@@ -1,0 +1,938 @@
+{
+  "RNBDENIMS": {
+    "symbol": "RNBDENIMS",
+    "collected_at": "2026-03-14T14:15:17.695312",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "RNBDENIMS",
+        "date": "13-Mar-2026 17:36:58",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/RBDENIMS_13032026173253_Outcome_of_EGM.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "RNBDENIMS",
+        "date": "21-Feb-2026 16:47:55",
+        "subject": "Bagging/Receiving of orders/contracts",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/RBDENIMS_21022026164742_Intimation_under_reg_30.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "RNBDENIMS",
+        "date": "18-Feb-2026 16:33:10",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/RBDENIMS_18022026163108_Notice_of_EOGM_with_covering.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "RNBDENIMS",
+        "date": "16-Feb-2026 11:20:40",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/RBDENIMS_16022026111938_Newspaper_Adv_Financial_Results.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "RNBDENIMS",
+        "date": "14-Feb-2026 19:14:07",
+        "subject": "Outcome of Board Meeting",
+        "type": "MEETING",
+        "attachment": "https://nsearchives.nseindia.com/corporate/RBDENIMS_14022026191016_Outcome_of_BM.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:ORDER_WIN — Bagging/Receiving of orders/contracts"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 5,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "TIMKEN": {
+    "symbol": "TIMKEN",
+    "collected_at": "2026-03-14T14:15:22.073965",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TIMKEN",
+        "date": "06-Mar-2026 16:45:49",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/TIMKEN_06032026164355_SE_NewspaperPublication_Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TIMKEN",
+        "date": "26-Feb-2026 15:36:01",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/TIMKEN_26022026153507_SE_IntimationofNotice_Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TIMKEN",
+        "date": "24-Feb-2026 15:11:49",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/TIMKEN_24022026151105_SE_Intimation_Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TIMKEN",
+        "date": "13-Feb-2026 17:35:53",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/TIMKEN_13022026173234_SE_Transcript_InvestorsMeet.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TIMKEN",
+        "date": "12-Feb-2026 15:08:28",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/TIMKEN_12022026150713_SEIntimation_InvestorsMeet_Signed.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [
+      {
+        "source": "GOOGLE_NEWS",
+        "symbol": "TIMKEN",
+        "date": "12-Mar-2026",
+        "title": "Trade Spotlight: How should you trade Ajanta Pharma, HFCL, Timken India, Linde India, Supreme Industries,... - Moneycontrol.com",
+        "news_source": "Moneycontrol.com",
+        "url": "https://news.google.com/rss/articles/CBMilgJBVV95cUxQNGNDWEtIakh6RHk3V3U0TnNEWFpjaFp5T09mS3ZLSHFhRjZ5dy1EWFM0emJCWmxNMVBpSzFrWTF1eGNqa2xHUmlFa041bkxHSnRNeFFrUUM2OGUyZktZYWdodmNXRXltWjk2SEh4WnQ3Zk50cUF4YklYMS1kVWpGNjAyWURLdVBLeDFtWlVEQVZqX0lSVzV5XzNaX3A5SGp2UlVYbHUtSEF2UEJTR2lwV3dVcFZWS05WRG1fN2FicEhpQktBNy12U3VPRWIzRTZJaHlLdXZaTDAzVkxqZ0ZVQkJmUWhjQTdTMXYzMHNHLTZUTGJOTTNQbVJ5WXdoenJaNDhxREthV1ZZc1lXTzFPYzdwTWhZZ9IBmwJBVV95cUxPZVpNXzFOdnhNMFZFaEtnWU80aE81N0RuYWRLeVg4c1lwNW83d3ZTc3hOMHB4TEtZVS1WRGkxUXViZmNnUkE1QWNPMHIxY084VEdkUWZnT2tZZGR0dGJiaUh5TUJFcjVxYThSM1hWZjNqWHFOT0tYNk9wU3hVa2JfSFdhekdVcjdOY2hLSEoyMUZDYmhWSEVWQmVybUIyNkRqVThJc002NTQtQU0ydHpRd3k4YzFZMllYOFJickMyemhCUEp3aC1TZ2dVSTVJSUg5aWpSeG9RQ3k5YWpnRGx0SmM1NTE5NXZQYUtJelM4TnQ5MXNJNXdZbVlLRjlsbjE0UzZCMXdGN19VWW82Rk9fMGtJZGg4eVYtZ09Z?oc=5",
+        "sentiment": "NEUTRAL"
+      },
+      {
+        "source": "GOOGLE_NEWS",
+        "symbol": "TIMKEN",
+        "date": "10-Mar-2026",
+        "title": "Timken India Ltd Technical Momentum Shifts to Bullish Amid Mixed Market Returns - Markets Mojo",
+        "news_source": "Markets Mojo",
+        "url": "https://news.google.com/rss/articles/CBMi0wFBVV95cUxOSDh5LXdEcWU4NHVmNG5teHBCRnVDclllOTQzTWRWUnptTjdTY1l2U3BEd0l1NTByMDBuMHdtalJtWHl2SmFtdFJ5alF0Y1VaWmxja3ZYNFlRa25sdFhZcU5MR0Z5X09EOUNEMy1IZHpNN1AzSk9sTXhubEFZbVViR3J3MW44S1RQcGJkNEs3X1FmOU01ak9WQnlvbVFYTHFQZDJGS1o4UWx2RFc5SlJuTXppNGstb2poc2RzVVNiVkYyNjBfeG15Uk83SDBlNkNCc05j?oc=5",
+        "sentiment": "NEUTRAL"
+      }
+    ],
+    "flags": [],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 5,
+    "deal_count": 0,
+    "headline_count": 2
+  },
+  "GOLDETFADD": {
+    "symbol": "GOLDETFADD",
+    "collected_at": "2026-03-14T14:15:26.314456",
+    "days_back": 30,
+    "announcements": [],
+    "deals": [],
+    "headlines": [],
+    "flags": [],
+    "news_tone": "NEUTRAL",
+    "has_news": false,
+    "ann_count": 0,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "STAR": {
+    "symbol": "STAR",
+    "collected_at": "2026-03-14T14:15:31.258299",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "STAR",
+        "date": "17-Feb-2026 15:36:06",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/STRIDES_532531_17022026153550_SEIntimation_Neviton_acq_Signed.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [
+      {
+        "source": "GOOGLE_NEWS",
+        "symbol": "STAR",
+        "date": "11-Mar-2026",
+        "title": "Blue Star, Voltas, LG Electronics: AC stocks surge amid IMD’s heatwave warning; latest updates to know - Upstox",
+        "news_source": "Upstox",
+        "url": "https://news.google.com/rss/articles/CBMi7gFBVV95cUxQaktuT1pqLWVkS3p4b213bE90N1ZsWFpfNm5DM0lLUGlKVjRTNTQxYldDZnIwQ3E1aWMxOFRDMkVPaG1oSWtwY2lmUlFJYzhXS0VGRndNc2FOUXd0UmNKUHR1WXNmRElWSnlFbF9TRG9ZblRVa1NoX0ZxWGNWZzI1RlpqT1ZTQ2VzNXUwYWd2MzNOWWZGdmlRbE0tLWlxNVVodFpIMFlPeEoyRkZNeXBLTk9NMmw2OXVybG9Ib3p0NjNwZ0x3VzREU2RMck1jYVNIMU1qZ09VaDlhODV4WHRvV0pUemFGTUpnYVhJaXhn?oc=5",
+        "sentiment": "NEUTRAL"
+      },
+      {
+        "source": "GOOGLE_NEWS",
+        "symbol": "STAR",
+        "date": "11-Mar-2026",
+        "title": "Sensex slides 892 pts; PSU bank shares decline - Business Standard",
+        "news_source": "Business Standard",
+        "url": "https://news.google.com/rss/articles/CBMixgFBVV95cUxNZDdCTlJMS3R4U085SGNNR3ItM0FBQWIxdGc3SlUwVGpnakJRLU5uN1IxM1lVaVo3ZE91dHFRZE9sYVctcFFLZEUwcFBRZjlDWGxxQkVGc0VsNUVDS2hubTlrbHZ0RkFWQlVQUnFJdVI2YVFQZkN1dzFkWUx6bmlDZWtNZFNNOG5yTVFCRWFneXJPM1JoY3VUUURoUVJ1aV8tWUhYYlJKQ2FoSDg2X0dYa212MGxfdkxnU0lUcXU1WDNwZ2FnS1HSAcsBQVVfeXFMTkREVmdxWk5WV1BTa0RRdXdlOWZVNkxYbmY4cnhLUXBxaXJwUGdOam5xVzA4Z3c5enQtYzZQUnp3ODdrSEZtUUtpZEVaQUZ2ZWJILTFQeHVuZlUtRXNJRFB1QVBubEJSOFE1cGZEeDVCNk9aOGQ0aFBudXdFQXVRWTZjY3JCaUV1ZXYzWnh6V2x5Y1VpTlNxQnZiYjEwblFSSEM0UUpiVi0xdVIyVWVfM0ZmcjVwVFRCbF9POTBwTFlreFU2a0g5enp6Nzg?oc=5",
+        "sentiment": "NEUTRAL"
+      }
+    ],
+    "flags": [],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 1,
+    "deal_count": 0,
+    "headline_count": 2
+  },
+  "IPCALAB": {
+    "symbol": "IPCALAB",
+    "collected_at": "2026-03-14T14:15:35.881972",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "IPCALAB",
+        "date": "18-Feb-2026 13:40:05",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/IPCALAB_18022026133955_IpcaConcallTranscript16022026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "IPCALAB",
+        "date": "16-Feb-2026 17:29:38",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/IPCALAB_16022026172924_IpcaConcallAudioLink16022026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "IPCALAB",
+        "date": "16-Feb-2026 11:21:26",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/IPCALAB_16022026112116_IpcaNewspaperIntimation.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "IPCALAB",
+        "date": "13-Feb-2026 13:38:28",
+        "subject": "Outcome of Board Meeting",
+        "type": "MEETING",
+        "attachment": "https://nsearchives.nseindia.com/corporate/IPCALAB_13022026133701_IpcaQ3Results.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 4,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "KTKBANK": {
+    "symbol": "KTKBANK",
+    "collected_at": "2026-03-14T14:15:40.433906",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "KTKBANK",
+        "date": "13-Mar-2026 17:23:06",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/KTKBANK_13032026172035_COTWSd.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "KTKBANK",
+        "date": "13-Mar-2026 16:12:52",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/KTKBANK_13032026161147_EYSEDSD.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "KTKBANK",
+        "date": "07-Mar-2026 17:14:56",
+        "subject": "Resignation",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/KTKBANK_07032026171053_DSRResign.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "KTKBANK",
+        "date": "07-Mar-2026 10:54:13",
+        "subject": "Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/KTKBANK_07032026105401_RDF.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "KTKBANK",
+        "date": "06-Mar-2026 20:32:29",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/KTKBANK_06032026202923_PBRFinalsd.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "KTKBANK",
+        "date": "05-Mar-2026 15:55:37",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/KTKBANK_05032026155519_SE_IntimationSD.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "KTKBANK",
+        "date": "27-Feb-2026 18:58:52",
+        "subject": "Retirement",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/KTKBANK_27022026185745_Ravichandransd.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "KTKBANK",
+        "date": "18-Feb-2026 14:48:51",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/KTKBANK_18022026144726_concalltranscriptfinalsd.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "KTKBANK",
+        "date": "16-Feb-2026 19:02:04",
+        "subject": "Change in Management",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/KTKBANK_16022026190109_Pankajf.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "KTKBANK",
+        "date": "16-Feb-2026 12:17:43",
+        "subject": "Press Release",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/KTKBANK_16022026121519_PRFINALF.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:ORDER_WIN — Trading Window"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 10,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "AETHER": {
+    "symbol": "AETHER",
+    "collected_at": "2026-03-14T14:15:44.923508",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AETHER",
+        "date": "14-Mar-2026 12:12:18",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AETHER_14032026121211_71A.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AETHER",
+        "date": "13-Mar-2026 16:20:59",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AETHER_13032026162052_70B.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AETHER",
+        "date": "11-Mar-2026 19:55:13",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AETHER_11032026195413_72.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AETHER",
+        "date": "11-Mar-2026 17:38:08",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AETHER_11032026173752_70A.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AETHER",
+        "date": "10-Mar-2026 15:11:30",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AETHER_10032026150942_71.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AETHER",
+        "date": "10-Mar-2026 15:11:30",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AETHER_10032026151036_69A.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AETHER",
+        "date": "04-Mar-2026 16:18:20",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AETHER_04032026161644_69.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AETHER",
+        "date": "04-Mar-2026 16:18:20",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AETHER_04032026161748_70.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AETHER",
+        "date": "25-Feb-2026 18:05:54",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AETHER_25022026180252_65A.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AETHER",
+        "date": "23-Feb-2026 09:51:32",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AETHER_23022026095123_68.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AETHER",
+        "date": "20-Feb-2026 17:39:08",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AETHER_20022026173859_67.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AETHER",
+        "date": "18-Feb-2026 11:16:53",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AETHER_18022026111631_66.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AETHER",
+        "date": "16-Feb-2026 11:22:48",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AETHER_16022026112240_65.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [
+      {
+        "source": "GOOGLE_NEWS",
+        "symbol": "AETHER",
+        "date": "11-Mar-2026",
+        "title": "Aether Industries reports fire at Surat warehouse with no casualties - Business Upturn",
+        "news_source": "Business Upturn",
+        "url": "https://news.google.com/rss/articles/CBMirgFBVV95cUxPb1VwMm11WWJkTzdtYmJiRncyQUhmQjFuTkxYX0lneFpDS1ppeTF0MlEyYTVqU2JQcGdfZkpSenlTb0E3ai1oSGNGUU8yMS1NVzV1WlRfNjMwbllvVUhjd3MyR2t5RlQ1LVJsbWk4T0dBUWk4cHJmVHByeGpnM2tyMzh1NGdITmxuVWtyaUNCbGxNcDNoVlpNTHpoMHlzRlBsY2t2V19JRjVuam02NlE?oc=5",
+        "sentiment": "NEUTRAL"
+      }
+    ],
+    "flags": [],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 13,
+    "deal_count": 0,
+    "headline_count": 1
+  },
+  "FOCUS": {
+    "symbol": "FOCUS",
+    "collected_at": "2026-03-14T14:15:49.640268",
+    "days_back": 30,
+    "announcements": [],
+    "deals": [],
+    "headlines": [
+      {
+        "source": "GOOGLE_NEWS",
+        "symbol": "FOCUS",
+        "date": "13-Mar-2026",
+        "title": "IFCI Share Price Jumps On NSE IPO News In Stock Market - Samco",
+        "news_source": "Samco",
+        "url": "https://news.google.com/rss/articles/CBMi3AFBVV95cUxNR2RfRGJWYjRrbjRiTUFrZXlIeG1MdkFYc200cHdlaUhOdmt1YWtlbWlraVpKRURJUnI5a0o3cGlGX0dRRzgzUGx1VTVacGxhVThFS1RjdHZFdEl6YU1zR0dQaWR0ZE1LWGlOTXlrdTlGVmVaYUwwYmVQRTFHak45MXlyc04zbEFlcE9xUF9PcTNOcjNwQ3VlNWNqcVkzYXdwd1p5QTR4b2M3N3d4R2NNQkdKbGU3b0hOQ2lwMjRHRDVMaHJtTTNiVTBwR05Od2Y5N0tpMExwWUxuRXJT?oc=5",
+        "sentiment": "POSITIVE"
+      },
+      {
+        "source": "GOOGLE_NEWS",
+        "symbol": "FOCUS",
+        "date": "10-Mar-2026",
+        "title": "Stocks to watch: NSE, Power Grid, Torrent Power among 10 shares in focus on Tuesday - Mint",
+        "news_source": "Mint",
+        "url": "https://news.google.com/rss/articles/CBMi5AFBVV95cUxPV2RxS2FFRTRLNzY1UnFmUGhwSlJsVnJmWmZiMEdMNkxQQVhlRzdLWlFNa016MGEzMllNVmFkMEFIZ3B0R0tSNWcwS0RlTGFqZzk0ZXJYa0JHZU9ZcmdXcGdlYTFlS19lcXpRZkdGZHB4bmhTZWJwYzdSYnFkaWtLSHhkOUx1eElnSHBPUXpQZ1dLU2NXNHNqLXBNdkt3UURQUU1Ud0hBck5uS0hwRVRxNGc2Q0NnUTNHNkNub2EwNlBXRUF3LVN1S2gyY3VKQW9lU25od0Zwc2xiRl9YRFBQS3N0eDbSAeoBQVVfeXFMUEFzMnU2bVJ2NEJhcFY2SElTUW5VZjM3OW1rRkVKTkhqUmd0akJYS0djMXhOajRPeGVpSzlUczdCYU5seUxVWjFPSk1ZRTNzRXVyTnNzZkdiazVzVDZmZVd4ZGYxRjdKbVVnOVRuTV81VUZYM0tMN183Tk5YLWRqSlFQdmdHQllfdUNfNFJhY0F1bFdKQXZJWWdDMlYtWnNuTVg2TV9Dd2I1SDMzUVdYSURUd0VzN0twYWhodnlmbnpNMzl0bVU1NExwZkF6MWRTRXlNLWtYVlk1bVZDQVd4RkxDem1fc0x0R0dR?oc=5",
+        "sentiment": "NEUTRAL"
+      },
+      {
+        "source": "GOOGLE_NEWS",
+        "symbol": "FOCUS",
+        "date": "10-Mar-2026",
+        "title": "Stocks to Watch Today: Infosys, Waaree Renewable, HG Infra, InterGlobe Aviation, TVS Supply Chain,... - Moneycontrol.com",
+        "news_source": "Moneycontrol.com",
+        "url": "https://news.google.com/rss/articles/CBMivwJBVV95cUxPUEtRNDFNM3FmV2NFanVnSzhRWk9EYWRlUFNrTVNfbnBmQmpOaWpqNG9xRkQ5eUJWNlNyWG9YZm1BQ2p2ZHM4ZEFZYkc3LV9jNVhyWE1PaGhmUVJnYW1FS0FGZ3lGNW9KbmhpQUUzNjkwSlBkbXdEQVpyZkVMZ2NmdktxWmN4SWxISnRJVzBoWnhSbVVsNHpWYTh6LXowRmZxOWpXUU1OUENlR2t0bmxsOThTajRaOXQzbzVmUFNwN21TcWZUS1NFMTk3VDdzX0RIa3BuVlZFbkt1OGIxUmc4QlItUjQ3U0ZlbTJCNi03UmlKb2I2THF6Yl9JV3pzeTR3NDkwXzZEcUYzWFNXOGwzemtyMkFvSGNJWTdxeHFoeHc1RW41QjRoVDRtUVZUQzBZSGNpNDZMZ0RLMjhwV1hZ0gHEAkFVX3lxTFBaOFR4bGNDMlgxMjhremZrbUhSdFd1QWtZZGI2Z1JPTVFtdHpJSkZWS0Q0bEdKdU4tYXhuYUhxYjM5aUozWHB1d3ZSbWIzV1ZLdDRLeTZBQlEyQ1d2T25MUHZBNFo1ZHVQLVZLaWdmWHRKVkw1aDdYRU9BWGoyQ1pBZXkwaXdiQXJSNkxEcHdRektrdDZ3cWpwT3RYaUJySU5zUXpjaHhaWEhYUHpHckRaN3NlOUE2NzM2dG1hc25NNUlVOVJ2N18tektHVmFISnFSemhoZnlmdzFqMW1aSDc0cWdLSWZGbUROQVlzbUxnN2xiR0NKbmlwYWRaaDhMVGVNQ2VVY2tRbnN1cThyLVNsRTFmeWJyejIyQVZRNWpKaWhfRlhpOFRmZ3JSaUw5R21TZ0toV2EwMGh2U19laGV1a3ZlSg?oc=5",
+        "sentiment": "NEUTRAL"
+      },
+      {
+        "source": "GOOGLE_NEWS",
+        "symbol": "FOCUS",
+        "date": "10-Mar-2026",
+        "title": "Paras Defence share price in focus: Firm secures ₹80 crore DRDO order to develop high-precision air defence optical systems - Upstox",
+        "news_source": "Upstox",
+        "url": "https://news.google.com/rss/articles/CBMijAJBVV95cUxNeWtwVFRra05FRVRSMDhQaUsyTVI0c2U0WFRqLXFvLUVOOTBrdTJ5UDFLLU9jTEp4VGhybDFVa1JxbXBnb19LX1B2ajJkXzJyS3ZVaVBPWjJmdHYycERsZWJOMVR5cldoMkFyNUtDX1B6MU9kcTRNWVdfQWM0QTFnQkdhc19POGI4aHNIZlRldllITmNxN21yMUg0Qmc2ZUhlRHAzTlBIblMzN0l2QS1lNUhJTTN0VTFleDQ0ejcyQzNuOFIxNm1RNFdhVkR2WHZyYm5aOXU0akdqaEpCREpwdXFrODd0c3hVWmZBb25uM3gwRjVWZWJwekFMQ1pGTll3YnlRWUhKbmJYSnhD?oc=5",
+        "sentiment": "POSITIVE"
+      },
+      {
+        "source": "GOOGLE_NEWS",
+        "symbol": "FOCUS",
+        "date": "12-Mar-2026",
+        "title": "Manorama Industries shares in focus as board approves ₹500 crore fundraiser via QIPs - Upstox",
+        "news_source": "Upstox",
+        "url": "https://news.google.com/rss/articles/CBMi2wFBVV95cUxPeUZqdWdnbVhDYWRGZ2luUUVlZ1NFanF6dHdFLXZydnA4Tmh1SGpzeEstM1p4YWRLY2RsaUZkVFlQaXVnZDM0RWpteEtnc1pSaHRVVVVRaTJ4SFItcG5wTjN3NUl2NEdWVXdVX3V0eGlhYjZHbTFJR2RPS3lHYllYUm9CNnVjNTBhZUxEemRTdl82MlBSbjZfSEtxN2R6VFNLMENpY25fVUhYRkVfb3BiaEV2SFYyYzlFeDRuZDdZUkxZUU82Ui0zb1RNRnQ0OTFNcUFsWGVEcE11Rlk?oc=5",
+        "sentiment": "NEUTRAL"
+      }
+    ],
+    "flags": [],
+    "news_tone": "POSITIVE",
+    "has_news": true,
+    "ann_count": 0,
+    "deal_count": 0,
+    "headline_count": 5
+  },
+  "GROWWLIQID": {
+    "symbol": "GROWWLIQID",
+    "collected_at": "2026-03-14T14:15:53.817512",
+    "days_back": 30,
+    "announcements": [],
+    "deals": [],
+    "headlines": [],
+    "flags": [],
+    "news_tone": "NEUTRAL",
+    "has_news": false,
+    "ann_count": 0,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "SBILIQETF": {
+    "symbol": "SBILIQETF",
+    "collected_at": "2026-03-14T14:15:58.366490",
+    "days_back": 30,
+    "announcements": [],
+    "deals": [],
+    "headlines": [],
+    "flags": [],
+    "news_tone": "NEUTRAL",
+    "has_news": false,
+    "ann_count": 0,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "SDL26BEES": {
+    "symbol": "SDL26BEES",
+    "collected_at": "2026-03-14T14:16:02.550801",
+    "days_back": 30,
+    "announcements": [],
+    "deals": [],
+    "headlines": [],
+    "flags": [],
+    "news_tone": "NEUTRAL",
+    "has_news": false,
+    "ann_count": 0,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "PREMIERPOL": {
+    "symbol": "PREMIERPOL",
+    "collected_at": "2026-03-14T14:16:06.954823",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "PREMIERPOL",
+        "date": "26-Feb-2026 11:57:48",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/PREMIERPOL_26022026115739_INtimation_statutory_auditor.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "PREMIERPOL",
+        "date": "24-Feb-2026 11:20:52",
+        "subject": "Press Release",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/PREMIERPOL_24022026112039_Newspaper.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "PREMIERPOL",
+        "date": "17-Feb-2026 14:17:28",
+        "subject": "Action(s) taken or orders passed",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/PREMIERPOL_17022026141651_Intimation_under_reg_30__NSE_Fine.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:ORDER_WIN — Action(s) taken or orders passed"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 3,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "COALINDIA": {
+    "symbol": "COALINDIA",
+    "collected_at": "2026-03-14T14:16:11.859914",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "COALINDIA",
+        "date": "13-Mar-2026 14:44:15",
+        "subject": "Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/COALINDIA_13032026144405_RHP.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "COALINDIA",
+        "date": "05-Mar-2026 13:13:29",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/COALINDIA_05032026131318_Schedule_of_Analyst__Meet.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "COALINDIA",
+        "date": "03-Mar-2026 12:15:11",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/COALINDIA_03032026121500_Schedule_of_Analyst__Meet.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "COALINDIA",
+        "date": "03-Mar-2026 11:14:07",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/COALINDIA_03032026111348_E-Auction.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "COALINDIA",
+        "date": "02-Mar-2026 16:19:19",
+        "subject": "Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/COALINDIA_02032026161829_FinesBSE.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "COALINDIA",
+        "date": "01-Mar-2026 12:44:44",
+        "subject": "Cessation",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/COALINDIA_01032026124430_rathoref.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "COALINDIA",
+        "date": "01-Mar-2026 12:41:36",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/COALINDIA_01032026124123_Productionf.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "COALINDIA",
+        "date": "27-Feb-2026 12:54:51",
+        "subject": "Press Release",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/COALINDIA_27022026125441_Press_Release.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "COALINDIA",
+        "date": "16-Feb-2026 12:40:04",
+        "subject": "Press Release",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/COALINDIA_16022026123936_Press_Release.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "COALINDIA",
+        "date": "16-Feb-2026 11:47:01",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/COALINDIA_16022026114652_Newspaper_publication_on_Tax.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "COALINDIA",
+        "date": "13-Feb-2026 12:10:05",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/COALINDIA_13022026120929_paper_publication.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "COALINDIA",
+        "date": "12-Feb-2026 19:17:03",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/COALINDIA_12022026191643_3rd_ID.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "COALINDIA",
+        "date": "12-Feb-2026 19:03:40",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/COALINDIA_12022026190314_Presentation.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "COALINDIA",
+        "date": "12-Feb-2026 18:56:51",
+        "subject": "Dividend",
+        "type": "CORPORATE_ACTION",
+        "attachment": "https://nsearchives.nseindia.com/corporate/COALINDIA_12022026185551_Dividend.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "COALINDIA",
+        "date": "12-Feb-2026 18:54:55",
+        "subject": "Record Date",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/COALINDIA_12022026185439_Dividend.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "COALINDIA",
+        "date": "12-Feb-2026 18:53:58",
+        "subject": "Outcome of Board Meeting",
+        "type": "MEETING",
+        "attachment": "https://nsearchives.nseindia.com/corporate/COALINDIA_12022026185237_results.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [
+      {
+        "source": "GOOGLE_NEWS",
+        "symbol": "COALINDIA",
+        "date": "12-Mar-2026",
+        "title": "Coal India Share Price: PSU stock surges 6% even as benchmark indices trade in red, here's why - India TV News",
+        "news_source": "India TV News",
+        "url": "https://news.google.com/rss/articles/CBMi6wFBVV95cUxQR3h1RlI4bDhMWGVmSkczU0NXMHVwWC1yWC05TTVHSFk5dy0wNTVLdmpuOTIzNjlkT0xZRm5RXzE0QjZtTEtjcnNZelNEcGRudV9ZWXgzQTRQTHpPakJneTg0WUx1MmlUa1hiNHNqc3NuVkhibmxzQWJhOThpbk5RdXUtOFFYc1lmRUl2TTFnR2JlcGpkZFhrb0o2WUlCZ1RaaVVmNmtPX1ZZRDBhRUk0LVdHdjNrQ09lN1NIMzFHdmRyOFlkc0VSbFZzSGgyUy02M3lNRGpocXR5a1MtakswelJqTTU3UXBKal9Z0gHwAUFVX3lxTFBPYmdnOWN4NWxCQXRROXVUT0k5NnhVVTRhQXJfNFlZZkt2a2xjRDhhVEpnc2FSRWN2Rjk5d0d1SzZVa2JMZ3JXV29jakdhUU9OY1Zfa3BQYmlTVVFvZ3ZRT1MzNmFrZmdSMFdILU1hNXRPeUNOVG1XQXhwTWlyZ1lUb0NJTFA5cUlsd2RIbVlRUzFBaktKQU9iQjNQRWRUZDhLLVBqUmY2ZE40VURPVi1ES1UzSnVjeHJVZGxHcUp3MUZEd2d6T1FJaC00MFFwRkktTGNTZmFreUtobkkxMmZqU1F0NkJFUVVDWDRMb1h6Qg?oc=5",
+        "sentiment": "POSITIVE"
+      },
+      {
+        "source": "GOOGLE_NEWS",
+        "symbol": "COALINDIA",
+        "date": "12-Mar-2026",
+        "title": "Coal India share price rallies nearly 6% to 52-week high amid energy crisis; key points to know - Upstox",
+        "news_source": "Upstox",
+        "url": "https://news.google.com/rss/articles/CBMi5wFBVV95cUxPV0JLbXl5UzBZUnBaN2pRRXBQZEptWkZrR2NXLWd6a2x0dHJUSEE2VmNzTkxXZ0FnaHZlYm1iZ25kSDlFeWlHNmJKS1RGYjZwbnl4ZE96X0dxYUFkeHIyY0I0ZVc2LWNMVzllUG03MDBER0pwb3Y5VEE0RFJ5b3lCRm45OGtqSEExOXNqMHl1NUNpQ0p5WklPVElnWDA2cEVUVWVuWjhUQmt3aklzcE5VUDRHY0F0ZzJCTXRlNTJzY2dGNVhHNlh0dUdZZlpwNUZDLXl4MzVGbnpFRGs3ZGtuNkcyX05HSnc?oc=5",
+        "sentiment": "POSITIVE"
+      },
+      {
+        "source": "GOOGLE_NEWS",
+        "symbol": "COALINDIA",
+        "date": "13-Mar-2026",
+        "title": "coal india share price - LatestLY",
+        "news_source": "LatestLY",
+        "url": "https://news.google.com/rss/articles/CBMie0FVX3lxTFBCbFhHSlR5UDBuai1BNXFxLXVpbUlOVU1TZWxHVEtIUXpIa0hqWG14WktURlUzQnhKVUtjbnFSZ3lDVmstZHA0S2NNWWt4OUZXcnlNNzNMUk50cGxwX0hjUDRhZEZBU3hHWE5ONGhHRG43aVRVM2wzVThwbw?oc=5",
+        "sentiment": "NEUTRAL"
+      }
+    ],
+    "flags": [],
+    "news_tone": "POSITIVE",
+    "has_news": true,
+    "ann_count": 16,
+    "deal_count": 0,
+    "headline_count": 3
+  },
+  "JAGSNPHARM": {
+    "symbol": "JAGSNPHARM",
+    "collected_at": "2026-03-14T14:16:16.238174",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "JAGSNPHARM",
+        "date": "13-Mar-2026 20:25:28",
+        "subject": "Pendency of Litigation(s)/dispute(s) or the outcome impacting the Company",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/JAGSNPHARM_13032026202420_13032026SignedRegulation30.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "JAGSNPHARM",
+        "date": "12-Mar-2026 14:32:27",
+        "subject": "Press Release",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/JAGSNPHARM_12032026143158_SignedPressrelease.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "JAGSNPHARM",
+        "date": "12-Mar-2026 14:03:45",
+        "subject": "Buyback",
+        "type": "CORPORATE_ACTION",
+        "attachment": "https://nsearchives.nseindia.com/corporate/JAGSNPHARM_12032026140337_Final_Outcome_Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "JAGSNPHARM",
+        "date": "12-Mar-2026 14:02:28",
+        "subject": "Outcome of Board Meeting",
+        "type": "MEETING",
+        "attachment": "https://nsearchives.nseindia.com/corporate/JAGSNPHARM_12032026140142_Final_Outcome_Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "JAGSNPHARM",
+        "date": "09-Mar-2026 15:50:37",
+        "subject": "Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/JAGSNPHARM_09032026155004_SignedESOPAllotment.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "JAGSNPHARM",
+        "date": "09-Mar-2026 15:45:17",
+        "subject": "Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/JAGSNPHARM_09032026154442_SignedESOPGRANT.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "RISK:REGULATORY — Pendency of Litigation(s)/dispute(s) or the outcome impactin"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 6,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "ASTERDM": {
+    "symbol": "ASTERDM",
+    "collected_at": "2026-03-14T14:16:20.496749",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ASTERDM",
+        "date": "13-Mar-2026 22:01:53",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ASTERDM2_13032026220142_SE_Intimation.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ASTERDM",
+        "date": "11-Mar-2026 22:21:21",
+        "subject": "Press Release",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ASTERDM2_11032026222109_Intimation_pressrelease.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ASTERDM",
+        "date": "11-Mar-2026 22:04:19",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ASTERDM2_11032026220411_Shareholders_Voting_results.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ASTERDM",
+        "date": "11-Mar-2026 17:42:47",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ASTERDM2_11032026174235_Voting_results_Creditors_meeting.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ASTERDM",
+        "date": "10-Mar-2026 19:01:03",
+        "subject": "Outcome of Board Meeting",
+        "type": "MEETING",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ASTERDM2_10032026190052_BoD_Outcome_10_March_2026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ASTERDM",
+        "date": "10-Mar-2026 18:56:23",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ASTERDM2_10032026185615_Proceedings_Unsecured_Trade_Creditors.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ASTERDM",
+        "date": "10-Mar-2026 18:53:40",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ASTERDM2_10032026185331_Proceedings_Equity_shareholders.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ASTERDM",
+        "date": "02-Mar-2026 15:25:23",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ASTERDM2_02032026152513_Reg_30_Disclosure.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ASTERDM",
+        "date": "26-Feb-2026 19:21:32",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ASTERDM2_26022026192118_Disclosure.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [
+      {
+        "source": "GOOGLE_NEWS",
+        "symbol": "ASTERDM",
+        "date": "11-Mar-2026",
+        "title": "Aster DM Healthcare secures 96.68% shareholder approval for merger with QCIL - Business Upturn",
+        "news_source": "Business Upturn",
+        "url": "https://news.google.com/rss/articles/CBMitwFBVV95cUxPUFJNU3QzYXhKeE9oaThINkxCYWVIUkpWQ1JER2tVMlQ4enE0RlhpQngzWWtXcGh1SnRQbEtyMVhNNlBCN3k0WUlHbkxpVXBiSHczWVgzNjJoVk05S0dkWjlOU2o1MTZXZ2VMRFNMM283SWFSeTFaLXdxbDM5QjNPdnRvSElLY1pPbGFURzEyaW9hZjZWZ3Btb1liWlNFLThuYU9iaTc3b1VLUzc4RE4xdnhEY24ya0U?oc=5",
+        "sentiment": "NEUTRAL"
+      }
+    ],
+    "flags": [],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 9,
+    "deal_count": 0,
+    "headline_count": 1
+  }
+}
