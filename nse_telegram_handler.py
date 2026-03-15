@@ -15,6 +15,8 @@ import json
 import argparse
 from datetime import date, datetime
 
+OWNER_NAME = "Chaitanya Rathod"
+
 # ── Absolute path for JSON so it works from any working directory ─────────────
 _HERE        = os.path.dirname(os.path.abspath(__file__))
 RESULTS_FILE = os.path.join(_HERE, "telegram_last_scan.json")
@@ -228,6 +230,8 @@ def format_stock_list(stocks: list, start_idx: int = 0, count: int = 5,
         msg += "\n"
 
     msg += f"📄 Page {cur_page}/{tot_pages}"
+    
+    msg += f"\nDeveloped by: {OWNER_NAME}"
     return msg
 
 
@@ -248,6 +252,7 @@ def format_help() -> str:
         "• 🔝 Top 10 — Show top 10 by 3M return only\n"
         "• 📰 With News — Current page + news headlines\n\n"
         "💡 Tap the inline buttons below each message to navigate!"
+	    "Developed by: {OWNER_NAME}"
     )
 
 
