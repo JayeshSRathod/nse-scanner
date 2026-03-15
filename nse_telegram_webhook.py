@@ -396,7 +396,11 @@ def main():
     parser.add_argument("--debug", action="store_true",    help="Enable Flask debug mode")
     args = parser.parse_args()
 
-    token_preview = getattr(config, 'TELEGRAM_TOKEN', '')[:20]
+    token = getattr(config, 'TELEGRAM_TOKEN', None)
+    if not token:
+        raise RuntimeError("Telegram Token Not Configured")
+    token_preview = token[:20]
+
     print("=" * 55)
     print("  NSE Momentum Scanner — Telegram Webhook Server")
     print("=" * 55)
@@ -411,3 +415,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+print("DEBUG CONFIG TOKEN:", config.TELEGRAM_TOKEN)
+print("DEBUG CONFIG CHATID:", config.TELEGRAM_CHATID)
