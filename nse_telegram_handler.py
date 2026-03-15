@@ -15,7 +15,7 @@ import json
 import argparse
 from datetime import date, datetime
 
-OWNER_NAME = "Chaitanya Rathod"
+OWNER_NAME = "Jayesh Rathod"
 
 # ── Absolute path for JSON so it works from any working directory ─────────────
 _HERE        = os.path.dirname(os.path.abspath(__file__))
