@@ -12,6 +12,7 @@ Required Railway Variables:
     TELEGRAM_CHAT_ID — your personal Telegram chat ID
 """
 
+
 import os
 import sys
 import json
