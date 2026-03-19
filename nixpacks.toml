@@ -1,6 +1,2 @@
 [start]
-<<<<<<< HEAD
 cmd = "python main.py"
-=======
-cmd = "python main.py"
->>>>>>> b402b44 (Remove webhook file permanently)
