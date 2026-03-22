@@ -26,7 +26,7 @@ logs/
 *.log
 
 # Bot pagination data — regenerated daily
-telegram_last_scan.json
+
 
 # News data
 news_*.json
