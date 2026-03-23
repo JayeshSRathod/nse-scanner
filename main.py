@@ -1,18 +1,8 @@
 """
 main.py — NSE Bot Entry Point for Railway (nse-bot service)
 ============================================================
-Used by: nse-bot Railway service (24/7)
-Runs   : Always — answers Telegram messages
-
-If telegram_last_scan.json is missing locally,
-fetches it from GitHub automatically so bot
-always has fresh data even after redeploy.
-
-Required Railway Variables (nse-bot service):
-    TELEGRAM_TOKEN   — bot token (nsescanner_live_bot)
-    TELEGRAM_CHAT_ID — your chat ID
-    GITHUB_TOKEN     — to fetch JSON from GitHub
-    GITHUB_REPO      — JayeshSRathod/nse-scanner
+Fetches both telegram_last_scan.json AND scan_history.json
+from GitHub on startup so all views work correctly.
 """
 
 import os
@@ -24,18 +14,15 @@ import requests
 from datetime import date
 from pathlib import Path
 
-# ── Force UTF-8 ───────────────────────────────────────────────
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 os.environ['PYTHONUTF8']       = '1'
 
-# ── Load .env locally ─────────────────────────────────────────
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
     pass
 
-# ── Read environment variables ────────────────────────────────
 TOKEN         = os.environ.get("TELEGRAM_TOKEN",   "").strip()
 CHAT_ID       = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
 GITHUB_TOKEN  = os.environ.get("GITHUB_TOKEN",     "").strip()
@@ -43,18 +30,17 @@ GITHUB_REPO   = os.environ.get("GITHUB_REPO",
                 "JayeshSRathod/nse-scanner").strip()
 GITHUB_BRANCH = os.environ.get("GITHUB_BRANCH", "main").strip()
 
-print(f"[MAIN] TELEGRAM_TOKEN   = {'SET (' + TOKEN[:15] + '...)' if TOKEN else 'NOT SET ❌'}")
-print(f"[MAIN] TELEGRAM_CHAT_ID = {CHAT_ID or 'NOT SET ❌'}")
+print(f"[MAIN] TELEGRAM_TOKEN   = {'SET (' + TOKEN[:15] + '...)' if TOKEN else 'NOT SET'}")
+print(f"[MAIN] TELEGRAM_CHAT_ID = {CHAT_ID or 'NOT SET'}")
 
 if not TOKEN:
-    print("[ERROR] TELEGRAM_TOKEN not set — add to Railway Variables")
+    print("[ERROR] TELEGRAM_TOKEN not set")
     sys.exit(1)
-
 if not CHAT_ID:
-    print("[ERROR] TELEGRAM_CHAT_ID not set — add to Railway Variables")
+    print("[ERROR] TELEGRAM_CHAT_ID not set")
     sys.exit(1)
 
-# ── Build config module ───────────────────────────────────────
+# ── Build config ──────────────────────────────────────────────
 config                 = types.ModuleType("config")
 config.TELEGRAM_TOKEN  = TOKEN
 config.TELEGRAM_CHATID = CHAT_ID
@@ -80,143 +66,131 @@ config.BONUS_TOP25     = 0.03
 sys.modules["config"]  = config
 print("[MAIN] Config module built")
 
-# ── Create folders ────────────────────────────────────────────
 for folder in ["logs", "output", "nse_data"]:
     Path(folder).mkdir(exist_ok=True)
 
 
-# ══════════════════════════════════════════════════════════════
-# FETCH JSON FROM GITHUB IF MISSING
-# ══════════════════════════════════════════════════════════════
+# ── GitHub file fetcher ───────────────────────────────────────
 
-def fetch_json_from_github() -> bool:
-    """
-    Download telegram_last_scan.json from GitHub.
-    Called on bot startup if local file is missing or stale.
-    """
+def fetch_file_from_github(filename: str) -> bool:
+    """Download a file from GitHub repo."""
     if not GITHUB_TOKEN:
-        print("[GITHUB] No GITHUB_TOKEN — cannot fetch JSON")
+        print(f"[GITHUB] No token — cannot fetch {filename}")
         return False
 
-    print(f"[GITHUB] Fetching telegram_last_scan.json from {GITHUB_REPO}...")
-
+    print(f"[GITHUB] Fetching {filename} from {GITHUB_REPO}...")
     try:
         headers = {
             "Authorization": f"token {GITHUB_TOKEN}",
             "Accept":        "application/vnd.github.v3+json",
         }
         url = (f"https://api.github.com/repos/{GITHUB_REPO}"
-               f"/contents/telegram_last_scan.json"
-               f"?ref={GITHUB_BRANCH}")
-
-        r = requests.get(url, headers=headers, timeout=15)
+               f"/contents/{filename}?ref={GITHUB_BRANCH}")
+        r   = requests.get(url, headers=headers, timeout=15)
 
         if r.status_code == 200:
-            data    = r.json()
-            content = base64.b64decode(data["content"]).decode("utf-8")
-            Path("telegram_last_scan.json").write_text(
-                content, encoding="utf-8")
+            content = base64.b64decode(r.json()["content"]).decode("utf-8")
+            Path(filename).write_text(content, encoding="utf-8")
+            parsed  = json.loads(content)
 
-            parsed    = json.loads(content)
-            stocks    = parsed.get("total_stocks", 0)
-            scan_date = parsed.get("scan_date", "?")
-            print(f"[GITHUB] ✅ Fetched: {stocks} stocks (date: {scan_date})")
+            # Print summary based on file type
+            if filename == "telegram_last_scan.json":
+                print(f"[GITHUB] ✅ {filename}: "
+                      f"{parsed.get('total_stocks')} stocks "
+                      f"(date: {parsed.get('scan_date')})")
+            elif filename == "scan_history.json":
+                print(f"[GITHUB] ✅ {filename}: "
+                      f"{parsed.get('days_stored', 0)} days stored")
             return True
 
         elif r.status_code == 404:
-            print("[GITHUB] JSON not found on GitHub yet")
-            print("[GITHUB] Run nse-pipeline cron first to generate data")
+            print(f"[GITHUB] {filename} not on GitHub yet")
             return False
         else:
-            print(f"[GITHUB] ❌ Fetch failed: {r.status_code}")
+            print(f"[GITHUB] ❌ {r.status_code}: {r.text[:100]}")
             return False
 
     except Exception as e:
-        print(f"[GITHUB] Error: {e}")
+        print(f"[GITHUB] Error fetching {filename}: {e}")
         return False
 
 
-# ── Ensure scan data exists ───────────────────────────────────
+# ── Fetch telegram_last_scan.json ─────────────────────────────
 RESULTS_FILE = Path("telegram_last_scan.json")
 
 if RESULTS_FILE.exists():
     try:
-        existing = json.loads(RESULTS_FILE.read_text(encoding="utf-8"))
-        stocks   = existing.get("total_stocks", 0)
+        existing  = json.loads(RESULTS_FILE.read_text(encoding="utf-8"))
+        stocks    = existing.get("total_stocks", 0)
         scan_date = existing.get("scan_date", "?")
-        print(f"[MAIN] Local JSON found: {stocks} stocks (date: {scan_date})")
+        print(f"[MAIN] Local scan data: {stocks} stocks (date: {scan_date})")
 
-        # Check if stale (older than 3 days) — fetch fresh from GitHub
+        # Refresh if stale (>3 days)
         try:
             from datetime import datetime, timedelta
             file_date = datetime.strptime(scan_date, "%Y-%m-%d").date()
             age_days  = (date.today() - file_date).days
             if age_days > 3:
-                print(f"[MAIN] Data is {age_days} days old — fetching fresh from GitHub")
-                fetch_json_from_github()
+                print(f"[MAIN] Data is {age_days}d old — refreshing from GitHub")
+                fetch_file_from_github("telegram_last_scan.json")
         except Exception:
             pass
-
-    except Exception as e:
-        print(f"[MAIN] Local JSON unreadable: {e} — fetching from GitHub")
-        fetch_json_from_github()
+    except Exception:
+        fetch_file_from_github("telegram_last_scan.json")
 else:
-    print("[MAIN] No local JSON — fetching from GitHub...")
-    fetched = fetch_json_from_github()
-
+    fetched = fetch_file_from_github("telegram_last_scan.json")
     if not fetched:
-        # Write minimal sample so bot has something to show
         print("[MAIN] Writing sample data (5 stocks)")
         sample = {
             "scan_date":    str(date.today()),
             "total_stocks": 5,
             "page_size":    5,
             "stocks": [
-                {
-                    "rank": 1, "symbol": "RELIANCE", "score": 8,
-                    "return_1m_pct": 5.2, "return_2m_pct": 9.1,
-                    "return_3m_pct": 18.4, "close": 2450,
-                    "volume": 8500000, "delivery_pct": 52.3,
-                    "sl": 2278, "target1": 2622, "target2": 2794
-                },
-                {
-                    "rank": 2, "symbol": "HDFCBANK", "score": 7,
-                    "return_1m_pct": 4.1, "return_2m_pct": 7.8,
-                    "return_3m_pct": 14.2, "close": 1680,
-                    "volume": 12000000, "delivery_pct": 61.5,
-                    "sl": 1562, "target1": 1798, "target2": 1916
-                },
-                {
-                    "rank": 3, "symbol": "INFY", "score": 7,
-                    "return_1m_pct": 3.8, "return_2m_pct": 6.2,
-                    "return_3m_pct": 11.5, "close": 1520,
-                    "volume": 6200000, "delivery_pct": 55.8,
-                    "sl": 1414, "target1": 1626, "target2": 1732
-                },
-                {
-                    "rank": 4, "symbol": "TCS", "score": 6,
-                    "return_1m_pct": 2.9, "return_2m_pct": 5.1,
-                    "return_3m_pct": 9.8, "close": 3820,
-                    "volume": 3100000, "delivery_pct": 67.2,
-                    "sl": 3553, "target1": 4087, "target2": 4354
-                },
-                {
-                    "rank": 5, "symbol": "WIPRO", "score": 6,
-                    "return_1m_pct": 2.1, "return_2m_pct": 4.3,
-                    "return_3m_pct": 8.2, "close": 480,
-                    "volume": 9800000, "delivery_pct": 48.6,
-                    "sl": 446, "target1": 514, "target2": 548
-                },
+                {"rank":1,"symbol":"RELIANCE","score":8,
+                 "return_1m_pct":5.2,"return_2m_pct":9.1,"return_3m_pct":18.4,
+                 "close":2450,"volume":8500000,"delivery_pct":52.3,
+                 "sl":2278,"target1":2622,"target2":2794},
+                {"rank":2,"symbol":"HDFCBANK","score":7,
+                 "return_1m_pct":4.1,"return_2m_pct":7.8,"return_3m_pct":14.2,
+                 "close":1680,"volume":12000000,"delivery_pct":61.5,
+                 "sl":1562,"target1":1798,"target2":1916},
+                {"rank":3,"symbol":"INFY","score":7,
+                 "return_1m_pct":3.8,"return_2m_pct":6.2,"return_3m_pct":11.5,
+                 "close":1520,"volume":6200000,"delivery_pct":55.8,
+                 "sl":1414,"target1":1626,"target2":1732},
+                {"rank":4,"symbol":"TCS","score":6,
+                 "return_1m_pct":2.9,"return_2m_pct":5.1,"return_3m_pct":9.8,
+                 "close":3820,"volume":3100000,"delivery_pct":67.2,
+                 "sl":3553,"target1":4087,"target2":4354},
+                {"rank":5,"symbol":"WIPRO","score":6,
+                 "return_1m_pct":2.1,"return_2m_pct":4.3,"return_3m_pct":8.2,
+                 "close":480,"volume":9800000,"delivery_pct":48.6,
+                 "sl":446,"target1":514,"target2":548},
             ]
         }
-        RESULTS_FILE.write_text(
-            json.dumps(sample, indent=2), encoding="utf-8")
-        print("[MAIN] Sample data written")
-        print("[MAIN] Real data arrives after nse-pipeline cron runs at 6:45 PM IST")
+        RESULTS_FILE.write_text(json.dumps(sample, indent=2), encoding="utf-8")
+        print("[MAIN] Sample data written — real data arrives at 6:00 AM IST")
 
-# ── Start polling bot ─────────────────────────────────────────
-print(f"\n[MAIN] Starting @nsescanner_live_bot...")
-print(f"[MAIN] Send 'hi' to get today's stock watchlist\n")
+# ── Fetch scan_history.json ───────────────────────────────────
+HISTORY_FILE = Path("scan_history.json")
+
+if not HISTORY_FILE.exists():
+    fetched = fetch_file_from_github("scan_history.json")
+    if not fetched:
+        print("[MAIN] No history yet — New/Exit/Strong views will show "
+              "building message")
+else:
+    try:
+        h = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
+        print(f"[MAIN] Local history: {h.get('days_stored', 0)} days")
+        # Always refresh history from GitHub (pipeline updates it daily)
+        fetch_file_from_github("scan_history.json")
+    except Exception:
+        fetch_file_from_github("scan_history.json")
+
+# ── Start bot ─────────────────────────────────────────────────
+print(f"\n[MAIN] Starting @nsescanner_live_bot (Phase 2)...")
+print(f"[MAIN] Views: Today / New / Exit / Strong\n")
 
 try:
     import nse_telegram_polling as bot
