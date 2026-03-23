@@ -1,19 +1,20 @@
 """
 main_pipeline.py — NSE Pipeline Entry Point for Railway Cron
 =============================================================
-Used by: nse-pipeline Railway service
-Runs   : Every weekday at 6:45 PM IST (13:15 UTC) via cron
+Used by : nse-pipeline Railway service
+Runs    : Every weekday at 6:00 AM IST (00:30 UTC) via cron
 
 Pipeline:
     Step 1 → Download today's NSE file
     Step 2 → Load into SQLite database
     Step 3 → Scan stocks for momentum signals
     Step 4 → Generate Excel + send Telegram notification
-    Step 5 → Save telegram_last_scan.json
-    Step 6 → Push JSON to GitHub (triggers nse-bot redeploy)
+    Step 5 → Save telegram_last_scan.json + scan_history.json
+    Step 6 → Push BOTH JSON files to GitHub
+    Step 7 → Trigger nse-bot redeploy
 
-Required Railway Variables (nse-pipeline service):
-    TELEGRAM_TOKEN   — bot token (nsescanner_live_bot)
+Required Railway Variables:
+    TELEGRAM_TOKEN   — live bot token
     TELEGRAM_CHAT_ID — your chat ID
     GITHUB_TOKEN     — personal access token with repo scope
     GITHUB_REPO      — JayeshSRathod/nse-scanner
@@ -26,7 +27,7 @@ import json
 import types
 import base64
 import requests
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 # ── Force UTF-8 ───────────────────────────────────────────────
@@ -45,20 +46,19 @@ try:
 except ImportError:
     pass
 
-# ── Read environment variables ────────────────────────────────
-TOKEN        = os.environ.get("TELEGRAM_TOKEN",   "").strip()
-CHAT_ID      = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN",     "").strip()
-GITHUB_REPO  = os.environ.get("GITHUB_REPO",
-               "JayeshSRathod/nse-scanner").strip()
+# ── Environment variables ─────────────────────────────────────
+TOKEN         = os.environ.get("TELEGRAM_TOKEN",   "").strip()
+CHAT_ID       = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+GITHUB_TOKEN  = os.environ.get("GITHUB_TOKEN",     "").strip()
+GITHUB_REPO   = os.environ.get("GITHUB_REPO",
+                "JayeshSRathod/nse-scanner").strip()
 GITHUB_BRANCH = os.environ.get("GITHUB_BRANCH", "main").strip()
 
-print(f"[ENV] TELEGRAM_TOKEN   = {'SET' if TOKEN    else 'NOT SET ❌'}")
-print(f"[ENV] TELEGRAM_CHAT_ID = {'SET' if CHAT_ID  else 'NOT SET ❌'}")
+print(f"[ENV] TELEGRAM_TOKEN   = {'SET' if TOKEN       else 'NOT SET ❌'}")
+print(f"[ENV] TELEGRAM_CHAT_ID = {'SET' if CHAT_ID     else 'NOT SET ❌'}")
 print(f"[ENV] GITHUB_TOKEN     = {'SET' if GITHUB_TOKEN else 'NOT SET ❌'}")
 print(f"[ENV] GITHUB_REPO      = {GITHUB_REPO}")
 
-# Validate
 missing = []
 if not TOKEN:        missing.append("TELEGRAM_TOKEN")
 if not CHAT_ID:      missing.append("TELEGRAM_CHAT_ID")
@@ -66,7 +66,6 @@ if not GITHUB_TOKEN: missing.append("GITHUB_TOKEN")
 
 if missing:
     print(f"\n[ERROR] Missing variables: {', '.join(missing)}")
-    print("[ERROR] Add them in Railway → nse-pipeline → Variables")
     sys.exit(1)
 
 # ── Build config module ───────────────────────────────────────
@@ -99,51 +98,63 @@ print("[ENV] Config module built")
 for folder in ["logs", "output", "nse_data"]:
     Path(folder).mkdir(exist_ok=True)
 
+
 # ══════════════════════════════════════════════════════════════
-# GITHUB PUSH FUNCTION
+# HOLIDAY CHECK
 # ══════════════════════════════════════════════════════════════
 
-def push_json_to_github(json_path: Path) -> bool:
-    """
-    Push telegram_last_scan.json to GitHub.
-    This triggers nse-bot service to redeploy with fresh data.
-    """
-    print(f"\n[GITHUB] Pushing {json_path.name} to {GITHUB_REPO}...")
+NSE_HOLIDAYS = {
+    date(2026, 1, 26), date(2026, 3, 25), date(2026, 4, 2),
+    date(2026, 4, 10), date(2026, 4, 14), date(2026, 5, 1),
+    date(2026, 8, 15), date(2026, 10, 2), date(2026, 10, 22),
+    date(2026, 11, 5), date(2026, 12, 25),
+}
 
-    if not json_path.exists():
-        print(f"[GITHUB] ERROR: {json_path} not found")
+def is_trading_day(d: date) -> bool:
+    if d.weekday() >= 5:
+        return False
+    if d in NSE_HOLIDAYS:
+        return False
+    return True
+
+def get_last_trading_day(from_date: date = None) -> date:
+    d = from_date or date.today()
+    while not is_trading_day(d):
+        d -= timedelta(days=1)
+    return d
+
+
+# ══════════════════════════════════════════════════════════════
+# GITHUB PUSH
+# ══════════════════════════════════════════════════════════════
+
+def push_file_to_github(file_path: Path, commit_msg: str = None) -> bool:
+    """Push any file to GitHub."""
+    if not file_path.exists():
+        print(f"[GITHUB] File not found: {file_path}")
         return False
 
-    content      = json_path.read_text(encoding="utf-8")
-    content_b64  = base64.b64encode(content.encode()).decode()
-
-    headers = {
+    content     = file_path.read_text(encoding="utf-8")
+    content_b64 = base64.b64encode(content.encode()).decode()
+    headers     = {
         "Authorization": f"token {GITHUB_TOKEN}",
         "Accept":        "application/vnd.github.v3+json",
-        "X-GitHub-Api-Version": "2022-11-28",
     }
-
     api_url = (f"https://api.github.com/repos/{GITHUB_REPO}"
-               f"/contents/{json_path.name}")
+               f"/contents/{file_path.name}")
 
-    # ── Get current SHA (needed for update) ──────────────────
+    # Get current SHA
     sha = None
     try:
         r = requests.get(api_url, headers=headers, timeout=10)
         if r.status_code == 200:
             sha = r.json().get("sha")
-            print(f"[GITHUB] Existing file found (sha: {sha[:8]}...)")
-        elif r.status_code == 404:
-            print("[GITHUB] File not found — will create new")
-        else:
-            print(f"[GITHUB] GET failed: {r.status_code} {r.text[:100]}")
-    except Exception as e:
-        print(f"[GITHUB] GET error: {e}")
+    except Exception:
+        pass
 
-    # ── Push (create or update) ───────────────────────────────
     today    = date.today().strftime("%d-%b-%Y")
     payload  = {
-        "message": f"Auto: scan data {today}",
+        "message": commit_msg or f"Auto: {file_path.name} {today}",
         "content": content_b64,
         "branch":  GITHUB_BRANCH,
     }
@@ -154,73 +165,14 @@ def push_json_to_github(json_path: Path) -> bool:
         r = requests.put(api_url, headers=headers,
                          json=payload, timeout=30)
         if r.status_code in (200, 201):
-            print(f"[GITHUB] ✅ Pushed successfully → "
-                  f"https://github.com/{GITHUB_REPO}/blob/"
-                  f"{GITHUB_BRANCH}/{json_path.name}")
+            print(f"[GITHUB] ✅ Pushed: {file_path.name}")
             return True
         else:
-            print(f"[GITHUB] ❌ Push failed: {r.status_code}")
-            print(f"[GITHUB] Response: {r.text[:200]}")
+            print(f"[GITHUB] ❌ Failed: {r.status_code} {r.text[:200]}")
             return False
     except Exception as e:
-        print(f"[GITHUB] Push error: {e}")
+        print(f"[GITHUB] Error: {e}")
         return False
-
-
-# ══════════════════════════════════════════════════════════════
-# TRIGGER BOT REDEPLOY
-# ══════════════════════════════════════════════════════════════
-
-def trigger_bot_redeploy():
-    """
-    Trigger nse-bot Railway service to redeploy.
-    Uses Railway API if RAILWAY_TOKEN is set,
-    otherwise GitHub push already triggers it via auto-deploy.
-    """
-    railway_token = os.environ.get("RAILWAY_TOKEN", "").strip()
-
-    if not railway_token:
-        print("\n[DEPLOY] No RAILWAY_TOKEN set")
-        print("[DEPLOY] GitHub push will trigger auto-redeploy of nse-bot")
-        print("[DEPLOY] Make sure nse-bot has 'Deploy on push' enabled in Railway")
-        return
-
-    # Railway GraphQL API
-    service_id = os.environ.get("BOT_SERVICE_ID", "").strip()
-    env_id     = os.environ.get("BOT_ENV_ID", "").strip()
-
-    if not service_id:
-        print("[DEPLOY] BOT_SERVICE_ID not set — skipping forced redeploy")
-        return
-
-    print(f"\n[DEPLOY] Triggering nse-bot redeploy...")
-    try:
-        query = """
-        mutation serviceInstanceRedeploy($serviceId: String!, $environmentId: String!) {
-            serviceInstanceRedeploy(serviceId: $serviceId, environmentId: $environmentId)
-        }
-        """
-        r = requests.post(
-            "https://backboard.railway.app/graphql/v2",
-            headers={
-                "Authorization": f"Bearer {railway_token}",
-                "Content-Type":  "application/json",
-            },
-            json={
-                "query":     query,
-                "variables": {
-                    "serviceId":     service_id,
-                    "environmentId": env_id,
-                }
-            },
-            timeout=15,
-        )
-        if r.status_code == 200:
-            print("[DEPLOY] ✅ Bot redeploy triggered")
-        else:
-            print(f"[DEPLOY] ❌ Failed: {r.status_code} {r.text[:100]}")
-    except Exception as e:
-        print(f"[DEPLOY] Error: {e}")
 
 
 # ══════════════════════════════════════════════════════════════
@@ -231,9 +183,16 @@ def run_pipeline():
     from time import time
     t0 = time()
 
-    print("\n[PIPELINE] Starting daily scan pipeline...")
-
     today = date.today()
+
+    # Holiday check
+    if not is_trading_day(today):
+        last_td = get_last_trading_day(today - timedelta(days=1))
+        print(f"\n[PIPELINE] {today} is not a trading day")
+        print(f"[PIPELINE] Using last trading day: {last_td}")
+        today = last_td
+
+    print(f"\n[PIPELINE] Scan date: {today.strftime('%d-%b-%Y')}")
 
     # ── Step 1: Download ──────────────────────────────────────
     print("\n[STEP 1] Downloading NSE data...")
@@ -254,7 +213,6 @@ def run_pipeline():
         print(f"[STEP 2] ✅ Loaded: {sum(result['rows'].values())} rows")
     except Exception as e:
         print(f"[STEP 2] ❌ Load failed: {e}")
-        print("[STEP 2] Cannot continue without database")
         return False
 
     # ── Step 3: Scan ──────────────────────────────────────────
@@ -262,16 +220,13 @@ def run_pipeline():
     try:
         from nse_scanner import scan_stocks
         results_df = scan_stocks(scan_date=today)
-
         if results_df.empty:
-            print("[STEP 3] ❌ No results from scanner")
+            print("[STEP 3] ❌ No results")
             return False
-
         hc = (results_df['conviction'] == 'HIGH CONVICTION').sum() \
              if 'conviction' in results_df.columns else 0
         wl = (results_df['conviction'] == 'Watchlist').sum() \
              if 'conviction' in results_df.columns else 0
-
         print(f"[STEP 3] ✅ {len(results_df)} stocks | HC: {hc} | WL: {wl}")
     except Exception as e:
         print(f"[STEP 3] ❌ Scan failed: {e}")
@@ -279,7 +234,7 @@ def run_pipeline():
         traceback.print_exc()
         return False
 
-    # ── Step 4: Output (Excel + Telegram + JSON) ──────────────
+    # ── Step 4: Output ────────────────────────────────────────
     print("\n[STEP 4] Generating output...")
     try:
         from nse_output import generate_report
@@ -291,29 +246,54 @@ def run_pipeline():
         traceback.print_exc()
         return False
 
-    # ── Step 5: Push JSON to GitHub ───────────────────────────
-    print("\n[STEP 5] Pushing JSON to GitHub...")
-    json_path = Path("telegram_last_scan.json")
-    pushed    = push_json_to_github(json_path)
+    # ── Step 5: Verify both JSON files exist ──────────────────
+    print("\n[STEP 5] Verifying JSON files...")
+    json_path    = Path("telegram_last_scan.json")
+    history_path = Path("scan_history.json")
 
-    if pushed:
-        print("[STEP 5] ✅ JSON pushed — nse-bot will auto-redeploy")
+    if json_path.exists():
+        d = json.loads(json_path.read_text(encoding="utf-8"))
+        print(f"[STEP 5] ✅ telegram_last_scan.json: "
+              f"{d.get('total_stocks')} stocks, date={d.get('scan_date')}")
     else:
-        print("[STEP 5] ⚠️ Push failed — bot will use yesterday's data")
+        print("[STEP 5] ❌ telegram_last_scan.json missing")
+        return False
 
-    # ── Step 6: Trigger bot redeploy ─────────────────────────
-    print("\n[STEP 6] Triggering bot redeploy...")
-    trigger_bot_redeploy()
+    if history_path.exists():
+        h = json.loads(history_path.read_text(encoding="utf-8"))
+        print(f"[STEP 5] ✅ scan_history.json: "
+              f"{h.get('days_stored')} days stored")
+    else:
+        print("[STEP 5] ⚠️ scan_history.json not yet created "
+              "(will appear after first save_scan_results call)")
+
+    # ── Step 6: Push both files to GitHub ─────────────────────
+    print("\n[STEP 6] Pushing JSON files to GitHub...")
+
+    pushed_json    = push_file_to_github(
+        json_path,
+        f"Auto: scan data {today.strftime('%d-%b-%Y')}"
+    )
+    pushed_history = False
+    if history_path.exists():
+        pushed_history = push_file_to_github(
+            history_path,
+            f"Auto: history update {today.strftime('%d-%b-%Y')}"
+        )
+    else:
+        print("[STEP 6] ⚠️ No history file to push yet")
 
     # ── Summary ───────────────────────────────────────────────
     elapsed = round(time() - t0, 1)
     print(f"\n{'='*55}")
     print(f"  PIPELINE COMPLETE in {elapsed}s")
+    print(f"  Scan date      : {today.strftime('%d-%b-%Y')}")
     print(f"  Stocks scanned : {len(results_df)}")
     print(f"  HC signals     : {hc}")
     print(f"  Watchlist      : {wl}")
-    print(f"  JSON pushed    : {'✅' if pushed else '❌'}")
-    print(f"  Next run       : Tomorrow 6:45 PM IST")
+    print(f"  JSON pushed    : {'✅' if pushed_json    else '❌'}")
+    print(f"  History pushed : {'✅' if pushed_history else '⚠️ first run'}")
+    print(f"  Next run       : Tomorrow 6:00 AM IST")
     print(f"{'='*55}")
 
     return True
