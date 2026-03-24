@@ -73,7 +73,6 @@ for folder in ["logs", "output", "nse_data"]:
 # ── GitHub file fetcher ───────────────────────────────────────
 
 def fetch_file_from_github(filename: str) -> bool:
-    """Download a file from GitHub repo."""
     if not GITHUB_TOKEN:
         print(f"[GITHUB] No token — cannot fetch {filename}")
         return False
@@ -86,14 +85,13 @@ def fetch_file_from_github(filename: str) -> bool:
         }
         url = (f"https://api.github.com/repos/{GITHUB_REPO}"
                f"/contents/{filename}?ref={GITHUB_BRANCH}")
-        r   = requests.get(url, headers=headers, timeout=15)
+        r = requests.get(url, headers=headers, timeout=15)
 
         if r.status_code == 200:
             content = base64.b64decode(r.json()["content"]).decode("utf-8")
             Path(filename).write_text(content, encoding="utf-8")
-            parsed  = json.loads(content)
+            parsed = json.loads(content)
 
-            # Print summary based on file type
             if filename == "telegram_last_scan.json":
                 print(f"[GITHUB] ✅ {filename}: "
                       f"{parsed.get('total_stocks')} stocks "
@@ -125,51 +123,26 @@ if RESULTS_FILE.exists():
         scan_date = existing.get("scan_date", "?")
         print(f"[MAIN] Local scan data: {stocks} stocks (date: {scan_date})")
 
-        # Refresh if stale (>3 days)
-        try:
-            from datetime import datetime, timedelta
-            file_date = datetime.strptime(scan_date, "%Y-%m-%d").date()
-            age_days  = (date.today() - file_date).days
-            print("[MAIN] Syncing latest scan from GitHub...")
-
-                fetch_file_from_github("telegram_last_scan.json")
-        except Exception:
-            pass
-    except Exception:
+        # ✅ ALWAYS fetch latest from GitHub
+        print("[MAIN] Syncing latest scan from GitHub...")
         fetch_file_from_github("telegram_last_scan.json")
+
+    except Exception as e:
+        print(f"[MAIN] Error reading local file: {e}")
+        fetch_file_from_github("telegram_last_scan.json")
+
 else:
     fetched = fetch_file_from_github("telegram_last_scan.json")
     if not fetched:
         print("[MAIN] Writing sample data (5 stocks)")
         sample = {
-            "scan_date":    str(date.today()),
+            "scan_date": str(date.today()),
             "total_stocks": 5,
-            "page_size":    5,
-            "stocks": [
-                {"rank":1,"symbol":"RELIANCE","score":8,
-                 "return_1m_pct":5.2,"return_2m_pct":9.1,"return_3m_pct":18.4,
-                 "close":2450,"volume":8500000,"delivery_pct":52.3,
-                 "sl":2278,"target1":2622,"target2":2794},
-                {"rank":2,"symbol":"HDFCBANK","score":7,
-                 "return_1m_pct":4.1,"return_2m_pct":7.8,"return_3m_pct":14.2,
-                 "close":1680,"volume":12000000,"delivery_pct":61.5,
-                 "sl":1562,"target1":1798,"target2":1916},
-                {"rank":3,"symbol":"INFY","score":7,
-                 "return_1m_pct":3.8,"return_2m_pct":6.2,"return_3m_pct":11.5,
-                 "close":1520,"volume":6200000,"delivery_pct":55.8,
-                 "sl":1414,"target1":1626,"target2":1732},
-                {"rank":4,"symbol":"TCS","score":6,
-                 "return_1m_pct":2.9,"return_2m_pct":5.1,"return_3m_pct":9.8,
-                 "close":3820,"volume":3100000,"delivery_pct":67.2,
-                 "sl":3553,"target1":4087,"target2":4354},
-                {"rank":5,"symbol":"WIPRO","score":6,
-                 "return_1m_pct":2.1,"return_2m_pct":4.3,"return_3m_pct":8.2,
-                 "close":480,"volume":9800000,"delivery_pct":48.6,
-                 "sl":446,"target1":514,"target2":548},
-            ]
+            "page_size": 5,
+            "stocks": []
         }
         RESULTS_FILE.write_text(json.dumps(sample, indent=2), encoding="utf-8")
-        print("[MAIN] Sample data written — real data arrives at 6:00 AM IST")
+
 
 # ── Fetch scan_history.json ───────────────────────────────────
 HISTORY_FILE = Path("scan_history.json")
@@ -177,16 +150,18 @@ HISTORY_FILE = Path("scan_history.json")
 if not HISTORY_FILE.exists():
     fetched = fetch_file_from_github("scan_history.json")
     if not fetched:
-        print("[MAIN] No history yet — New/Exit/Strong views will show "
-              "building message")
+        print("[MAIN] No history yet — New/Exit/Strong views will show building message")
 else:
     try:
         h = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
         print(f"[MAIN] Local history: {h.get('days_stored', 0)} days")
-        # Always refresh history from GitHub (pipeline updates it daily)
+
+        # ✅ ALWAYS refresh history
         fetch_file_from_github("scan_history.json")
+
     except Exception:
         fetch_file_from_github("scan_history.json")
+
 
 # ── Start bot ─────────────────────────────────────────────────
 print(f"\n[MAIN] Starting @nsescanner_live_bot (Phase 2)...")
