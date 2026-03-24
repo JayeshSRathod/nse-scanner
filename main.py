@@ -130,8 +130,8 @@ if RESULTS_FILE.exists():
             from datetime import datetime, timedelta
             file_date = datetime.strptime(scan_date, "%Y-%m-%d").date()
             age_days  = (date.today() - file_date).days
-            if age_days > 3:
-                print(f"[MAIN] Data is {age_days}d old — refreshing from GitHub")
+            print("[MAIN] Syncing latest scan from GitHub...")
+
                 fetch_file_from_github("telegram_last_scan.json")
         except Exception:
             pass
