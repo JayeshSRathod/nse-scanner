@@ -205,8 +205,18 @@ def run_pipeline():
     try:
         from nse_scanner import scan_stocks
         results_df = scan_stocks(scan_date=today)
+
         if results_df.empty:
-            raise ValueError("Empty scan result")
+            print("⚠️ No stocks found — skipping scan but keeping previous data")
+
+            write_health(
+                status="NO_RESULTS",
+                scan_date=today.strftime("%Y-%m-%d"),
+                reason="Empty scan"
+            )
+
+        return True   # ✅ IMPORTANT: stop here but NOT fail pipeline
+
     except Exception as e:
         send_failure_alert("STEP 3 Scan", str(e), today)
         write_health(
