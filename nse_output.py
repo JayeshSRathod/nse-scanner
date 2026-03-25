@@ -179,6 +179,11 @@ def _fmt_fallback(df: pd.DataFrame, report_date: date) -> str:
     return msg
 
 
+log.info(
+    f"[BOT] Writing pagination JSON "
+    f"date={report_date} rows={len(results_df)}"
+)
+
 # ── Pagination JSON save ───────────────────────────────────────────────────────
 
 def _save_pagination_json(results_df: pd.DataFrame, report_date: date):
