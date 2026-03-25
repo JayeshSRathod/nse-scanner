@@ -1,4 +1,0 @@
-/next
-/next
-/page 1
-/quit
