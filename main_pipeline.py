@@ -245,27 +245,67 @@ def run_pipeline():
         import traceback
         traceback.print_exc()
         return False
-
-    # ── Step 5: Verify both JSON files exist ──────────────────
+    
+# ── Step 5: Verify both JSON files exist AND are fresh ──────────
     print("\n[STEP 5] Verifying JSON files...")
-    json_path    = Path("telegram_last_scan.json")
+
+    json_path = Path("telegram_last_scan.json")
     history_path = Path("scan_history.json")
 
-    if json_path.exists():
-        d = json.loads(json_path.read_text(encoding="utf-8"))
-        print(f"[STEP 5] ✅ telegram_last_scan.json: "
-              f"{d.get('total_stocks')} stocks, date={d.get('scan_date')}")
-    else:
+    expected_date = today.strftime("%Y-%m-%d")
+
+    if not json_path.exists():
         print("[STEP 5] ❌ telegram_last_scan.json missing")
         return False
 
+    try:
+        d = json.loads(json_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"[STEP 5] ❌ Failed to read telegram_last_scan.json: {e}")
+        return False
+
+    found_date = d.get("scan_date")
+
+    if found_date != expected_date:
+        print(
+            "[STEP 5] ❌ STALE JSON DETECTED\n"
+            f" Expected : {expected_date}\n"
+            f" Found    : {found_date}\n"
+            " Aborting pipeline to prevent stale GitHub push."
+        )
+        return False
+
+    print(
+        f"[STEP 5] ✅ telegram_last_scan.json OK "
+        f"({d.get('total_stocks')} stocks, date={found_date})"
+    )
+
     if history_path.exists():
         h = json.loads(history_path.read_text(encoding="utf-8"))
-        print(f"[STEP 5] ✅ scan_history.json: "
-              f"{h.get('days_stored')} days stored")
+        print(f"[STEP 5] ✅ scan_history.json: {h.get('days_stored')} days")
     else:
-        print("[STEP 5] ⚠️ scan_history.json not yet created "
-              "(will appear after first save_scan_results call)")
+        print("[STEP 5] ⚠️ scan_history.json not present yet (first run)")
+
+    # ── Step 5: Verify both JSON files exist ──────────────────
+    #print("\n[STEP 5] Verifying JSON files...")
+    #json_path    = Path("telegram_last_scan.json")
+    #history_path = Path("scan_history.json")
+
+    #if json_path.exists():
+    #    d = json.loads(json_path.read_text(encoding="utf-8"))
+    #    print(f"[STEP 5] ✅ telegram_last_scan.json: "
+    #          f"{d.get('total_stocks')} stocks, date={d.get('scan_date')}")
+    #else:
+     #   print("[STEP 5] ❌ telegram_last_scan.json missing")
+     #   return False
+
+    #if history_path.exists():
+     #   h = json.loads(history_path.read_text(encoding="utf-8"))
+      #  print(f"[STEP 5] ✅ scan_history.json: "
+       #       f"{h.get('days_stored')} days stored")
+    #else:
+     #   print("[STEP 5] ⚠️ scan_history.json not yet created "
+      #        "(will appear after first save_scan_results call)")
 
     # ── Step 6: Push both files to GitHub ─────────────────────
     print("\n[STEP 6] Pushing JSON files to GitHub...")
