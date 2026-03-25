@@ -306,22 +306,52 @@ def run_pipeline():
     #else:
      #   print("[STEP 5] ⚠️ scan_history.json not yet created "
       #        "(will appear after first save_scan_results call)")
-
-    # ── Step 6: Push both files to GitHub ─────────────────────
+    
+# ── Step 6: Push JSON files to GitHub (only if fresh) ─────────
+    
+    #print("\n[STEP 6] Pushing JSON files to GitHub...")
     print("\n[STEP 6] Pushing JSON files to GitHub...")
+    scan_date_in_json = d.get("scan_date")
+    if scan_date_in_json != expected_date:
+        print(
+            "[STEP 6] ❌ REFUSING PUSH — JSON IS STALE\n"
+            f" Expected : {expected_date}\n"
+            f" Found    : {scan_date_in_json}"
+        )
+        return False
 
-    pushed_json    = push_file_to_github(
+    pushed_json = push_file_to_github(
         json_path,
-        f"Auto: scan data {today.strftime('%d-%b-%Y')}"
+        f"Auto: scan data {expected_date}"
     )
+
     pushed_history = False
     if history_path.exists():
         pushed_history = push_file_to_github(
             history_path,
-            f"Auto: history update {today.strftime('%d-%b-%Y')}"
+            f"Auto: history update {expected_date}"
         )
-    else:
-        print("[STEP 6] ⚠️ No history file to push yet")
+
+    print(
+        f"[STEP 6] JSON pushed: {'✅' if pushed_json else '❌'} | "
+        f"History pushed: {'✅' if pushed_history else '⚠️'}"
+    )
+
+    # ── Step 6: Push both files to GitHub ─────────────────────
+   # print("\n[STEP 6] Pushing JSON files to GitHub...")
+
+    #pushed_json    = push_file_to_github(
+     #   json_path,
+      #  f"Auto: scan data {today.strftime('%d-%b-%Y')}"
+    #)
+    #pushed_history = False
+    #if history_path.exists():
+     #   pushed_history = push_file_to_github(
+      #      history_path,
+       #     f"Auto: history update {today.strftime('%d-%b-%Y')}"
+       # )
+    #else:
+     #   print("[STEP 6] ⚠️ No history file to push yet")
 
     # ── Summary ───────────────────────────────────────────────
     elapsed = round(time() - t0, 1)
