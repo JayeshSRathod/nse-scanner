@@ -453,6 +453,25 @@ def main():
             return
 
     generate_report(df, report_date)
+    
+# ── HARD GUARANTEE: Pagination JSON must exist & be fresh ──
+if RESULTS_FILE:
+    if not os.path.exists(RESULTS_FILE):
+        raise RuntimeError(
+            "telegram_last_scan.json was NOT created — aborting pipeline"
+        )
+
+    with open(RESULTS_FILE, encoding="utf-8") as f:
+        check = json.load(f)
+
+    expected = report_date.strftime("%Y-%m-%d")
+    found = check.get("scan_date")
+
+    if found != expected:
+        raise RuntimeError(
+            f"telegram_last_scan.json STALE "
+            f"(expected {expected}, found {found})"
+        )
 
 
 if __name__ == "__main__":
