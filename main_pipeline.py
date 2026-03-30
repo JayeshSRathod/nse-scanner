@@ -265,7 +265,27 @@ def run_pipeline():
 
     # ── STEP 6 ────────────────────────────────────────────────
     push_file_to_github(json_path, f"Auto: scan {expected}")
+    """
+main_pipeline.py — 1 EDIT ONLY
+================================
+INSTRUCTION: Find the line in Step 6 of run_pipeline():
 
+    push_file_to_github(json_path, f"Auto: scan {expected}")
+
+ADD these lines IMMEDIATELY AFTER it:
+"""
+
+    # ── Push scan_history.json (NEW — needed for bot views) ───
+    history_path = Path("scan_history.json")
+    if history_path.exists():
+        if push_file_to_github(history_path, f"Auto: history {expected}"):
+            print(f"  ✅ scan_history.json pushed to GitHub")
+        else:
+            print(f"  ⚠️  scan_history.json push failed (non-fatal)")
+
+# That's it. 5 lines. Without this, the bot on Railway
+# will never have history data and /new, /exit, /strong
+# views will always show "no data".
     write_health(
         status="SUCCESS",
         scan_date=expected,
