@@ -1,59 +1,29 @@
 """
-nse_scanner.py — Core Stock Scanner (v2 — with Technical Signals)
-===================================================================
-Loads data from SQLite -> applies filters -> momentum score ->
-technical signal score -> returns ranked stocks with trade plan.
-
-Changes from v1:
-    - Fixed DAYS_3M: 66 trading days (was 180 — that is download window)
-    - Integrated nse_technical_filters for HMA/RSI/MACD/RR scoring
-    - Added entry, sl, target1, target2 columns to output
-    - Added conviction tier: HIGH CONVICTION / Watchlist
-
-Usage:
-    python nse_scanner.py
-    python nse_scanner.py --date 05-03-2026
-    python nse_scanner.py --top 30
+nse_scanner.py — Core Stock Scanner (v3 — Categories + Streaks)
+================================================================
 """
 
 import os
 import sys
+import json
 import argparse
 import sqlite3
 import pandas as pd
 import numpy as np
 from datetime import date, datetime, timedelta
+from pathlib import Path
 import logging
 
 try:
     import config
 except ImportError:
-    print("ERROR: config.py not found. Run setup_project.py first.")
+    print("ERROR: config.py not found.")
     sys.exit(1)
-
-# ══════════════════════════════════════════════════════════════
-# EDIT A: REPLACE your existing try/except import block
-# ══════════════════════════════════════════════════════════════
-# Find these lines:
-#   try:
-#       from nse_technical_filters import score_all_stocks, ...
-#       TECH_FILTERS_AVAILABLE = True
-#   except ImportError:
-#       ...
-#
-# REPLACE with:
-
-import json
-from pathlib import Path
 
 try:
     from nse_technical_filters import (
-        score_all_stocks,
-        TIER_HIGH_CONVICTION,
-        TIER_WATCHLIST,
-        assign_categories_bulk,    # NEW
-        CATEGORY_META,             # NEW
-        CATEGORY_ORDER,            # NEW
+        score_all_stocks, TIER_HIGH_CONVICTION, TIER_WATCHLIST,
+        assign_categories_bulk, CATEGORY_META, CATEGORY_ORDER,
     )
     TECH_FILTERS_AVAILABLE = True
 except ImportError:
@@ -73,13 +43,11 @@ try:
 except ImportError:
     save_scan_results = None
 
-# ── Return periods (trading days) ────────────────────────────
-DAYS_1M = 22    # 1 month
-DAYS_2M = 44    # 2 months
-DAYS_3M = 66    # 3 months  ← FIXED (was 180 in config — that is download window)
-LOOKBACK = 180  # How many days to load from DB for indicator calculation
+DAYS_1M  = 22
+DAYS_2M  = 44
+DAYS_3M  = 66
+LOOKBACK = 180
 
-# ── Logging ──────────────────────────────────────────────────
 os.makedirs(config.LOG_DIR, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
@@ -92,11 +60,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
-def load_data_for_date(scan_date: date) -> dict:
-    """
-    Load price history and blacklist from SQLite.
-    Loads LOOKBACK=180 days so technical indicators have enough history.
-    """
+def load_data_for_date(scan_date):
     conn = sqlite3.connect(config.DB_PATH)
     start_date = scan_date - timedelta(days=LOOKBACK + 30)
 
@@ -113,18 +77,6 @@ def load_data_for_date(scan_date: date) -> dict:
         SELECT symbol FROM blacklist WHERE date = '{scan_date}'
     """, conn)
 
-    # Load latest week52 for bonus signal
-#    ══════════════════════════════════════════════════════════════
-# EDIT B: In load_data_for_date(), REPLACE the week52 query
-# ══════════════════════════════════════════════════════════════
-# Find these lines:
-#   w52_df = pd.read_sql_query(f"""
-#       SELECT symbol, week52_high, week52_low FROM week52
-#       WHERE date = '{scan_date}'
-#   """, conn)
-#
-# REPLACE with:
-
     w52_df = pd.read_sql_query(f"""
         SELECT symbol, week52_high, week52_low FROM week52
         WHERE date = (
@@ -137,26 +89,22 @@ def load_data_for_date(scan_date: date) -> dict:
         print("  ⚠️  No week52 data — 'Close to Peak' category disabled")
     else:
         print(f"  ✅  week52 loaded: {len(w52_df)} stocks")
+
     w52_map = {
         row['symbol']: (row['week52_high'], row['week52_low'])
         for _, row in w52_df.iterrows()
     }
 
     conn.close()
-
     return {
-        'prices'    : prices_df,
-        'blacklist' : set(blacklist_df['symbol'].tolist()),
-        'w52_map'   : w52_map,
-        'scan_date' : scan_date,
+        'prices': prices_df,
+        'blacklist': set(blacklist_df['symbol'].tolist()),
+        'w52_map': w52_map,
+        'scan_date': scan_date,
     }
 
 
-def calculate_returns(prices_df: pd.DataFrame, scan_date: date) -> pd.DataFrame:
-    """
-    Calculate 1M / 2M / 3M returns using correct 66-day lookback.
-    Also calculates avg_volume over last 22 days for filter.
-    """
+def calculate_returns(prices_df, scan_date):
     if prices_df.empty:
         return pd.DataFrame()
 
@@ -164,91 +112,51 @@ def calculate_returns(prices_df: pd.DataFrame, scan_date: date) -> pd.DataFrame:
     recent['symbol'] = recent['symbol'].astype(str).str.strip()
     recent = recent.dropna(subset=['symbol', 'date', 'close'])
     recent = recent.sort_values(['symbol', 'date'])
-
     results = []
 
     for symbol, grp in recent.groupby('symbol'):
-        grp = grp.tail(DAYS_3M + 5)   # a bit of buffer
-
+        grp = grp.tail(DAYS_3M + 5)
         if len(grp) < DAYS_1M:
             continue
-
         current_close = grp.iloc[-1]['close']
-
-        # 1M return
-        r1m = 0.0
-        if len(grp) >= DAYS_1M:
-            p = grp.iloc[-DAYS_1M]['close']
-            r1m = (current_close - p) / p if p > 0 else 0.0
-
-        # 2M return
-        r2m = 0.0
-        if len(grp) >= DAYS_2M:
-            p = grp.iloc[-DAYS_2M]['close']
-            r2m = (current_close - p) / p if p > 0 else 0.0
-
-        # 3M return (66 trading days)
-        r3m = 0.0
-        if len(grp) >= DAYS_3M:
-            p = grp.iloc[-DAYS_3M]['close']
-            r3m = (current_close - p) / p if p > 0 else 0.0
-
-        latest      = grp.iloc[-1]
-        avg_volume  = grp.tail(22)['volume'].mean()
-
+        r1m = (current_close - grp.iloc[-DAYS_1M]['close']) / grp.iloc[-DAYS_1M]['close'] if len(grp) >= DAYS_1M and grp.iloc[-DAYS_1M]['close'] > 0 else 0.0
+        r2m = (current_close - grp.iloc[-DAYS_2M]['close']) / grp.iloc[-DAYS_2M]['close'] if len(grp) >= DAYS_2M and grp.iloc[-DAYS_2M]['close'] > 0 else 0.0
+        r3m = (current_close - grp.iloc[-DAYS_3M]['close']) / grp.iloc[-DAYS_3M]['close'] if len(grp) >= DAYS_3M and grp.iloc[-DAYS_3M]['close'] > 0 else 0.0
+        latest = grp.iloc[-1]
+        avg_volume = grp.tail(22)['volume'].mean()
         results.append({
-            'symbol'       : str(symbol).strip(),
-            'close'        : current_close,
-            'open'         : latest.get('open', 0),
-            'high'         : latest.get('high', 0),
-            'low'          : latest.get('low', 0),
-            'volume'       : latest.get('volume', 0),
-            'avg_volume'   : avg_volume,
-            'delivery_pct' : latest.get('delivery_pct', 0),
-            'avg_price'    : latest.get('avg_price', 0),
-            'return_1m'    : r1m,
-            'return_2m'    : r2m,
-            'return_3m'    : r3m,
+            'symbol': str(symbol).strip(), 'close': current_close,
+            'open': latest.get('open', 0), 'high': latest.get('high', 0),
+            'low': latest.get('low', 0), 'volume': latest.get('volume', 0),
+            'avg_volume': avg_volume, 'delivery_pct': latest.get('delivery_pct', 0),
+            'avg_price': latest.get('avg_price', 0),
+            'return_1m': r1m, 'return_2m': r2m, 'return_3m': r3m,
         })
-
     return pd.DataFrame(results)
 
 
-def apply_filters(stocks_df: pd.DataFrame, blacklist: set) -> pd.DataFrame:
-    """Apply all basic filters sequentially with counts."""
-    print("\n" + "="*60)
-    print("  NSE SCANNER — Applying Filters")
-    print("="*60)
-
+def apply_filters(stocks_df, blacklist):
+    print("\n" + "="*60 + "\n  NSE SCANNER — Applying Filters\n" + "="*60)
     n = len(stocks_df)
     print(f"Initial stocks     : {n:,}")
-
     stocks_df = stocks_df[~stocks_df['symbol'].isin(blacklist)]
-    print(f"After blacklist    : {len(stocks_df):,}  (removed {n - len(stocks_df)} GSM/ASM/IRP)")
-
+    print(f"After blacklist    : {len(stocks_df):,}")
     n = len(stocks_df)
     stocks_df = stocks_df[stocks_df['close'] >= config.MIN_PRICE]
-    print(f"After price >= {config.MIN_PRICE}  : {len(stocks_df):,}  (removed {n - len(stocks_df)} penny stocks)")
-
+    print(f"After price >= {config.MIN_PRICE}  : {len(stocks_df):,}")
     n = len(stocks_df)
     stocks_df = stocks_df[stocks_df['avg_volume'] >= config.MIN_VOLUME]
-    print(f"After volume {config.MIN_VOLUME//1000}k   : {len(stocks_df):,}  (removed {n - len(stocks_df)} illiquid)")
-
+    print(f"After volume       : {len(stocks_df):,}")
     n = len(stocks_df)
     stocks_df = stocks_df[stocks_df['delivery_pct'] >= config.MIN_DELIVERY]
-    print(f"After delivery {config.MIN_DELIVERY}% : {len(stocks_df):,}  (removed {n - len(stocks_df)} speculative)")
-
-    print("─"*60)
-    print(f"Ready for scoring  : {len(stocks_df):,} quality stocks")
-
+    print(f"After delivery     : {len(stocks_df):,}")
+    print(f"Ready for scoring  : {len(stocks_df):,}")
     return stocks_df.reset_index(drop=True)
 
 
-def calculate_momentum_score(stocks_df: pd.DataFrame) -> pd.DataFrame:
-    """Weighted momentum score from 1M/2M/3M returns."""
+def calculate_momentum_score(stocks_df):
     if stocks_df.empty:
         return stocks_df
-
     stocks_df['momentum_score'] = (
         config.WEIGHT_1M * stocks_df['return_1m'] +
         config.WEIGHT_2M * stocks_df['return_2m'] +
@@ -257,61 +165,28 @@ def calculate_momentum_score(stocks_df: pd.DataFrame) -> pd.DataFrame:
     return stocks_df.sort_values('momentum_score', ascending=False)
 
 
-def add_trade_plan(row: pd.Series, tech_row: pd.Series = None) -> dict:
-    """
-    Calculate Entry, SL, Target1, Target2 for one stock.
-
-    Entry   = today's close
-    SL      = from technical filter (HMA55 or 5D low)
-              fallback = close * 0.92 (8% below)
-    Target1 = Entry + (1 x Risk)   -- partial exit ~1 month
-    Target2 = Entry + (2 x Risk)   -- full target  ~3 months
-    """
+def add_trade_plan(row, tech_row=None):
     entry = row['close']
-
-    # Use technical filter SL if available
     if tech_row is not None and pd.notna(tech_row.get('stop')) and tech_row['stop'] > 0:
         sl = tech_row['stop']
     else:
-        sl = round(entry * 0.93, 2)   # fallback: 7% stop
-    # ══════════════════════════════════════════════════════════════
-# EDIT C: In add_trade_plan(), fix the SL fallback
-# ══════════════════════════════════════════════════════════════
-# Find this line:
-#     sl = round(entry * 0.92, 2)   # fallback: 8% stop
-#
-# REPLACE with:
-#     sl = round(entry * 0.93, 2)   # fallback: 7% stop
+        sl = round(entry * 0.93, 2)
 
     risk    = entry - sl
     target1 = round(entry + (1.0 * risk), 2)
     target2 = round(entry + (2.0 * risk), 2)
-
-    sl_pct  = round(-risk / entry * 100, 1)
-    t1_pct  = round(risk  / entry * 100, 1)
-    t2_pct  = round(risk * 2 / entry * 100, 1)
-    rr      = round(risk / risk, 1) if risk > 0 else 0   # always 2.0
+    sl_pct  = round(-risk / entry * 100, 1) if entry > 0 else 0
+    t1_pct  = round(risk / entry * 100, 1)  if entry > 0 else 0
+    t2_pct  = round(risk * 2 / entry * 100, 1) if entry > 0 else 0
 
     return {
-        'entry'   : round(entry, 2),
-        'sl'      : round(sl, 2),
-        'sl_pct'  : sl_pct,
-        'target1' : target1,
-        't1_pct'  : t1_pct,
-        'target2' : target2,
-        't2_pct'  : t2_pct,
-        'rr'      : 2.0,
+        'entry': round(entry, 2), 'sl': round(sl, 2), 'sl_pct': sl_pct,
+        'target1': target1, 't1_pct': t1_pct,
+        'target2': target2, 't2_pct': t2_pct, 'rr': 2.0,
     }
 
-#     ══════════════════════════════════════════════════════════════
-# EDIT D: ADD these 2 helpers ABOVE scan_stocks()
-#         Then REPLACE scan_stocks() entirely
-# ══════════════════════════════════════════════════════════════
 
-# ── ADD THESE TWO HELPERS above scan_stocks() ─────────────────
-
-def _load_streaks() -> dict:
-    """Load consecutive-day streak per symbol from scan_history.json."""
+def _load_streaks():
     history_file = Path("scan_history.json")
     if not history_file.exists():
         return {}
@@ -336,13 +211,11 @@ def _load_streaks() -> dict:
         return {}
 
 
-def _assign_category_simple(row) -> str:
-    """Fallback category assignment when tech filters unavailable."""
+def _assign_category_simple(row):
     r1m = float(row.get("return_1m", 0))
     r2m = float(row.get("return_2m", 0))
     r3m = float(row.get("return_3m", 0))
     dlv = float(row.get("delivery_pct", 0))
-
     if r1m > r3m + 0.02 and r3m < 0.10:
         return "recovering"
     if dlv >= 55:
@@ -351,71 +224,47 @@ def _assign_category_simple(row) -> str:
         return "rising"
     return "rising"
 
-# ── REPLACE scan_stocks() with this version ───────────────────
 
-def scan_stocks(scan_date: date = None, top_n: int = None) -> pd.DataFrame:
-    """
-    Main scan function. Returns ranked DataFrame with:
-      - Trade plan (entry, SL, T1, T2)
-      - Layman category (rising, uptrend, peak, recovering, safer)
-      - Streak (consecutive days in top 25)
-    """
+def scan_stocks(scan_date=None, top_n=None):
     if scan_date is None:
         scan_date = date.today()
     if top_n is None:
         top_n = config.TOP_N_STOCKS
 
     print(f"\nScanning for date  : {scan_date.strftime('%d-%b-%Y')}")
-    print(f"3M lookback        : {DAYS_3M} trading days (fixed)")
-    print(f"History loaded     : {LOOKBACK} days (for HMA stability)")
 
-    # ── Load data ──
     data = load_data_for_date(scan_date)
     if data['prices'].empty:
         print("ERROR: No price data in database.")
         return pd.DataFrame()
 
-    # ── Returns ──
     stocks_df = calculate_returns(data['prices'], scan_date)
     if stocks_df.empty:
-        print("ERROR: Could not calculate returns.")
         return pd.DataFrame()
 
-    # ── Basic filters ──
     filtered_df = apply_filters(stocks_df, data['blacklist'])
     if filtered_df.empty:
-        print("No stocks passed basic filters.")
         return pd.DataFrame()
 
-    # ── Momentum score ──
     scored_df = calculate_momentum_score(filtered_df)
 
-    # ── Technical signal scoring ──
     tech_df = pd.DataFrame()
     if TECH_FILTERS_AVAILABLE:
         print(f"\n  Running technical signal scoring...")
         tech_df = score_all_stocks(
-            price_df         = data['prices'],
-            filtered_symbols = filtered_df['symbol'].tolist(),
-            scan_date        = scan_date,
-            w52_map          = data['w52_map'],
+            price_df=data['prices'],
+            filtered_symbols=filtered_df['symbol'].tolist(),
+            scan_date=scan_date, w52_map=data['w52_map'],
         )
 
-    # ── Merge technical scores ──
     if not tech_df.empty:
         tech_df = tech_df.reset_index()
-        merge_cols = ['symbol', 'score', 'conviction', 'stop',
-                      'target', 'rr', 'rsi', 'vol_ratio',
-                      'pts_hma', 'pts_vol', 'pts_brk',
-                      'pts_rsi', 'pts_macd', 'pts_52w', 'pts_rr',
-                      'fresh_cross']
-        merge_cols = [c for c in merge_cols if c in tech_df.columns]
-        scored_df = scored_df.merge(
-            tech_df[merge_cols], on='symbol', how='left'
-        )
+        merge_cols = [c for c in ['symbol','score','conviction','stop','target','rr','rsi',
+                      'vol_ratio','pts_hma','pts_vol','pts_brk','pts_rsi','pts_macd',
+                      'pts_52w','pts_rr','fresh_cross'] if c in tech_df.columns]
+        scored_df = scored_df.merge(tech_df[merge_cols], on='symbol', how='left')
         scored_df['score']      = scored_df['score'].fillna(0)
         scored_df['conviction'] = scored_df['conviction'].fillna('')
-
         hc   = scored_df[scored_df['conviction'] == 'HIGH CONVICTION'].sort_values('score', ascending=False)
         wl   = scored_df[scored_df['conviction'] == 'Watchlist'].sort_values('score', ascending=False)
         rest = scored_df[scored_df['conviction'] == ''].sort_values('momentum_score', ascending=False)
@@ -425,7 +274,6 @@ def scan_stocks(scan_date: date = None, top_n: int = None) -> pd.DataFrame:
         scored_df['conviction'] = ''
         scored_df['stop']       = None
 
-    # ── Trade plan ──
     trade_plans = []
     for _, row in scored_df.head(top_n).iterrows():
         tech_row = None
@@ -444,54 +292,34 @@ def scan_stocks(scan_date: date = None, top_n: int = None) -> pd.DataFrame:
     result_df['return_2m_pct'] = (result_df['return_2m'] * 100).round(1)
     result_df['return_3m_pct'] = (result_df['return_3m'] * 100).round(1)
 
-    # ══════════════════════════════════════════════════════════
-    # NEW: Assign categories
-    # ══════════════════════════════════════════════════════════
+    # ── Assign categories ──
     print(f"\n  Assigning layman categories...")
-
     if TECH_FILTERS_AVAILABLE and not tech_df.empty:
-        categories = assign_categories_bulk(
-            scored_df=result_df, returns_df=result_df,
-            w52_map=data['w52_map'],
-        )
-        result_df['category'] = categories
+        result_df['category'] = assign_categories_bulk(
+            scored_df=result_df, returns_df=result_df, w52_map=data['w52_map'])
     else:
-        result_df['category'] = result_df.apply(
-            _assign_category_simple, axis=1
-        )
+        result_df['category'] = result_df.apply(_assign_category_simple, axis=1)
 
     cat_counts = result_df['category'].value_counts()
-    print(f"  Categories:")
     for cat, count in cat_counts.items():
         meta = CATEGORY_META.get(cat, {})
-        icon = meta.get("icon", "•")
-        label = meta.get("label", cat)
-        print(f"    {icon} {label}: {count}")
+        print(f"    {meta.get('icon','•')} {meta.get('label', cat)}: {count}")
 
-    # ══════════════════════════════════════════════════════════
-    # NEW: Add streaks
-    # ══════════════════════════════════════════════════════════
+    # ── Add streaks ──
     streaks = _load_streaks()
-    result_df['streak'] = result_df['symbol'].map(
-        lambda s: streaks.get(s, 0)
-    )
+    result_df['streak'] = result_df['symbol'].map(lambda s: streaks.get(s, 0))
     strong = (result_df['streak'] >= 5).sum()
     if strong > 0:
         print(f"  🔥 {strong} stocks with 5+ day streak")
 
-    log.info(
-        f"Scan complete: {len(result_df)} stocks | "
-        f"HC={(result_df['conviction'] == 'HIGH CONVICTION').sum()} | "
-        f"WL={(result_df['conviction'] == 'Watchlist').sum()} | "
-        f"Cats: {dict(cat_counts)}"
-    )
-
+    log.info(f"Scan complete: {len(result_df)} stocks | Cats: {dict(cat_counts)}")
     return result_df
+
 
 def main():
     parser = argparse.ArgumentParser(description="NSE Stock Momentum Scanner")
     parser.add_argument("--date", help="Scan date DD-MM-YYYY")
-    parser.add_argument("--top",  type=int, help="Number of top stocks to show")
+    parser.add_argument("--top",  type=int, help="Number of top stocks")
     args = parser.parse_args()
 
     scan_date = None
@@ -502,59 +330,34 @@ def main():
                 break
             except ValueError:
                 pass
-        if not scan_date:
-            print(f"ERROR: Invalid date: {args.date}. Use DD-MM-YYYY")
-            sys.exit(1)
 
     results = scan_stocks(scan_date=scan_date, top_n=args.top)
-
     if results.empty:
-        print("\nNo results to display.")
+        print("\nNo results.")
         return
 
-    # ── Print results ──
     hc_df = results[results['conviction'] == 'HIGH CONVICTION']
     wl_df = results[results['conviction'] == 'Watchlist']
-    ot_df = results[~results['conviction'].isin(['HIGH CONVICTION', 'Watchlist'])]
 
     def print_section(title, df):
-        if df.empty:
-            return
-        print(f"\n{'─'*72}")
-        print(f"  {title}")
-        print(f"{'─'*72}")
-        print(f"  {'#':<4} {'Symbol':<12} {'Scr':>3} {'1M%':>6} {'2M%':>6} {'3M%':>6} "
-              f"{'Entry':>8} {'SL':>8} {'T1':>8} {'T2':>8}")
-        print(f"  {'─'*68}")
+        if df.empty: return
+        print(f"\n{'─'*72}\n  {title}\n{'─'*72}")
         for i, (_, row) in enumerate(df.iterrows(), 1):
-            print(
-                f"  {i:<4} {str(row['symbol']):<12} "
-                f"{int(row.get('score',0)):>3} "
-                f"{row['return_1m_pct']:>+6.1f}% "
-                f"{row['return_2m_pct']:>+6.1f}% "
-                f"{row['return_3m_pct']:>+6.1f}% "
-                f"{row['entry']:>8.2f} "
-                f"{row['sl']:>8.2f} "
-                f"{row['target1']:>8.2f} "
-                f"{row['target2']:>8.2f}"
-            )
+            print(f"  {i:<4} {str(row['symbol']):<12} {int(row.get('score',0)):>3} "
+                  f"{row['return_3m_pct']:>+6.1f}% {row['entry']:>8.2f} "
+                  f"{row['sl']:>8.2f} {row['target1']:>8.2f} {row['target2']:>8.2f} "
+                  f"{row.get('category','')}")
 
-    print(f"\n{'#'*72}")
-    print(f"  NSE SCANNER RESULTS — {(scan_date or date.today()).strftime('%d-%b-%Y')}")
-    print(f"  Entry=Close | SL=HMA55/5DLow | T1=1xRisk | T2=2xRisk")
-    print(f"{'#'*72}")
-    print_section(f"HIGH CONVICTION (8-10)  [{len(hc_df)} stocks]", hc_df)
-    print_section(f"WATCHLIST (5-7)         [{len(wl_df)} stocks]", wl_df)
-    print_section(f"MOMENTUM ONLY           [{len(ot_df)} stocks]", ot_df)
-    print(f"\n  Total: {len(results)} stocks\n")
-    
-    # Save results to Telegram JSON for bot pagination
+    print(f"\n{'#'*72}\n  NSE SCANNER RESULTS — {(scan_date or date.today()).strftime('%d-%b-%Y')}\n{'#'*72}")
+    print_section(f"HIGH CONVICTION [{len(hc_df)}]", hc_df)
+    print_section(f"WATCHLIST [{len(wl_df)}]", wl_df)
+
     if save_scan_results:
         try:
             save_scan_results(results, scan_date or date.today())
-            print(f"[OK] Results saved to telegram_last_scan.json for bot pagination")
+            print(f"[OK] Results saved to telegram_last_scan.json")
         except Exception as e:
-            print(f"[WARNING] Failed to save to Telegram JSON: {e}")
+            print(f"[WARNING] Failed to save: {e}")
 
 
 if __name__ == "__main__":
