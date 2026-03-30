@@ -373,6 +373,28 @@ def load_day(trade_date, do_cleanup=False):
         print(f"  OK    week52          : {n} rows inserted")
     else:
         print(f"  SKIP  week52          : not available (add bundle ZIP)")
+    """
+nse_loader.py — 1 EDIT
+========================
+INSTRUCTION: In load_day(), find the section:
+    # 5 -- 52W (OPTIONAL)
+    ...
+    else:
+        print(f"  SKIP  week52  : not available (add bundle ZIP)")
+
+ADD these lines RIGHT AFTER that else block:
+"""
+
+    # ── Week52 health check for category system (NEW) ─────────
+    w52_recent = conn.execute(
+        "SELECT COUNT(*) FROM week52 WHERE date >= ?",
+        [(trade_date - timedelta(days=7)).isoformat()]
+    ).fetchone()[0]
+
+    if w52_recent == 0:
+        print(f"  ⚠️   week52 EMPTY — '🔝 Close to Peak' category won't work")
+        print(f"       Download bundle ZIP from NSE for full categories")
+        notes.append("week52 empty — peak category disabled")
 
     # 6 -- PE (OPTIONAL)
     ok, reason = validate("pe", parsed["pe"], trade_date)
