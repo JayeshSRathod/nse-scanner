@@ -62,14 +62,33 @@ if missing:
     print(f"[ERROR] Missing vars: {', '.join(missing)}")
     sys.exit(1)
 
-config                 = types.ModuleType("config")
-config.TELEGRAM_TOKEN  = TOKEN
-config.TELEGRAM_CHATID = CHAT_ID
-config.OUTPUT_DIR      = "output"
-config.LOG_DIR         = "logs"
-config.DB_PATH         = "nse_scanner.db"
-config.DATA_DIR        = "nse_data"
-sys.modules["config"]  = config
+config                  = types.ModuleType("config")
+config.TELEGRAM_TOKEN   = TOKEN
+config.TELEGRAM_CHATID  = CHAT_ID
+config.OUTPUT_DIR       = "output"
+config.LOG_DIR          = "logs"
+config.DB_PATH          = "nse_scanner.db"
+config.DATA_DIR         = "nse_data"
+config.NSE_DATA_DIR     = "nse_data"
+# Scanner thresholds (must match config.py)
+config.MIN_PRICE        = 50
+config.MIN_VOLUME       = 50000
+config.MIN_DELIVERY     = 35
+config.MAX_ANNVOL       = 1.5
+config.MAX_PE           = 80
+config.TOP_N_STOCKS     = 25
+config.MIN_MARKET_CAP   = 500
+# Return calculation weights
+config.WEIGHT_1M        = 0.20
+config.WEIGHT_2M        = 0.30
+config.WEIGHT_3M        = 0.50
+config.DAYS_1M          = 22
+config.DAYS_2M          = 44
+config.DAYS_3M          = 66
+# Bonus scores
+config.BONUS_52W_HIGH   = 0.05
+config.BONUS_TOP25      = 0.03
+sys.modules["config"]   = config
 
 for folder in ["logs", "output", "nse_data"]:
     Path(folder).mkdir(exist_ok=True)
