@@ -28,24 +28,37 @@ except ImportError:
     sys.exit(1)
 
 try:
-    from nse_telegram_handler import (
-        load_scan_results,
-        load_history,
-        sort_stocks,
-        format_stock_list,
-        format_new_stocks,
-        format_exit_stocks,
-        format_strong_stocks,
-        format_help,
-        get_new_stocks,
-        get_exit_stocks,
-        get_strong_stocks,
-        fetch_news_for_symbol,
-        _h, _b, _code,
-        _fmt_return,
-        RESULTS_FILE,
-        PARSE_MODE,
-    )
+    """
+nse_telegram_polling.py — 3 EDITS
+====================================
+EDIT A: Add new imports at the top
+EDIT B: Add keyboard + handler functions (paste anywhere above main())
+EDIT C: Wire into your existing callback/command handlers
+"""
+
+
+# ══════════════════════════════════════════════════════════════
+# EDIT A: ADD these imports alongside your existing ones
+# ══════════════════════════════════════════════════════════════
+
+from nse_telegram_handler import (
+    load_scan_results,
+    load_history,
+    sort_stocks,
+    format_stock_list,
+    format_help,
+    format_welcome,          # NEW
+    format_today_scan,       # NEW
+    format_new_stocks,       # NEW
+    format_exit_stocks,      # NEW
+    format_caution_stocks,   # NEW
+    format_strong_stocks,    # NEW
+    get_new_stocks,          # NEW
+    get_exit_stocks,         # NEW
+    get_strong_stocks,       # NEW
+    PARSE_MODE,
+)
+
 except ImportError as e:
     print(f"ERROR importing nse_telegram_handler: {e}")
     sys.exit(1)
@@ -578,6 +591,117 @@ def startup_checks() -> bool:
 
     return ok
 
+# ══════════════════════════════════════════════════════════════
+# EDIT B: ADD these functions (paste above your main() function)
+# ══════════════════════════════════════════════════════════════
+
+def get_main_keyboard():
+    """Primary navigation keyboard with all views."""
+    return {"inline_keyboard": [
+        [{"text": "📊 Today",   "callback_data": "view_today"},
+         {"text": "🆕 New",     "callback_data": "view_new"},
+         {"text": "📉 Exit",    "callback_data": "view_exit"}],
+        [{"text": "⚠️ Caution", "callback_data": "view_caution"},
+         {"text": "🔥 Strong",  "callback_data": "view_strong"},
+         {"text": "❓ Help",     "callback_data": "help"}],
+    ]}
+
+
+def get_list_keyboard():
+    """Navigation keyboard for paginated list view."""
+    return {"inline_keyboard": [
+        [{"text": "⬅️ Prev", "callback_data": "prev"},
+         {"text": "➡️ Next", "callback_data": "next"}],
+        [{"text": "📈 3M",   "callback_data": "sort_3m"},
+         {"text": "⭐ Score", "callback_data": "sort_score"},
+         {"text": "🔝 Top10", "callback_data": "sort_top10"}],
+        [{"text": "📊 Back", "callback_data": "view_today"},
+         {"text": "❓ Help",  "callback_data": "help"}],
+    ]}
+
+
+def handle_new_views(callback_data, chat_id=None):
+    """
+    Handle new view callbacks. Returns (message, keyboard) or (None, None).
+
+    Call this from your existing handle_callback():
+        msg, kb = handle_new_views(data)
+        if msg:
+            # send msg with kb
+            return
+        # ... existing callback handling ...
+    """
+    res = load_scan_results()
+    if not res:
+        return ("No scan data yet. Pipeline hasn't run today.",
+                get_main_keyboard())
+
+    stocks    = res['stocks']
+    scan_date = res.get('scan_date', '')
+    history   = load_history()
+    msg, kb = handle_new_views(callback_data)
+     if msg:
+         answer_callback(callback_query_id)
+         edit_message(chat_id, message_id, msg, kb)
+         return
+  
+    if callback_data == "view_today":
+        return format_today_scan(stocks, scan_date), get_main_keyboard()
+
+    elif callback_data == "view_new":
+        return format_new_stocks(get_new_stocks(history), scan_date), get_main_keyboard()
+
+    elif callback_data == "view_exit":
+        return format_exit_stocks(get_exit_stocks(history), scan_date), get_main_keyboard()
+
+    elif callback_data == "view_caution":
+        return format_caution_stocks(stocks, scan_date), get_main_keyboard()
+
+    elif callback_data == "view_strong":
+        return format_strong_stocks(get_strong_stocks(history), scan_date), get_main_keyboard()
+
+    return None, None
+
+
+def handle_new_commands(text, chat_id=None, user_name=None):
+    """
+    Handle new slash commands. Returns (message, keyboard) or (None, None).
+
+    Call this from your existing command handler:
+        msg, kb = handle_new_commands(text, chat_id, first_name)
+        if msg:
+            # send msg with kb
+            return
+        # ... existing command handling ...
+    """
+    res = load_scan_results()
+    msg, kb = handle_new_commands(text, chat_id, first_name)
+     if msg:
+         send_message(chat_id, msg, kb)
+         return
+
+    if text in ("/start", "hi", "hello", "Hi", "Hello"):
+        return format_welcome(user_name), get_main_keyboard()
+
+    if not res:
+        return ("No scan data yet.", get_main_keyboard())
+
+    stocks    = res['stocks']
+    scan_date = res.get('scan_date', '')
+    history   = load_history()
+
+    if text == "/today":
+        return format_today_scan(stocks, scan_date), get_main_keyboard()
+    elif text == "/new":
+        return format_new_stocks(get_new_stocks(history), scan_date), get_main_keyboard()
+    elif text == "/exit":
+        return format_exit_stocks(get_exit_stocks(history), scan_date), get_main_keyboard()
+    elif text == "/caution":
+        return format_caution_stocks(stocks, scan_date), get_main_keyboard()
+    elif text == "/strong":
+        return format_strong_stocks(get_strong_stocks(history), scan_date), get_main_keyboard()
+
+    return None, None
 
 # ── Main polling loop ─────────────────────────────────────────
 
