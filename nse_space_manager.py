@@ -45,7 +45,31 @@ KEEP_CSV_DAYS  = 7    # Raw CSVs older than this are deleted (in SQLite already)
 KEEP_LOG_DAYS  = 30   # Log files rolling window
 KEEP_EXCEL     = 1    # Keep only latest N Excel files
 KEEP_NEWS_DAYS = 7    # News JSON files
+"""
+nse_space_manager.py — 1 EDIT
+================================
+INSTRUCTION: Find the line:
+    KEEP_NEWS_DAYS = 7
 
+ADD these lines RIGHT AFTER it:
+"""
+
+# ── Files that must NEVER be cleaned (NEW) ────────────────────
+NEVER_DELETE = {
+    "scan_history.json",        # streak calculation needs 30 days
+    "telegram_last_scan.json",  # bot pagination data
+    "scan_health.json",         # pipeline health monitoring
+    "nse_scanner.db",           # all historical price data
+}
+
+# Then in clean_old_csvs(), ADD this check at the start of the loop:
+#
+#   for f in sorted(DATA_DIR.rglob("*")):
+#       if not f.is_file():
+#           continue
+#       if f.name in NEVER_DELETE:    # <── ADD THIS LINE
+#           continue                   # <── ADD THIS LINE
+#       ... rest of existing code ...
 
 # ── Helpers ───────────────────────────────────────────────────
 
