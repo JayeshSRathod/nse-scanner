@@ -1,9 +1,7 @@
 """
-main_pipeline.py — FULL CLEAN FILE with DB bootstrap
-======================================================
-Replace the entire main_pipeline.py on GitHub with this.
-Includes: DB fetch from GitHub, historical backfill check,
-scan_history.json push, all config values.
+main_pipeline.py — NSE Pipeline Entry Point for Railway Cron
+=============================================================
+Now includes: historical backfill on first run (when DB is empty)
 """
 
 import os
@@ -64,7 +62,6 @@ if missing:
     print(f"[ERROR] Missing vars: {', '.join(missing)}")
     sys.exit(1)
 
-# ── CONFIG MODULE (must include ALL scanner thresholds) ───────
 config                  = types.ModuleType("config")
 config.TELEGRAM_TOKEN   = TOKEN
 config.TELEGRAM_CHATID  = CHAT_ID
@@ -93,8 +90,12 @@ sys.modules["config"]   = config
 for folder in ["logs", "output", "nse_data"]:
     Path(folder).mkdir(exist_ok=True)
 
-# ── HOLIDAY HELPERS ───────────────────────────────────────────
 NSE_HOLIDAYS = {
+    date(2025, 1, 26), date(2025, 2, 26), date(2025, 3, 14),
+    date(2025, 4, 10), date(2025, 4, 14), date(2025, 4, 18),
+    date(2025, 5, 1),  date(2025, 8, 15), date(2025, 8, 27),
+    date(2025, 10, 2), date(2025, 10, 21), date(2025, 10, 22),
+    date(2025, 11, 5), date(2025, 12, 25),
     date(2026, 1, 26), date(2026, 3, 25), date(2026, 4, 2),
     date(2026, 4, 10), date(2026, 4, 14), date(2026, 5, 1),
     date(2026, 8, 15), date(2026, 10, 2),
@@ -109,7 +110,15 @@ def get_last_trading_day(d):
         d -= timedelta(days=1)
     return d
 
-# ── GITHUB HELPERS ────────────────────────────────────────────
+def get_trading_days(start, end):
+    days = []
+    d = start
+    while d <= end:
+        if is_trading_day(d):
+            days.append(d)
+        d += timedelta(days=1)
+    return days
+
 
 def push_file_to_github(file_path, commit_msg):
     content     = file_path.read_text(encoding="utf-8")
@@ -127,78 +136,92 @@ def push_file_to_github(file_path, commit_msg):
     return r.status_code in (200, 201)
 
 
-def fetch_file_from_github(filename):
-    """Download a file from GitHub repo. Returns True on success."""
-    if not GITHUB_TOKEN:
-        print(f"[GITHUB] No token — cannot fetch {filename}")
-        return False
-    print(f"[GITHUB] Fetching {filename}...")
-    try:
-        headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{filename}?ref={GITHUB_BRANCH}"
-        r = requests.get(url, headers=headers, timeout=30)
-        if r.status_code == 200:
-            content = base64.b64decode(r.json()["content"])
-            Path(filename).write_bytes(content)
-            size_kb = len(content) / 1024
-            print(f"[GITHUB] ✅ {filename} ({size_kb:.1f} KB)")
-            return True
-        elif r.status_code == 404:
-            print(f"[GITHUB] {filename} not found on GitHub")
-            return False
-        else:
-            print(f"[GITHUB] ❌ {r.status_code}")
-            return False
-    except Exception as e:
-        print(f"[GITHUB] Error: {e}")
-        return False
-
-
-def fetch_db_from_github():
-    """
-    Download nse_scanner.db from GitHub if local DB is empty or missing.
-    GitHub API has 100MB limit — if DB is larger, use .gz version.
-    """
+def db_has_enough_data(min_days=22):
+    """Check if DB has enough trading days for scanner to work."""
     db_path = Path("nse_scanner.db")
+    if not db_path.exists() or db_path.stat().st_size < 10000:
+        return False, 0
+    try:
+        conn = sqlite3.connect(str(db_path))
+        row = conn.execute("SELECT COUNT(DISTINCT date) FROM daily_prices").fetchone()
+        conn.close()
+        days = row[0] if row else 0
+        return days >= min_days, days
+    except Exception:
+        return False, 0
 
-    # Check if local DB already has data
-    if db_path.exists() and db_path.stat().st_size > 100_000:
+
+def backfill_historical_data(target_date, days_back=90):
+    """
+    Download and load historical data when DB is empty.
+    Downloads 90 trading days of data from NSE archives.
+    This runs ONCE on first deploy, then daily cron adds 1 day at a time.
+    """
+    print(f"\n{'='*55}")
+    print(f"  HISTORICAL BACKFILL — Loading {days_back} days")
+    print(f"  This runs once. Future runs load 1 day only.")
+    print(f"{'='*55}")
+
+    from nse_historical_downloader import download_direct
+    from nse_loader import init_database, load_day
+
+    init_database()
+
+    # Calculate date range
+    end_date   = target_date
+    start_date = target_date - timedelta(days=int(days_back * 1.5))
+    trading_days = get_trading_days(start_date, end_date)
+
+    # Take last N trading days
+    trading_days = trading_days[-days_back:]
+
+    print(f"  Date range: {trading_days[0].strftime('%d-%b-%Y')} to {trading_days[-1].strftime('%d-%b-%Y')}")
+    print(f"  Trading days to load: {len(trading_days)}")
+
+    loaded = 0
+    failed = 0
+    skipped = 0
+
+    for i, d in enumerate(trading_days):
         try:
-            conn = sqlite3.connect(str(db_path))
-            count = conn.execute("SELECT COUNT(*) FROM daily_prices").fetchone()[0]
-            conn.close()
-            if count > 1000:
-                print(f"[DB] Local DB has {count:,} price rows — no fetch needed")
-                return True
-        except Exception:
-            pass
+            # Download
+            download_direct(d)
 
-    # Try fetching compressed DB first
-    print("[DB] Local DB empty/missing — fetching from GitHub...")
+            # Load into DB
+            result = load_day(d, do_cleanup=False)
 
-    # Try .gz version first (for DBs > 100MB)
-    gz_path = Path("nse_scanner.db.gz")
-    if fetch_file_from_github("nse_scanner.db.gz"):
-        try:
-            import gzip, shutil
-            with gzip.open(str(gz_path), 'rb') as f_in:
-                with open(str(db_path), 'wb') as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-            gz_path.unlink()
-            size_mb = db_path.stat().st_size / 1_048_576
-            print(f"[DB] ✅ Decompressed DB: {size_mb:.1f} MB")
-            return True
+            if result["status"] == "ok":
+                loaded += 1
+            elif result["status"] in ("skip", "already_loaded"):
+                skipped += 1
+            else:
+                failed += 1
+
         except Exception as e:
-            print(f"[DB] Decompression failed: {e}")
+            failed += 1
+            if i < 3:
+                print(f"  ❌ {d.strftime('%d-%b-%Y')}: {e}")
 
-    # Try raw .db file (for DBs < 100MB)
-    if fetch_file_from_github("nse_scanner.db"):
-        size_mb = db_path.stat().st_size / 1_048_576
-        print(f"[DB] ✅ Fetched DB: {size_mb:.1f} MB")
-        return True
+        # Progress every 10 days
+        if (i + 1) % 10 == 0:
+            print(f"  Progress: {i+1}/{len(trading_days)} "
+                  f"(loaded={loaded} skipped={skipped} failed={failed})")
 
-    print("[DB] ⚠️  Could not fetch DB from GitHub — starting fresh")
-    return False
+        # Small delay to be polite to NSE servers
+        import time
+        time.sleep(0.5)
+
+    print(f"\n  BACKFILL COMPLETE:")
+    print(f"    Loaded : {loaded}")
+    print(f"    Skipped: {skipped}")
+    print(f"    Failed : {failed}")
+
+    # Verify
+    has_enough, total_days = db_has_enough_data()
+    print(f"    DB now has {total_days} trading days of data")
+    print(f"    Scanner ready: {'YES' if has_enough else 'NO'}")
+
+    return has_enough
 
 
 # ── MAIN PIPELINE ─────────────────────────────────────────────
@@ -214,7 +237,7 @@ def run_pipeline():
     print(f"\n[PIPELINE] Scan date: {today.strftime('%d-%b-%Y')}")
 
     # ── CANARY TEST ──
-    print("\n[CANARY] Testing pagination JSON write path...")
+    print("\n[CANARY] Testing JSON write path...")
     canary = Path("telegram_last_scan.json")
     try:
         canary.write_text(json.dumps({"scan_date": today.strftime("%Y-%m-%d"), "canary": True}), encoding="utf-8")
@@ -228,26 +251,39 @@ def run_pipeline():
 
     write_health(status="RUNNING", scan_date=today.strftime("%Y-%m-%d"))
 
-    # ── STEP 0: Bootstrap DB from GitHub if empty ─────────────
-    print("\n[STEP 0] Checking database...")
-    fetch_db_from_github()
+    # ── STEP 0: Check if DB needs backfill ────────────────────
+    has_enough, current_days = db_has_enough_data(min_days=22)
+    print(f"\n[STEP 0] DB check: {current_days} trading days loaded")
 
-    # ── STEP 1: Download today's files ────────────────────────
-    try:
-        from nse_historical_downloader import download_direct
-        download_direct(today)
-    except Exception:
-        pass
+    if not has_enough:
+        print(f"[STEP 0] Need at least 22 days for scanner. Starting backfill...")
+        try:
+            backfill_ok = backfill_historical_data(today, days_back=90)
+            if not backfill_ok:
+                print("[STEP 0] ⚠️  Backfill incomplete but continuing...")
+        except Exception as e:
+            print(f"[STEP 0] Backfill error: {e}")
+            send_failure_alert("Backfill", str(e), today)
+    else:
+        # Normal daily run — just download + load today
+        print(f"[STEP 0] ✅ DB has enough data. Loading today only.")
 
-    # ── STEP 2: Load into DB ──────────────────────────────────
-    try:
-        from nse_loader import init_database, load_day
-        init_database()
-        load_day(today, do_cleanup=False)
-    except Exception as e:
-        send_failure_alert("DB Load", str(e), today)
-        write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"), failed_step="STEP 2", reason=str(e))
-        return False
+        # Step 1: Download today
+        try:
+            from nse_historical_downloader import download_direct
+            download_direct(today)
+        except Exception:
+            pass
+
+        # Step 2: Load today
+        try:
+            from nse_loader import init_database, load_day
+            init_database()
+            load_day(today, do_cleanup=False)
+        except Exception as e:
+            send_failure_alert("DB Load", str(e), today)
+            write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"), failed_step="STEP 2", reason=str(e))
+            return False
 
     # ── STEP 3: Scan ──────────────────────────────────────────
     try:
@@ -291,8 +327,6 @@ def run_pipeline():
     if history_path.exists():
         if push_file_to_github(history_path, f"Auto: history {expected}"):
             print(f"  ✅ scan_history.json pushed to GitHub")
-        else:
-            print(f"  ⚠️  scan_history.json push failed (non-fatal)")
 
     write_health(
         status="SUCCESS", scan_date=expected,
