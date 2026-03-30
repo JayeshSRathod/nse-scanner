@@ -19,10 +19,32 @@ PARSE_MODE   = "HTML"
 HISTORY_DAYS = 30
 
 try:
-    import config
-except ImportError:
-    pass
-
+    from nse_telegram_handler import (
+        # Original functions
+        load_scan_results,
+        load_history,
+        sort_stocks,
+        format_stock_list,
+        format_help,
+        # New view formatters
+        format_welcome,
+        format_today_scan,
+        format_new_stocks,
+        format_exit_stocks,
+        format_caution_stocks,
+        format_strong_stocks,
+        # History analysis
+        get_new_stocks,
+        get_exit_stocks,
+        get_strong_stocks,
+        # Constants
+        PARSE_MODE,
+    )
+    print("[POLL] Handler imports OK")
+except ImportError as e:
+    print(f"[POLL] Handler import error: {e}")
+    raise
+  
 # ── Category config ───────────────────────────────────────────
 
 CATEGORY_META = {
