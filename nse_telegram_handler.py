@@ -414,15 +414,15 @@ def format_strong_stocks(strong_stocks, scan_date=None):
 def format_welcome(user_name=None):
     name = f" {user_name}" if user_name else ""
     return (
-        f"👋 {_b('Hello'+name+'! Welcome to NSE Scanner Daily.')}\n\n"
-        "Here's what I can show you:\n\n"
-        f"📊 {_b('Today\\'s Scan')} — Top 25 bucketed by signal\n"
-        f"🆕 {_b('New Entries')} — Stocks added today\n"
-        f"📉 {_b('Exit Watch')} — Stocks removed today\n"
-        f"⚠️ {_b('Caution Flags')} — Weaker signals\n"
-        f"🔥 {_b('Strong Picks')} — 5+ day streak\n\n"
-        "💡 Tap a button below!")
-
+        f"👋 {_b('Hello' + name + '! Welcome to NSE Scanner Daily.')}\n\n"
+        "Here is what I can show you:\n\n"
+        + f"📊 {_b('Todays Scan')} — Top 25 bucketed by signal\n"
+        + f"🆕 {_b('New Entries')} — Stocks added today\n"
+        + f"📉 {_b('Exit Watch')} — Stocks removed today\n"
+        + f"⚠️ {_b('Caution Flags')} — Weaker signals\n"
+        + f"🔥 {_b('Strong Picks')} — 5+ day streak\n\n"
+        "💡 Tap a button below!"
+    )
 
 def format_help():
     return (
