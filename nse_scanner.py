@@ -31,12 +31,42 @@ except ImportError:
     print("ERROR: config.py not found. Run setup_project.py first.")
     sys.exit(1)
 
+# ══════════════════════════════════════════════════════════════
+# EDIT A: REPLACE your existing try/except import block
+# ══════════════════════════════════════════════════════════════
+# Find these lines:
+#   try:
+#       from nse_technical_filters import score_all_stocks, ...
+#       TECH_FILTERS_AVAILABLE = True
+#   except ImportError:
+#       ...
+#
+# REPLACE with:
+
+import json
+from pathlib import Path
+
 try:
-    from nse_technical_filters import score_all_stocks, TIER_HIGH_CONVICTION, TIER_WATCHLIST
+    from nse_technical_filters import (
+        score_all_stocks,
+        TIER_HIGH_CONVICTION,
+        TIER_WATCHLIST,
+        assign_categories_bulk,    # NEW
+        CATEGORY_META,             # NEW
+        CATEGORY_ORDER,            # NEW
+    )
     TECH_FILTERS_AVAILABLE = True
 except ImportError:
-    print("WARNING: nse_technical_filters.py not found. Running momentum-only mode.")
+    print("WARNING: nse_technical_filters.py not found. Momentum-only mode.")
     TECH_FILTERS_AVAILABLE = False
+    CATEGORY_META = {
+        "rising":     {"icon": "📈", "label": "Consistently Rising"},
+        "uptrend":    {"icon": "🚀", "label": "Clear Uptrend Confirmed"},
+        "peak":       {"icon": "🔝", "label": "Close to Their Peak"},
+        "recovering": {"icon": "📉", "label": "Recovering from a Fall"},
+        "safer":      {"icon": "🛡️", "label": "Safer Bets with Good Reward"},
+    }
+    CATEGORY_ORDER = ["uptrend", "rising", "peak", "safer", "recovering"]
 
 try:
     from nse_telegram_handler import save_scan_results
@@ -84,10 +114,29 @@ def load_data_for_date(scan_date: date) -> dict:
     """, conn)
 
     # Load latest week52 for bonus signal
+#    ══════════════════════════════════════════════════════════════
+# EDIT B: In load_data_for_date(), REPLACE the week52 query
+# ══════════════════════════════════════════════════════════════
+# Find these lines:
+#   w52_df = pd.read_sql_query(f"""
+#       SELECT symbol, week52_high, week52_low FROM week52
+#       WHERE date = '{scan_date}'
+#   """, conn)
+#
+# REPLACE with:
+
     w52_df = pd.read_sql_query(f"""
         SELECT symbol, week52_high, week52_low FROM week52
-        WHERE date = '{scan_date}'
+        WHERE date = (
+            SELECT MAX(date) FROM week52
+            WHERE date <= '{scan_date}'
+        )
     """, conn)
+
+    if w52_df.empty:
+        print("  ⚠️  No week52 data — 'Close to Peak' category disabled")
+    else:
+        print(f"  ✅  week52 loaded: {len(w52_df)} stocks")
     w52_map = {
         row['symbol']: (row['week52_high'], row['week52_low'])
         for _, row in w52_df.iterrows()
@@ -224,7 +273,15 @@ def add_trade_plan(row: pd.Series, tech_row: pd.Series = None) -> dict:
     if tech_row is not None and pd.notna(tech_row.get('stop')) and tech_row['stop'] > 0:
         sl = tech_row['stop']
     else:
-        sl = round(entry * 0.92, 2)   # fallback: 8% stop
+        sl = round(entry * 0.93, 2)   # fallback: 7% stop
+    # ══════════════════════════════════════════════════════════════
+# EDIT C: In add_trade_plan(), fix the SL fallback
+# ══════════════════════════════════════════════════════════════
+# Find this line:
+#     sl = round(entry * 0.92, 2)   # fallback: 8% stop
+#
+# REPLACE with:
+#     sl = round(entry * 0.93, 2)   # fallback: 7% stop
 
     risk    = entry - sl
     target1 = round(entry + (1.0 * risk), 2)
@@ -246,10 +303,62 @@ def add_trade_plan(row: pd.Series, tech_row: pd.Series = None) -> dict:
         'rr'      : 2.0,
     }
 
+#     ══════════════════════════════════════════════════════════════
+# EDIT D: ADD these 2 helpers ABOVE scan_stocks()
+#         Then REPLACE scan_stocks() entirely
+# ══════════════════════════════════════════════════════════════
+
+# ── ADD THESE TWO HELPERS above scan_stocks() ─────────────────
+
+def _load_streaks() -> dict:
+    """Load consecutive-day streak per symbol from scan_history.json."""
+    history_file = Path("scan_history.json")
+    if not history_file.exists():
+        return {}
+    try:
+        data = json.loads(history_file.read_text(encoding="utf-8"))
+        history = data.get("history", [])
+        if not history:
+            return {}
+        today_symbols = set(history[0].get("symbols", []))
+        streaks = {}
+        for symbol in today_symbols:
+            count = 0
+            for day_entry in history:
+                if symbol in day_entry.get("symbols", []):
+                    count += 1
+                else:
+                    break
+            streaks[symbol] = count
+        return streaks
+    except Exception as e:
+        log.warning(f"Could not load streaks: {e}")
+        return {}
+
+
+def _assign_category_simple(row) -> str:
+    """Fallback category assignment when tech filters unavailable."""
+    r1m = float(row.get("return_1m", 0))
+    r2m = float(row.get("return_2m", 0))
+    r3m = float(row.get("return_3m", 0))
+    dlv = float(row.get("delivery_pct", 0))
+
+    if r1m > r3m + 0.02 and r3m < 0.10:
+        return "recovering"
+    if dlv >= 55:
+        return "safer"
+    if r1m > 0 and r2m > 0 and r3m > 0:
+        return "rising"
+    return "rising"
+
+# ── REPLACE scan_stocks() with this version ───────────────────
 
 def scan_stocks(scan_date: date = None, top_n: int = None) -> pd.DataFrame:
     """
-    Main scan function. Returns ranked DataFrame with full trade plan.
+    Main scan function. Returns ranked DataFrame with:
+      - Trade plan (entry, SL, T1, T2)
+      - Layman category (rising, uptrend, peak, recovering, safer)
+      - Streak (consecutive days in top 25)
     """
     if scan_date is None:
         scan_date = date.today()
@@ -263,7 +372,7 @@ def scan_stocks(scan_date: date = None, top_n: int = None) -> pd.DataFrame:
     # ── Load data ──
     data = load_data_for_date(scan_date)
     if data['prices'].empty:
-        print("ERROR: No price data in database. Run nse_loader.py first.")
+        print("ERROR: No price data in database.")
         return pd.DataFrame()
 
     # ── Returns ──
@@ -292,7 +401,7 @@ def scan_stocks(scan_date: date = None, top_n: int = None) -> pd.DataFrame:
             w52_map          = data['w52_map'],
         )
 
-    # ── Merge technical scores into results ──
+    # ── Merge technical scores ──
     if not tech_df.empty:
         tech_df = tech_df.reset_index()
         merge_cols = ['symbol', 'score', 'conviction', 'stop',
@@ -302,24 +411,21 @@ def scan_stocks(scan_date: date = None, top_n: int = None) -> pd.DataFrame:
                       'fresh_cross']
         merge_cols = [c for c in merge_cols if c in tech_df.columns]
         scored_df = scored_df.merge(
-            tech_df[merge_cols],
-            on='symbol', how='left'
+            tech_df[merge_cols], on='symbol', how='left'
         )
         scored_df['score']      = scored_df['score'].fillna(0)
         scored_df['conviction'] = scored_df['conviction'].fillna('')
 
-        # Sort: HIGH CONVICTION first by tech score, then rest by momentum
         hc   = scored_df[scored_df['conviction'] == 'HIGH CONVICTION'].sort_values('score', ascending=False)
         wl   = scored_df[scored_df['conviction'] == 'Watchlist'].sort_values('score', ascending=False)
         rest = scored_df[scored_df['conviction'] == ''].sort_values('momentum_score', ascending=False)
         scored_df = pd.concat([hc, wl, rest], ignore_index=True)
     else:
-        # No tech filter — use pure momentum ranking
         scored_df['score']      = (scored_df['momentum_score'] * 100).round(1)
         scored_df['conviction'] = ''
         scored_df['stop']       = None
 
-    # ── Add trade plan ──
+    # ── Trade plan ──
     trade_plans = []
     for _, row in scored_df.head(top_n).iterrows():
         tech_row = None
@@ -329,26 +435,58 @@ def scan_stocks(scan_date: date = None, top_n: int = None) -> pd.DataFrame:
                 tech_row = match.iloc[0]
         trade_plans.append(add_trade_plan(row, tech_row))
 
-    # Take top N and add trade plan columns
     result_df = scored_df.head(top_n).copy().reset_index(drop=True)
     trade_df  = pd.DataFrame(trade_plans)
-
     for col in trade_df.columns:
         result_df[col] = trade_df[col].values
 
-    # ── Format display columns ──
     result_df['return_1m_pct'] = (result_df['return_1m'] * 100).round(1)
     result_df['return_2m_pct'] = (result_df['return_2m'] * 100).round(1)
     result_df['return_3m_pct'] = (result_df['return_3m'] * 100).round(1)
 
+    # ══════════════════════════════════════════════════════════
+    # NEW: Assign categories
+    # ══════════════════════════════════════════════════════════
+    print(f"\n  Assigning layman categories...")
+
+    if TECH_FILTERS_AVAILABLE and not tech_df.empty:
+        categories = assign_categories_bulk(
+            scored_df=result_df, returns_df=result_df,
+            w52_map=data['w52_map'],
+        )
+        result_df['category'] = categories
+    else:
+        result_df['category'] = result_df.apply(
+            _assign_category_simple, axis=1
+        )
+
+    cat_counts = result_df['category'].value_counts()
+    print(f"  Categories:")
+    for cat, count in cat_counts.items():
+        meta = CATEGORY_META.get(cat, {})
+        icon = meta.get("icon", "•")
+        label = meta.get("label", cat)
+        print(f"    {icon} {label}: {count}")
+
+    # ══════════════════════════════════════════════════════════
+    # NEW: Add streaks
+    # ══════════════════════════════════════════════════════════
+    streaks = _load_streaks()
+    result_df['streak'] = result_df['symbol'].map(
+        lambda s: streaks.get(s, 0)
+    )
+    strong = (result_df['streak'] >= 5).sum()
+    if strong > 0:
+        print(f"  🔥 {strong} stocks with 5+ day streak")
+
     log.info(
         f"Scan complete: {len(result_df)} stocks | "
-        f"HC={( result_df['conviction'] == 'HIGH CONVICTION').sum()} | "
-        f"WL={(result_df['conviction'] == 'Watchlist').sum()}"
+        f"HC={(result_df['conviction'] == 'HIGH CONVICTION').sum()} | "
+        f"WL={(result_df['conviction'] == 'Watchlist').sum()} | "
+        f"Cats: {dict(cat_counts)}"
     )
 
     return result_df
-
 
 def main():
     parser = argparse.ArgumentParser(description="NSE Stock Momentum Scanner")
