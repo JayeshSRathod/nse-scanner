@@ -74,9 +74,14 @@ NSE_HOLIDAYS = {
 # ── WORKING DIRECT DOWNLOAD URLs ─────────────────────────────
 # Confirmed working — tested 10-Mar-2026
 DIRECT_URLS = {
+    # ── CORE (always available) ──
     "sec_bhavdata_full" : "https://archives.nseindia.com/products/content/sec_bhavdata_full_{DDMMYYYY}.csv",
     "REG_IND"           : "https://archives.nseindia.com/content/cm/REG_IND{DDMMYY}.csv",
     "ind_close_all"     : "https://archives.nseindia.com/content/indices/ind_close_all_{DDMMYYYY}.csv",
+    # ── ADDITIONAL (volatility, 52W, PE) ──
+    "CMVOLT"            : "https://archives.nseindia.com/archives/nsccl/volt/CMVOLT_{DDMMYYYY}.CSV",
+    "CM_52_wk_High_low" : "https://nsearchives.nseindia.com/content/CM_52_wk_High_low_{DDMMYYYY}.csv",
+    "PE"                : "https://archives.nseindia.com/content/indices/PE_{DDMMYY}.csv",
 }
 
 # ── FILES EXPECTED FROM BUNDLE ZIP ───────────────────────────
