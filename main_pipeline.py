@@ -1,8 +1,9 @@
 """
-main_pipeline.py — NSE Pipeline Entry Point for Railway Cron
-=============================================================
-Used by : nse-pipeline Railway service
-Runs : Every weekday at 6:00 AM IST (00:30 UTC) via cron
+main_pipeline.py — FULL CLEAN FILE with DB bootstrap
+======================================================
+Replace the entire main_pipeline.py on GitHub with this.
+Includes: DB fetch from GitHub, historical backfill check,
+scan_history.json push, all config values.
 """
 
 import os
@@ -10,6 +11,7 @@ import sys
 import json
 import types
 import base64
+import sqlite3
 import requests
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -62,6 +64,7 @@ if missing:
     print(f"[ERROR] Missing vars: {', '.join(missing)}")
     sys.exit(1)
 
+# ── CONFIG MODULE (must include ALL scanner thresholds) ───────
 config                  = types.ModuleType("config")
 config.TELEGRAM_TOKEN   = TOKEN
 config.TELEGRAM_CHATID  = CHAT_ID
@@ -70,7 +73,6 @@ config.LOG_DIR          = "logs"
 config.DB_PATH          = "nse_scanner.db"
 config.DATA_DIR         = "nse_data"
 config.NSE_DATA_DIR     = "nse_data"
-# Scanner thresholds (must match config.py)
 config.MIN_PRICE        = 50
 config.MIN_VOLUME       = 50000
 config.MIN_DELIVERY     = 35
@@ -78,14 +80,12 @@ config.MAX_ANNVOL       = 1.5
 config.MAX_PE           = 80
 config.TOP_N_STOCKS     = 25
 config.MIN_MARKET_CAP   = 500
-# Return calculation weights
 config.WEIGHT_1M        = 0.20
 config.WEIGHT_2M        = 0.30
 config.WEIGHT_3M        = 0.50
 config.DAYS_1M          = 22
 config.DAYS_2M          = 44
 config.DAYS_3M          = 66
-# Bonus scores
 config.BONUS_52W_HIGH   = 0.05
 config.BONUS_TOP25      = 0.03
 sys.modules["config"]   = config
@@ -93,6 +93,7 @@ sys.modules["config"]   = config
 for folder in ["logs", "output", "nse_data"]:
     Path(folder).mkdir(exist_ok=True)
 
+# ── HOLIDAY HELPERS ───────────────────────────────────────────
 NSE_HOLIDAYS = {
     date(2026, 1, 26), date(2026, 3, 25), date(2026, 4, 2),
     date(2026, 4, 10), date(2026, 4, 14), date(2026, 5, 1),
@@ -108,6 +109,7 @@ def get_last_trading_day(d):
         d -= timedelta(days=1)
     return d
 
+# ── GITHUB HELPERS ────────────────────────────────────────────
 
 def push_file_to_github(file_path, commit_msg):
     content     = file_path.read_text(encoding="utf-8")
@@ -124,6 +126,82 @@ def push_file_to_github(file_path, commit_msg):
     r = requests.put(url, headers=headers, json=payload)
     return r.status_code in (200, 201)
 
+
+def fetch_file_from_github(filename):
+    """Download a file from GitHub repo. Returns True on success."""
+    if not GITHUB_TOKEN:
+        print(f"[GITHUB] No token — cannot fetch {filename}")
+        return False
+    print(f"[GITHUB] Fetching {filename}...")
+    try:
+        headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{filename}?ref={GITHUB_BRANCH}"
+        r = requests.get(url, headers=headers, timeout=30)
+        if r.status_code == 200:
+            content = base64.b64decode(r.json()["content"])
+            Path(filename).write_bytes(content)
+            size_kb = len(content) / 1024
+            print(f"[GITHUB] ✅ {filename} ({size_kb:.1f} KB)")
+            return True
+        elif r.status_code == 404:
+            print(f"[GITHUB] {filename} not found on GitHub")
+            return False
+        else:
+            print(f"[GITHUB] ❌ {r.status_code}")
+            return False
+    except Exception as e:
+        print(f"[GITHUB] Error: {e}")
+        return False
+
+
+def fetch_db_from_github():
+    """
+    Download nse_scanner.db from GitHub if local DB is empty or missing.
+    GitHub API has 100MB limit — if DB is larger, use .gz version.
+    """
+    db_path = Path("nse_scanner.db")
+
+    # Check if local DB already has data
+    if db_path.exists() and db_path.stat().st_size > 100_000:
+        try:
+            conn = sqlite3.connect(str(db_path))
+            count = conn.execute("SELECT COUNT(*) FROM daily_prices").fetchone()[0]
+            conn.close()
+            if count > 1000:
+                print(f"[DB] Local DB has {count:,} price rows — no fetch needed")
+                return True
+        except Exception:
+            pass
+
+    # Try fetching compressed DB first
+    print("[DB] Local DB empty/missing — fetching from GitHub...")
+
+    # Try .gz version first (for DBs > 100MB)
+    gz_path = Path("nse_scanner.db.gz")
+    if fetch_file_from_github("nse_scanner.db.gz"):
+        try:
+            import gzip, shutil
+            with gzip.open(str(gz_path), 'rb') as f_in:
+                with open(str(db_path), 'wb') as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+            gz_path.unlink()
+            size_mb = db_path.stat().st_size / 1_048_576
+            print(f"[DB] ✅ Decompressed DB: {size_mb:.1f} MB")
+            return True
+        except Exception as e:
+            print(f"[DB] Decompression failed: {e}")
+
+    # Try raw .db file (for DBs < 100MB)
+    if fetch_file_from_github("nse_scanner.db"):
+        size_mb = db_path.stat().st_size / 1_048_576
+        print(f"[DB] ✅ Fetched DB: {size_mb:.1f} MB")
+        return True
+
+    print("[DB] ⚠️  Could not fetch DB from GitHub — starting fresh")
+    return False
+
+
+# ── MAIN PIPELINE ─────────────────────────────────────────────
 
 def run_pipeline():
     from time import time
@@ -150,14 +228,18 @@ def run_pipeline():
 
     write_health(status="RUNNING", scan_date=today.strftime("%Y-%m-%d"))
 
-    # ── STEP 1: Download ──
+    # ── STEP 0: Bootstrap DB from GitHub if empty ─────────────
+    print("\n[STEP 0] Checking database...")
+    fetch_db_from_github()
+
+    # ── STEP 1: Download today's files ────────────────────────
     try:
         from nse_historical_downloader import download_direct
         download_direct(today)
     except Exception:
         pass
 
-    # ── STEP 2: Load DB ──
+    # ── STEP 2: Load into DB ──────────────────────────────────
     try:
         from nse_loader import init_database, load_day
         init_database()
@@ -167,7 +249,7 @@ def run_pipeline():
         write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"), failed_step="STEP 2", reason=str(e))
         return False
 
-    # ── STEP 3: Scan ──
+    # ── STEP 3: Scan ──────────────────────────────────────────
     try:
         from nse_scanner import scan_stocks
         results_df = scan_stocks(scan_date=today)
@@ -181,10 +263,10 @@ def run_pipeline():
         write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"), failed_step="STEP 3", reason=str(e))
         return False
 
-    hc = (results_df["conviction"] == "HIGH CONVICTION").sum()
-    wl = (results_df["conviction"] == "Watchlist").sum()
+    hc = (results_df["conviction"] == "HIGH CONVICTION").sum() if "conviction" in results_df.columns else 0
+    wl = (results_df["conviction"] == "Watchlist").sum() if "conviction" in results_df.columns else 0
 
-    # ── STEP 4: Output ──
+    # ── STEP 4: Output ────────────────────────────────────────
     try:
         from nse_output import generate_report
         generate_report(results_df, today)
@@ -193,7 +275,7 @@ def run_pipeline():
         write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"), failed_step="STEP 4", reason=str(e))
         return False
 
-    # ── STEP 5: Freshness check ──
+    # ── STEP 5: Freshness check ───────────────────────────────
     json_path = Path("telegram_last_scan.json")
     d = json.loads(json_path.read_text())
     expected = today.strftime("%Y-%m-%d")
@@ -202,7 +284,7 @@ def run_pipeline():
         write_health(status="FAILED", scan_date=expected, failed_step="STEP 5", reason="STALE JSON")
         return False
 
-    # ── STEP 6: Push to GitHub ──
+    # ── STEP 6: Push to GitHub ────────────────────────────────
     push_file_to_github(json_path, f"Auto: scan {expected}")
 
     history_path = Path("scan_history.json")
