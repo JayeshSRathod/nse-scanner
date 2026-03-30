@@ -506,7 +506,7 @@ def format_quick_dashboard(classification: dict,
     summary = classification["summary"]
     
     msg  = f"☀️ {_b('Good morning! NSE Scan — ' + date_str)}\n"
-    msg += f"{_i('Today\\'s top 25 stocks, categorized:')}\n\n"
+    msg += f"{_i('Today' + chr(39) + 's top 25 stocks, categorized:')}\n\n"
     
     bucket_order = [
         BUCKET_RISING, BUCKET_UPTREND, BUCKET_PEAK,
