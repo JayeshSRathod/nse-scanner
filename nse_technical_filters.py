@@ -956,6 +956,159 @@ def print_technical_results(df: pd.DataFrame, scan_date: date):
     print(f"        Always confirm with your own analysis before trading.")
     print(f"{'#'*72}\n")
 
+"""
+nse_technical_filters.py — ADDITION
+=====================================
+INSTRUCTION: Open your existing nse_technical_filters.py
+             Find the line:  if __name__ == "__main__":
+             Paste EVERYTHING BELOW just ABOVE that line
+             Do NOT delete anything existing
+"""
+
+# ═══════════════════════════════════════════════════════════════
+# PASTE ABOVE  if __name__ == "__main__":
+# ═══════════════════════════════════════════════════════════════
+
+# ── CATEGORY DEFINITIONS ──────────────────────────────────────
+
+CATEGORY_META = {
+    "rising": {
+        "icon":  "📈",
+        "label": "Consistently Rising",
+        "desc":  "Steady upward momentum over 1-3 months",
+    },
+    "uptrend": {
+        "icon":  "🚀",
+        "label": "Clear Uptrend Confirmed",
+        "desc":  "Technical breakout confirmed with volume",
+    },
+    "peak": {
+        "icon":  "🔝",
+        "label": "Close to Their Peak",
+        "desc":  "Near 52-week highs — strong institutional demand",
+    },
+    "recovering": {
+        "icon":  "📉",
+        "label": "Recovering from a Fall",
+        "desc":  "Bouncing back — early recovery signal",
+    },
+    "safer": {
+        "icon":  "🛡️",
+        "label": "Safer Bets with Good Reward",
+        "desc":  "Lower risk, consistent returns",
+    },
+}
+
+CATEGORY_ORDER = ["uptrend", "rising", "peak", "safer", "recovering"]
+
+
+def assign_category(row: dict,
+                    return_1m: float,
+                    return_2m: float,
+                    return_3m: float,
+                    delivery_pct: float = 0,
+                    w52_high: float = 0,
+                    close: float = 0) -> str:
+    """
+    Assign a layman-friendly category to one stock.
+
+    Priority (first match wins):
+        1. uptrend    — fresh HMA cross OR breakout + volume
+        2. recovering — 1M return > 3M return (bounce back)
+        3. peak       — close >= 90% of 52W high
+        4. safer      — high delivery + decent score + good RR
+        5. rising     — all returns positive (default)
+
+    Args:
+        row          : dict with keys from score_all_stocks
+        return_1m    : decimal (0.05 = 5%)
+        return_2m    : decimal
+        return_3m    : decimal
+        delivery_pct : e.g. 58.3
+        w52_high     : 52-week adjusted high
+        close        : today's close price
+
+    Returns:
+        category string
+    """
+    fresh_cross = bool(row.get("fresh_cross", False))
+    pts_brk     = int(row.get("pts_brk", 0))
+    pts_vol     = int(row.get("pts_vol", 0))
+    score       = int(row.get("score", 0))
+    rr          = float(row.get("rr", 0) or 0)
+
+    # 1. UPTREND — fresh cross or breakout + volume
+    if fresh_cross:
+        return "uptrend"
+    if pts_brk >= 2 and pts_vol >= 2:
+        return "uptrend"
+
+    # 2. RECOVERING — recent bounce stronger than long-term
+    if (return_1m > return_3m + 0.02) and (return_3m < 0.10):
+        return "recovering"
+
+    # 3. PEAK — near 52-week high
+    if w52_high > 0 and close > 0:
+        pct_of_high = close / w52_high
+        if pct_of_high >= W52_HIGH_PCT:
+            return "peak"
+
+    # 4. SAFER — high delivery, decent RR, good score
+    if delivery_pct >= 55 and score >= 6 and rr >= 2.0:
+        return "safer"
+
+    # 5. RISING — all positive (default for quality stocks)
+    if return_1m > 0 and return_2m > 0 and return_3m > 0:
+        return "rising"
+
+    return "rising"
+
+
+def assign_categories_bulk(scored_df, returns_df, w52_map: dict = None) -> list:
+    """
+    Assign categories to all scored stocks.
+
+    Args:
+        scored_df  : DataFrame from score_all_stocks()
+        returns_df : DataFrame with return_1m, return_2m, return_3m
+        w52_map    : {symbol: (high, low)}
+
+    Returns:
+        List of category strings, same order as scored_df
+    """
+    w52_map = w52_map or {}
+    categories = []
+
+    for _, row in scored_df.iterrows():
+        symbol = row["symbol"]
+
+        ret_row = returns_df[returns_df["symbol"] == symbol]
+        if ret_row.empty:
+            categories.append("rising")
+            continue
+
+        ret = ret_row.iloc[0]
+        r1m = float(ret.get("return_1m", 0) if "return_1m" in ret.index else 0)
+        r2m = float(ret.get("return_2m", 0) if "return_2m" in ret.index else 0)
+        r3m = float(ret.get("return_3m", 0) if "return_3m" in ret.index else 0)
+        dlv = float(ret.get("delivery_pct", 0))
+        cls = float(ret.get("close", 0))
+
+        w52_high = 0
+        w52_val = w52_map.get(symbol)
+        if isinstance(w52_val, tuple):
+            w52_high = w52_val[0] or 0
+        elif w52_val:
+            w52_high = float(w52_val)
+
+        cat = assign_category(
+            row=row.to_dict(),
+            return_1m=r1m, return_2m=r2m, return_3m=r3m,
+            delivery_pct=dlv, w52_high=w52_high, close=cls,
+        )
+        categories.append(cat)
+
+    return categories
 
 # ═════════════════════════════════════════════════════════════
 # SELF TEST
