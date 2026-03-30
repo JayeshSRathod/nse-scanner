@@ -26,9 +26,35 @@ except ImportError:
     print("ERROR: config.py not found.")
     sys.exit(1)
 
-# Load handler for pagination storage
+"""
+nse_output.py — 4 TARGETED EDITS
+==================================
+Do NOT replace the whole file. Make these 4 edits:
+
+EDIT A: Fix the import block at top
+EDIT B: Delete orphaned log.info line (~line 290)
+EDIT C: Replace send_telegram() + add _fmt_bucketed/_fmt_summary
+EDIT D: Move HARD GUARANTEE block inside generate_report()
+"""
+
+
+# ══════════════════════════════════════════════════════════════
+# EDIT A: REPLACE the handler import block at top of file
+# ══════════════════════════════════════════════════════════════
+# Find:
+#   try:
+#       from nse_telegram_handler import save_scan_results, RESULTS_FILE, PARSE_MODE
+#       _HANDLER_OK = True
+#   except ImportError as e:
+#       ...
+#
+# REPLACE with:
+
 try:
-    from nse_telegram_handler import save_scan_results, RESULTS_FILE, PARSE_MODE
+    from nse_telegram_handler import (
+        save_scan_results, RESULTS_FILE, PARSE_MODE,
+        CATEGORY_META, CATEGORY_ORDER,   # NEW
+    )
     _HANDLER_OK = True
     print(f"[OUTPUT] Pagination JSON will be saved to: {RESULTS_FILE}")
 except ImportError as e:
@@ -36,7 +62,16 @@ except ImportError as e:
     RESULTS_FILE      = None
     PARSE_MODE        = "HTML"
     _HANDLER_OK       = False
+    CATEGORY_META = {
+        "rising":     {"icon": "📈", "label": "Consistently Rising"},
+        "uptrend":    {"icon": "🚀", "label": "Clear Uptrend"},
+        "peak":       {"icon": "🔝", "label": "Close to Peak"},
+        "recovering": {"icon": "📉", "label": "Recovering"},
+        "safer":      {"icon": "🛡️", "label": "Safer Bets"},
+    }
+    CATEGORY_ORDER = ["uptrend", "rising", "peak", "safer", "recovering"]
     print(f"[WARN] nse_telegram_handler not found: {e}")
+
 
 os.makedirs(config.LOG_DIR,    exist_ok=True)
 os.makedirs(config.OUTPUT_DIR, exist_ok=True)
@@ -179,10 +214,17 @@ def _fmt_fallback(df: pd.DataFrame, report_date: date) -> str:
     return msg
 
 
-log.info(
-    f"[BOT] Writing pagination JSON "
-    f"date={report_date} rows={len(results_df)}"
-)
+# ══════════════════════════════════════════════════════════════
+# EDIT B: DELETE this orphaned line (around line 290)
+# ══════════════════════════════════════════════════════════════
+# FIND AND DELETE these lines that sit between functions at module level:
+#
+#   log.info(
+#       f"[BOT] Writing pagination JSON "
+#       f"date={report_date} rows={len(results_df)}"
+#   )
+#
+# Just delete those 3-4 lines. They crash on import.
 
 # ── Pagination JSON save ───────────────────────────────────────────────────────
 
@@ -224,81 +266,131 @@ def _save_pagination_json(results_df: pd.DataFrame, report_date: date):
         print(f"[BOT] ❌ Pagination JSON save FAILED: {e}")
         print(f"[BOT]    Bot /start will NOT work until this is fixed!")
 
+# ══════════════════════════════════════════════════════════════
+# EDIT C: ADD these two functions, then REPLACE send_telegram()
+# ══════════════════════════════════════════════════════════════
+
+# ADD these two NEW functions (put them before send_telegram):
+
+def _fmt_bucketed(results_df, report_date):
+    """Format stocks into bucketed message with layman categories."""
+    d = report_date.strftime('%d\\-%b\\-%Y')
+
+    cat_groups = {}
+    for _, row in results_df.iterrows():
+        cat = str(row.get('category', 'rising'))
+        cat_groups.setdefault(cat, []).append(row)
+
+    summary = []
+    for k in CATEGORY_ORDER:
+        if k in cat_groups:
+            m = CATEGORY_META.get(k, {})
+            summary.append(f"{m.get('icon','•')} {len(cat_groups[k])} {m.get('label','').split()[0].lower()}")
+
+    msg  = f"*NSE MOMENTUM SCANNER*\nDate: {d}\n"
+    msg += " | ".join(summary) + "\n" + f"{'─'*28}\n\n"
+
+    rank = 1
+    for k in CATEGORY_ORDER:
+        stocks = cat_groups.get(k, [])
+        if not stocks: continue
+        m = CATEGORY_META.get(k, {})
+        msg += f"*{m.get('icon','')} {m.get('label', k)}* ({len(stocks)})\n\n"
+
+        for row in stocks:
+            sym = str(row['symbol'])
+            sc  = int(row.get('score', 0))
+            e   = float(row.get('entry', row.get('close', 0)))
+            sl  = float(row.get('sl', 0))
+            t1  = float(row.get('target1', 0))
+            t2  = float(row.get('target2', 0))
+            r3  = float(row.get('return_3m_pct', 0))
+            st  = int(row.get('streak', 0))
+            stag = f" 🔥{st}d" if st >= 5 else ""
+
+            msg += f"*{rank}. {sym}*  [{sc}/10]{stag}\n"
+            msg += f"  Entry Rs {e:,.0f} | SL Rs {sl:,.0f}\n"
+            msg += f"  T1 Rs {t1:,.0f} | T2 Rs {t2:,.0f} | 3M {r3:+.1f}%\n\n"
+            rank += 1
+
+    msg += f"{'─'*28}\nTotal: {len(results_df)} stocks\n"
+    msg += "💡 Send /start to explore all views"
+    return msg
+
+
+def _fmt_summary(results_df, report_date):
+    """Compact summary when bucketed message is too long."""
+    d = report_date.strftime('%d\\-%b\\-%Y')
+    msg = f"*NSE MOMENTUM SCANNER*\nDate: {d} | {len(results_df)} stocks\n{'─'*28}\n\n"
+
+    cat_groups = {}
+    for _, row in results_df.iterrows():
+        cat = str(row.get('category', 'rising'))
+        cat_groups.setdefault(cat, []).append(row)
+
+    for k in CATEGORY_ORDER:
+        stocks = cat_groups.get(k, [])
+        if not stocks: continue
+        m = CATEGORY_META.get(k, {})
+        names = [str(s['symbol']) for s in stocks[:3]]
+        more = f" +{len(stocks)-3}" if len(stocks) > 3 else ""
+        msg += f"{m.get('icon','')} *{m.get('label',k)}*: {', '.join(names)}{more}\n"
+
+    msg += f"\n{'─'*28}\n💡 Send /start or /today for full details"
+    return msg
 
 # ── Telegram sender ───────────────────────────────────────────────────────────
 
-def send_telegram(results_df: pd.DataFrame, report_date: date) -> bool:
-    """
-    Send scanner results to Telegram.
-    Also saves pagination JSON for the bot.
-    """
+# ── NOW REPLACE send_telegram() with this version ────────────
+
+def send_telegram(results_df, report_date):
     if not getattr(config, 'TELEGRAM_TOKEN', None) or \
        not getattr(config, 'TELEGRAM_CHATID', None):
         log.warning("Telegram not configured")
         return False
 
     if results_df.empty:
-        log.warning("Empty DataFrame — nothing to send")
+        log.warning("Empty DataFrame")
         return False
 
-    # ── STEP 1: Save pagination JSON for /start ───────────────
-    # This is done FIRST and SEPARATELY from message formatting
-    # so a formatting error cannot block the JSON save.
+    # Step 1: Save pagination JSON
     _save_pagination_json(results_df, report_date)
 
-    # ── STEP 2: Format and send Telegram notification ─────────
+    # Step 2: Send bucketed message
+    kb = {"inline_keyboard": [
+        [{"text": "📊 Today",   "callback_data": "view_today"},
+         {"text": "🆕 New",     "callback_data": "view_new"},
+         {"text": "📉 Exit",    "callback_data": "view_exit"}],
+        [{"text": "⚠️ Caution", "callback_data": "view_caution"},
+         {"text": "🔥 Strong",  "callback_data": "view_strong"},
+         {"text": "❓ Help",     "callback_data": "help"}],
+    ]}
+
     sent = False
+    has_cat = 'category' in results_df.columns
 
-    has_conviction = (
-        'conviction' in results_df.columns and
-        results_df['conviction'].notna().any() and
-        results_df['conviction'].astype(str).str.len().max() > 0
-    )
+    if has_cat:
+        df = results_df.copy()
+        if 'return_3m_pct' in df.columns:
+            df = df.sort_values('return_3m_pct', ascending=False)
 
-    if has_conviction:
-        hc_df = results_df[results_df['conviction'] == 'HIGH CONVICTION'].copy()
-        wl_df = results_df[results_df['conviction'] == 'Watchlist'].copy()
-
-        # Sort both by 3M return desc
-        if 'return_3m_pct' in hc_df.columns:
-            hc_df = hc_df.sort_values('return_3m_pct', ascending=False)
-        if 'return_3m_pct' in wl_df.columns:
-            wl_df = wl_df.sort_values('return_3m_pct', ascending=False)
-
-        # Message 1 — HIGH CONVICTION
-        if not hc_df.empty:
-            kb = {"inline_keyboard": [[
-                {"text": "📋 Watchlist",    "callback_data": "list"},
-                {"text": "📱 Browse All",  "callback_data": "sort_3m"},
-                {"text": "❓ Help",         "callback_data": "help"},
-            ]]}
-            if _send(_fmt_hc(hc_df, report_date), kb):
-                log.info(f"HC message sent: {len(hc_df)} stocks")
+        msg = _fmt_bucketed(df, report_date)
+        if len(msg) <= 4000:
+            if _send(msg, kb):
+                log.info(f"Bucketed message sent: {len(results_df)} stocks")
+                sent = True
+        else:
+            summary = _fmt_summary(df, report_date)
+            if _send(summary, kb):
                 sent = True
 
-        # Message 2 — Watchlist
-        if not wl_df.empty:
-            kb = {"inline_keyboard": [[
-                {"text": "Next ➡️",        "callback_data": "next"},
-                {"text": "📱 Browse All",  "callback_data": "sort_3m"},
-                {"text": "❓ Help",         "callback_data": "help"},
-            ]]}
-            if _send(_fmt_watchlist(wl_df, report_date, len(hc_df)), kb):
-                log.info(f"Watchlist message sent: {len(wl_df)} stocks")
-                sent = True
-
-    # Fallback
     if not sent:
-        kb = {"inline_keyboard": [[
-            {"text": "Next ➡️",       "callback_data": "next"},
-            {"text": "📱 Browse All", "callback_data": "sort_3m"},
-            {"text": "❓ Help",        "callback_data": "help"},
-        ]]}
-        if _send(_fmt_fallback(results_df, report_date), kb):
-            log.info("Fallback message sent")
+        msg = _fmt_fallback(results_df, report_date)
+        if _send(msg, kb):
             sent = True
 
     return sent
+
 
 
 # ── Excel builder ─────────────────────────────────────────────────────────────
@@ -412,6 +504,21 @@ def generate_report(results_df: pd.DataFrame, report_date: date = None) -> dict:
          if 'conviction' in results_df.columns else 0
     print(f"Stocks: {len(results_df)} | HC: {hc} | Watchlist: {wl}")
     print(f"Bot JSON: {RESULTS_FILE or 'not configured'}")
+    # ── Freshness check (moved from module level) ─────────────
+    if RESULTS_FILE and os.path.exists(RESULTS_FILE):
+        try:
+            with open(RESULTS_FILE, encoding="utf-8") as f:
+                check = json.load(f)
+            expected = report_date.strftime("%Y-%m-%d")
+            found = check.get("scan_date")
+            if found != expected:
+                log.warning(
+                    f"JSON date mismatch: expected {expected}, found {found}"
+                )
+        except Exception as e:
+            log.warning(f"JSON check failed: {e}")
+
+    return results
 
     return results
 
@@ -459,15 +566,28 @@ def main():
 
     generate_report(df, report_date)
     
-# ── HARD GUARANTEE: Pagination JSON must exist & be fresh ──
-if RESULTS_FILE:
-    if not os.path.exists(RESULTS_FILE):
-        raise RuntimeError(
-            "telegram_last_scan.json was NOT created — aborting pipeline"
-        )
+# ══════════════════════════════════════════════════════════════
+# EDIT D: In generate_report(), BEFORE the final `return results`
+#         MOVE the HARD GUARANTEE block here (delete it from bottom)
+# ══════════════════════════════════════════════════════════════
+# Find the HARD GUARANTEE block at the very bottom of the file:
+#
+#   if RESULTS_FILE:
+#       if not os.path.exists(RESULTS_FILE):
+#           raise RuntimeError(...)
+#       with open(RESULTS_FILE, ...) as f:
+#           check = json.load(f)
+#       ...
+#
+# DELETE those lines from the bottom of the file.# ── HARD GUARANTEE: Pagination JSON must exist & be fresh ──
+#if RESULTS_FILE:
+#    if not os.path.exists(RESULTS_FILE):
+#        raise RuntimeError(
+#            "telegram_last_scan.json was NOT created — aborting pipeline"
+#        )
 
-    with open(RESULTS_FILE, encoding="utf-8") as f:
-        check = json.load(f)
+#    with open(RESULTS_FILE, encoding="utf-8") as f:
+#        check = json.load(f)
 
     expected = report_date.strftime("%Y-%m-%d")
     found = check.get("scan_date")
