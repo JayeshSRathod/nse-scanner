@@ -17,7 +17,7 @@
       "target1": 1434.2,
       "target2": 1459.6,
       "category": "uptrend",
-      "streak": 1
+      "streak": 2
     },
     {
       "rank": 2,
@@ -33,7 +33,7 @@
       "target1": 296.58,
       "target2": 308.51,
       "category": "uptrend",
-      "streak": 0
+      "streak": 1
     },
     {
       "rank": 3,
@@ -49,7 +49,7 @@
       "target1": 1864.54,
       "target2": 1930.78,
       "category": "uptrend",
-      "streak": 1
+      "streak": 2
     },
     {
       "rank": 4,
@@ -65,7 +65,7 @@
       "target1": 1675.79,
       "target2": 1756.08,
       "category": "peak",
-      "streak": 0
+      "streak": 1
     },
     {
       "rank": 5,
@@ -81,7 +81,7 @@
       "target1": 1637.73,
       "target2": 1674.26,
       "category": "peak",
-      "streak": 1
+      "streak": 2
     },
     {
       "rank": 6,
@@ -97,7 +97,7 @@
       "target1": 363.89,
       "target2": 378.88,
       "category": "uptrend",
-      "streak": 1
+      "streak": 2
     },
     {
       "rank": 7,
@@ -113,7 +113,7 @@
       "target1": 140.0,
       "target2": 144.11,
       "category": "uptrend",
-      "streak": 0
+      "streak": 1
     },
     {
       "rank": 8,
@@ -129,7 +129,7 @@
       "target1": 557.04,
       "target2": 565.48,
       "category": "uptrend",
-      "streak": 0
+      "streak": 1
     },
     {
       "rank": 9,
@@ -145,7 +145,7 @@
       "target1": 108.17,
       "target2": 121.82,
       "category": "recovering",
-      "streak": 1
+      "streak": 2
     },
     {
       "rank": 10,
@@ -161,7 +161,7 @@
       "target1": 432.56,
       "target2": 450.42,
       "category": "uptrend",
-      "streak": 1
+      "streak": 2
     },
     {
       "rank": 11,
@@ -177,7 +177,7 @@
       "target1": 106.32,
       "target2": 111.63,
       "category": "uptrend",
-      "streak": 1
+      "streak": 2
     },
     {
       "rank": 12,
@@ -193,7 +193,7 @@
       "target1": 1098.59,
       "target2": 1099.29,
       "category": "peak",
-      "streak": 1
+      "streak": 2
     },
     {
       "rank": 13,
@@ -209,7 +209,7 @@
       "target1": 1034.46,
       "target2": 1035.14,
       "category": "peak",
-      "streak": 1
+      "streak": 2
     },
     {
       "rank": 14,
@@ -225,7 +225,7 @@
       "target1": 108.53,
       "target2": 108.6,
       "category": "peak",
-      "streak": 0
+      "streak": 1
     },
     {
       "rank": 15,
@@ -241,7 +241,7 @@
       "target1": 648.66,
       "target2": 676.92,
       "category": "recovering",
-      "streak": 1
+      "streak": 2
     },
     {
       "rank": 16,
@@ -257,7 +257,7 @@
       "target1": 1000.01,
       "target2": 1000.02,
       "category": "uptrend",
-      "streak": 0
+      "streak": 1
     },
     {
       "rank": 17,
@@ -273,7 +273,7 @@
       "target1": 106.32,
       "target2": 115.03,
       "category": "uptrend",
-      "streak": 1
+      "streak": 2
     },
     {
       "rank": 18,
@@ -289,7 +289,7 @@
       "target1": 96.69,
       "target2": 105.52,
       "category": "recovering",
-      "streak": 0
+      "streak": 1
     },
     {
       "rank": 19,
@@ -305,7 +305,7 @@
       "target1": 488.0,
       "target2": 531.25,
       "category": "recovering",
-      "streak": 1
+      "streak": 2
     },
     {
       "rank": 20,
@@ -321,7 +321,7 @@
       "target1": 486.35,
       "target2": 509.6,
       "category": "uptrend",
-      "streak": 0
+      "streak": 1
     },
     {
       "rank": 21,
@@ -337,7 +337,7 @@
       "target1": 1120.6,
       "target2": 1229.2,
       "category": "uptrend",
-      "streak": 0
+      "streak": 1
     },
     {
       "rank": 22,
@@ -353,7 +353,7 @@
       "target1": 748.3,
       "target2": 795.1,
       "category": "uptrend",
-      "streak": 1
+      "streak": 2
     },
     {
       "rank": 23,
@@ -369,7 +369,7 @@
       "target1": 1621.43,
       "target2": 1793.76,
       "category": "recovering",
-      "streak": 1
+      "streak": 2
     },
     {
       "rank": 24,
@@ -385,7 +385,7 @@
       "target1": 310.37,
       "target2": 319.44,
       "category": "uptrend",
-      "streak": 0
+      "streak": 1
     },
     {
       "rank": 25,
@@ -401,7 +401,7 @@
       "target1": 307.67,
       "target2": 314.84,
       "category": "uptrend",
-      "streak": 0
+      "streak": 1
     }
   ]
 }
