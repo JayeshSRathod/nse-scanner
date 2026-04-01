@@ -5,21 +5,13 @@ Views: Today / New / Exit / Caution / Strong / Buckets / Guide
 Admin: /admin, /users, /health (admin-only)
 Tracking: every user + every action logged
 Health check: auto-sends to admin at 11:30 PM IST
-
-Changes from Phase 2.0:
-  + User tracking on every interaction
-  + Activity logging for all commands/buttons
-  + Blocked user enforcement
-  + /guide command + 📖 Guide button with PDF download
-  + /buckets command + 📊 Buckets button for categorized view
-  + /admin, /users, /health admin-only commands
-  + 11:30 PM background health check scheduler
-  + All existing features preserved (Hindi words, page nav, etc.)
+Nav: symbol back buttons on all sub-menus
 """
 
 import time
 import sys
 import json
+import os
 import threading
 import logging
 from datetime import date, datetime
@@ -38,32 +30,21 @@ except ImportError:
 
 try:
     from nse_telegram_handler import (
-        load_scan_results,
-        load_history,
-        sort_stocks,
-        format_stock_list,
-        format_help,
-        format_welcome,
-        format_today_scan,
-        format_new_stocks,
-        format_exit_stocks,
-        format_caution_stocks,
-        format_strong_stocks,
-        get_new_stocks,
-        get_exit_stocks,
-        get_strong_stocks,
-        PARSE_MODE,
-        RESULTS_FILE,
-        _b, _h, _code, _fmt_return,
+        load_scan_results, load_history, sort_stocks,
+        format_stock_list, format_help, format_welcome,
+        format_today_scan, format_new_stocks, format_exit_stocks,
+        format_caution_stocks, format_strong_stocks,
+        get_new_stocks, get_exit_stocks, get_strong_stocks,
+        PARSE_MODE, RESULTS_FILE, _b, _h, _code, _fmt_return,
     )
     print("[POLL] Handler imports OK")
 except ImportError as e:
     print(f"ERROR importing nse_telegram_handler: {e}")
     sys.exit(1)
 
-# ── NEW: Import admin + buckets (graceful fallback) ───────────
-_ADMIN_OK  = False
-_BUCKET_OK = False
+_ADMIN_OK   = False
+_BUCKET_OK  = False
+_TRACKER_OK = False
 
 try:
     from nse_bot_admin import (
@@ -75,8 +56,7 @@ try:
     _ADMIN_OK = True
     print("[POLL] Admin module loaded OK")
 except ImportError as e:
-    print(f"[WARN] nse_bot_admin not found: {e} — admin features disabled")
-    # Stubs so bot works without admin module
+    print(f"[WARN] nse_bot_admin not found: {e}")
     def track_user(u): pass
     def log_activity(uid, t, d): pass
     def is_admin(uid): return False
@@ -93,10 +73,24 @@ try:
     _BUCKET_OK = True
     print("[POLL] Smart buckets loaded OK")
 except ImportError as e:
-    print(f"[WARN] nse_smart_buckets not found: {e} — bucket view disabled")
+    print(f"[WARN] nse_smart_buckets not found: {e}")
 
-# ── Logging ───────────────────────────────────────────────────
-import os
+try:
+    from nse_signal_tracker import (
+        update_tracker, get_live_signals, get_exited_signals,
+        get_signal, get_tracker_summary, calculate_probability,
+        format_stock_with_prob, format_signal_card,
+        format_exit_card, format_caution_card, set_category,
+        STATE_ACTIVE, STATE_T1_HIT, STATE_WEAKENING, STATE_EXITED,
+    )
+    _TRACKER_OK = True
+    print("[POLL] Signal tracker loaded OK")
+except ImportError as e:
+    print(f"[WARN] nse_signal_tracker not found: {e}")
+    def get_signal(s): return None
+    def get_tracker_summary(): return {}
+    def calculate_probability(**kw): return {"t1_pct": 0, "t2_pct": 0, "sl_pct": 0}
+
 os.makedirs("logs", exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
@@ -108,61 +102,54 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# ── Guide PDF URL ─────────────────────────────────────────────
 GUIDE_PDF_URL = os.environ.get(
     "GUIDE_PDF_URL",
     "https://htmlpreview.github.io/?https://github.com/JayeshSRathod/nse-scanner/blob/main/docs/NSE_Scanner_Guide.html"
 )
 
-# ── FakeUser helper for tracking ──────────────────────────────
+
 class FakeUser:
-    """Mimics telegram.User from raw update dict."""
     def __init__(self, d):
-        if d is None:
-            d = {}
+        if d is None: d = {}
         self.id         = d.get("id", 0)
         self.username   = d.get("username", "")
         self.first_name = d.get("first_name", "")
         self.last_name  = d.get("last_name", "")
 
 
-# ══════════════════════════════════════════════════════════════
-# NATURAL LANGUAGE MAPPING (preserved from your working bot)
-# ══════════════════════════════════════════════════════════════
+# ── Natural language mapping ──────────────────────────────────
 
 GREETINGS = {
-    "hi", "hii", "hiii", "hello", "hey", "helo", "hlo",
-    "start", "begin", "go",
-    "good morning", "good evening", "good afternoon",
-    "gm", "ge", "ga",
-    "namaste", "namaskar", "jai hind",
+    "hi","hii","hiii","hello","hey","helo","hlo","start","begin","go",
+    "good morning","good evening","good afternoon","gm","ge","ga",
+    "namaste","namaskar","jai hind",
 }
-
-NEXT_WORDS    = {"next", "n", "aage", "more", "forward"}
-PREV_WORDS    = {"prev", "previous", "p", "back", "peeche"}
-NEWS_WORDS    = {"news", "headline", "headlines", "khabar"}
-TOP_WORDS     = {"top", "best", "top10", "winners", "leader"}
-LIST_WORDS    = {"list", "all", "summary", "sab"}
-HELP_WORDS    = {"help", "?", "commands", "menu"}
-NEW_WORDS     = {"new", "new entry", "fresh", "naya"}
-EXIT_WORDS    = {"exit", "exited", "left", "bahar"}
-STRONG_WORDS  = {"strong", "streak", "consistent", "strong stocks"}
-CAUTION_WORDS = {"caution", "risk", "warning", "careful"}
-TODAY_WORDS   = {"today", "scan", "aaj"}
-GUIDE_WORDS   = {"guide", "pdf", "how", "learn", "tutorial", "padho", "sikho"}
-BUCKET_WORDS  = {"buckets", "categories", "groups", "category", "bucket"}
-ADMIN_WORDS   = {"admin", "dashboard", "panel"}
+NEXT_WORDS    = {"next","n","aage","more","forward"}
+PREV_WORDS    = {"prev","previous","p","back","peeche"}
+NEWS_WORDS    = {"news","headline","headlines","khabar"}
+TOP_WORDS     = {"top","best","top10","winners","leader"}
+LIST_WORDS    = {"list","all","summary","sab"}
+HELP_WORDS    = {"help","?","commands","menu"}
+NEW_WORDS     = {"new","new entry","fresh","naya"}
+EXIT_WORDS    = {"exit","exited","left","bahar"}
+STRONG_WORDS  = {"strong","streak","consistent","strong stocks"}
+CAUTION_WORDS = {"caution","risk","warning","careful"}
+TODAY_WORDS   = {"today","scan","aaj"}
+GUIDE_WORDS   = {"guide","pdf","how","learn","tutorial","padho","sikho"}
+BUCKET_WORDS  = {"buckets","categories","groups","category","bucket"}
+ADMIN_WORDS   = {"admin","dashboard","panel"}
 
 
 def resolve_text_to_command(text):
     clean = text.strip().lower()
     if clean.startswith('/'):
         return clean
-    if clean in ('next', 'prev', 'list', 'help', 'news',
-                 'sort_3m', 'sort_score', 'sort_top10', 'noop',
-                 'view_today', 'view_new', 'view_exit', 'view_caution',
-                 'view_strong', 'view_buckets') \
-       or clean.startswith('page_') or clean.startswith('bucket_'):
+    if clean in ('next','prev','list','help','news',
+                 'sort_3m','sort_score','sort_top10','noop',
+                 'view_today','view_new','view_exit','view_caution',
+                 'view_strong','view_buckets') \
+       or clean.startswith('page_') or clean.startswith('bucket_') \
+       or clean.startswith('stock_'):
         return clean
     if clean in GREETINGS:        return '/start'
     if clean.isdigit() and 1 <= int(clean) <= 99:
@@ -186,9 +173,7 @@ def resolve_text_to_command(text):
     return clean
 
 
-# ══════════════════════════════════════════════════════════════
-# USER STATE (preserved)
-# ══════════════════════════════════════════════════════════════
+# ── User state ────────────────────────────────────────────────
 
 _user_state = {}
 
@@ -205,9 +190,7 @@ def get_user_view(chat_id):    return _state(chat_id).get('view', 'today')
 def set_user_view(chat_id, v): _state(chat_id)['view'] = v
 
 
-# ══════════════════════════════════════════════════════════════
-# TELEGRAM API (preserved)
-# ══════════════════════════════════════════════════════════════
+# ── Telegram API ──────────────────────────────────────────────
 
 def send_message(chat_id, text, reply_markup=None):
     url  = f"https://api.telegram.org/bot{config.TELEGRAM_TOKEN}/sendMessage"
@@ -217,11 +200,9 @@ def send_message(chat_id, text, reply_markup=None):
     try:
         r = requests.post(url, data=data, timeout=10)
         if r.status_code != 200:
-            print(f"[WARN] send_message FAILED — HTTP {r.status_code}")
-            try:
-                print(f"[WARN] {r.json().get('description', r.text[:300])}")
-            except Exception:
-                print(f"[WARN] {r.text[:300]}")
+            print(f"[WARN] send_message FAILED: {r.status_code}")
+            try: print(f"[WARN] {r.json().get('description', r.text[:300])}")
+            except: print(f"[WARN] {r.text[:300]}")
             return False
         return True
     except Exception as e:
@@ -232,19 +213,15 @@ def send_message(chat_id, text, reply_markup=None):
 def answer_callback_query(cq_id, text=""):
     url  = f"https://api.telegram.org/bot{config.TELEGRAM_TOKEN}/answerCallbackQuery"
     data = {'callback_query_id': cq_id}
-    if text:
-        data['text'] = text
-    try:
-        requests.post(url, data=data, timeout=5)
-    except Exception:
-        pass
+    if text: data['text'] = text
+    try: requests.post(url, data=data, timeout=5)
+    except: pass
 
 
 def get_updates(offset=None):
     url    = f"https://api.telegram.org/bot{config.TELEGRAM_TOKEN}/getUpdates"
     params = {'timeout': 30, 'allowed_updates': json.dumps(['message', 'callback_query'])}
-    if offset is not None:
-        params['offset'] = offset
+    if offset is not None: params['offset'] = offset
     try:
         r = requests.get(url, params=params, timeout=35)
         return r.json()
@@ -253,11 +230,8 @@ def get_updates(offset=None):
         return None
 
 
-# ══════════════════════════════════════════════════════════════
-# KEYBOARD (updated — adds Guide + Buckets row, preserves all existing)
-# ══════════════════════════════════════════════════════════════
+# ── Keyboards ─────────────────────────────────────────────────
 
-# Bucket callback data map
 BUCKET_CB_MAP = {
     "bucket_rising":   BUCKET_RISING   if _BUCKET_OK else "rising",
     "bucket_uptrend":  BUCKET_UPTREND  if _BUCKET_OK else "uptrend",
@@ -270,133 +244,116 @@ BUCKET_CB_MAP = {
 
 def create_inline_keyboard(current_page, total_pages, active_sort='3m', active_view='today'):
     kb = []
-
-    # ── Row 1: View tabs ──
     kb.append([
-        {"text": f"{'●' if active_view == 'today'   else '○'} 📊 Today",   "callback_data": "view_today"},
-        {"text": f"{'●' if active_view == 'new'     else '○'} 🆕 New",     "callback_data": "view_new"},
-        {"text": f"{'●' if active_view == 'exit'    else '○'} 📉 Exit",    "callback_data": "view_exit"},
+        {"text": f"{'●' if active_view=='today'   else '○'} Today",   "callback_data": "view_today"},
+        {"text": f"{'●' if active_view=='new'     else '○'} New",     "callback_data": "view_new"},
+        {"text": f"{'●' if active_view=='exit'    else '○'} Exit",    "callback_data": "view_exit"},
     ])
-
-    # ── Row 2: More views ──
     kb.append([
-        {"text": f"{'●' if active_view == 'caution' else '○'} ⚠️ Caution", "callback_data": "view_caution"},
-        {"text": f"{'●' if active_view == 'strong'  else '○'} 🔥 Strong",  "callback_data": "view_strong"},
-        {"text": f"{'●' if active_view == 'buckets' else '○'} 🗂 Buckets", "callback_data": "view_buckets"},
+        {"text": f"{'●' if active_view=='caution' else '○'} Caution", "callback_data": "view_caution"},
+        {"text": f"{'●' if active_view=='strong'  else '○'} Strong",  "callback_data": "view_strong"},
+        {"text": f"{'●' if active_view=='buckets' else '○'} Buckets", "callback_data": "view_buckets"},
     ])
-
-    # ── Row 3: Sort (only for today view) ──
     if active_view == 'today':
         kb.append([
-            {"text": f"{'●' if active_sort == '3m'    else '○'} 📈 3M",    "callback_data": "sort_3m"},
-            {"text": f"{'●' if active_sort == 'score' else '○'} ⭐ Score",  "callback_data": "sort_score"},
-            {"text": f"{'●' if active_sort == 'top10' else '○'} 🔝 Top10", "callback_data": "sort_top10"},
+            {"text": f"{'●' if active_sort=='3m'    else '○'} 3M",    "callback_data": "sort_3m"},
+            {"text": f"{'●' if active_sort=='score' else '○'} Score", "callback_data": "sort_score"},
+            {"text": f"{'●' if active_sort=='top10' else '○'} Top10", "callback_data": "sort_top10"},
         ])
-
-    # ── Row 4-5: Pagination (only for today view) ──
     if active_view == 'today' and total_pages > 1:
         nav = []
         if current_page > 0:
-            nav.append({"text": "⬅️ Prev", "callback_data": "prev"})
-        nav.append({"text": f"📄 {current_page + 1}/{total_pages}", "callback_data": "noop"})
+            nav.append({"text": "\u25c0 Prev", "callback_data": "prev"})
+        nav.append({"text": f"{current_page+1}/{total_pages}", "callback_data": "noop"})
         if current_page < total_pages - 1:
-            nav.append({"text": "Next ➡️", "callback_data": "next"})
+            nav.append({"text": "Next \u25b6", "callback_data": "next"})
         kb.append(nav)
-
         start_p = max(0, min(current_page - 2, total_pages - 5))
         end_p   = min(total_pages, start_p + 5)
         kb.append([
-            {"text": f"●{p+1}" if p == current_page else str(p+1),
+            {"text": f"\u25cf{p+1}" if p == current_page else str(p+1),
              "callback_data": f"page_{p}"}
             for p in range(start_p, end_p)
         ])
-
-    # ── Row 6: Utilities ──
     kb.append([
-        {"text": "📰 News", "callback_data": "news"},
-        {"text": "📋 Summary", "callback_data": "list"},
-        {"text": "📖 Guide", "callback_data": "guide"},
-        {"text": "❓ Help", "callback_data": "help"},
+        {"text": "News", "callback_data": "news"},
+        {"text": "Summary", "callback_data": "list"},
+        {"text": "Guide", "callback_data": "guide"},
+        {"text": "Help", "callback_data": "help"},
     ])
-
     return {"inline_keyboard": kb}
 
 
 def create_bucket_keyboard():
-    """Keyboard for bucket detail view."""
     return {"inline_keyboard": [
-        [
-            {"text": "📈 Rising",   "callback_data": "bucket_rising"},
-            {"text": "🚀 Uptrend",  "callback_data": "bucket_uptrend"},
-            {"text": "🔝 Peak",     "callback_data": "bucket_peak"},
-        ],
-        [
-            {"text": "📉 Recovery", "callback_data": "bucket_recovery"},
-            {"text": "🛡️ Safer",    "callback_data": "bucket_safe"},
-            {"text": "⚠️ Caution",  "callback_data": "bucket_caution"},
-        ],
-        [
-            {"text": "🔙 Back to Main", "callback_data": "view_today"},
-        ],
+        [{"text": "\U0001F4C8 Rising","callback_data": "bucket_rising"},
+         {"text": "\U0001F680 Uptrend","callback_data": "bucket_uptrend"},
+         {"text": "\U0001F51D Peak","callback_data": "bucket_peak"}],
+        [{"text": "\U0001F4C9 Recovery","callback_data": "bucket_recovery"},
+         {"text": "\U0001F6E1 Safer","callback_data": "bucket_safe"},
+         {"text": "\u26A0 Caution","callback_data": "bucket_caution"}],
+        [{"text": "\u25c0\u25c0 Main", "callback_data": "view_today"}],
+    ]}
+
+
+def create_bucket_detail_keyboard():
+    return {"inline_keyboard": [
+        [{"text": "\U0001F4C8 Rising","callback_data": "bucket_rising"},
+         {"text": "\U0001F680 Uptrend","callback_data": "bucket_uptrend"},
+         {"text": "\U0001F51D Peak","callback_data": "bucket_peak"}],
+        [{"text": "\U0001F4C9 Recovery","callback_data": "bucket_recovery"},
+         {"text": "\U0001F6E1 Safer","callback_data": "bucket_safe"},
+         {"text": "\u26A0 Caution","callback_data": "bucket_caution"}],
+        [{"text": "\u25c0 Buckets", "callback_data": "view_buckets"},
+         {"text": "\u25c0\u25c0 Main", "callback_data": "view_today"}],
     ]}
 
 
 def create_guide_keyboard():
-    """Guide keyboard with PDF download button."""
     return {"inline_keyboard": [
-        [
-            {"text": "📖 Open Full Guide", "url": GUIDE_PDF_URL},
-        ],
-        [
-            {"text": "🔙 Back to Main", "callback_data": "view_today"},
-        ],
+        [{"text": "\U0001F4D6 Open Full Guide", "url": GUIDE_PDF_URL}],
+        [{"text": "\u25c0\u25c0 Main", "callback_data": "view_today"}],
     ]}
 
 
 def create_admin_keyboard():
-    """Admin-only keyboard."""
     return {"inline_keyboard": [
-        [
-            {"text": "🏥 Health Check", "callback_data": "admin_health"},
-            {"text": "👥 Users",        "callback_data": "admin_users"},
-        ],
-        [
-            {"text": "📊 Activity",     "callback_data": "admin_stats"},
-            {"text": "🔙 Back",         "callback_data": "view_today"},
-        ],
+        [{"text": "Health Check", "callback_data": "admin_health"},
+         {"text": "Users", "callback_data": "admin_users"}],
+        [{"text": "Activity", "callback_data": "admin_stats"},
+         {"text": "\u25c0\u25c0 Main", "callback_data": "view_today"}],
     ]}
 
 
-# ══════════════════════════════════════════════════════════════
-# COMMAND HANDLER (extended — all original logic preserved)
-# ══════════════════════════════════════════════════════════════
+def create_signal_card_keyboard(symbol=""):
+    kb = []
+    kb.append([
+        {"text": "\u25c0 Back", "callback_data": "back_from_card"},
+        {"text": "\u25c0\u25c0 Main", "callback_data": "view_today"},
+    ])
+    return {"inline_keyboard": kb}
+
+
+# ── Command handler ───────────────────────────────────────────
 
 def handle_command(chat_id, text, is_callback=False, raw_user=None):
-    """
-    Main command router.
-    Added: raw_user param for tracking (dict from update).
-    """
     cmd = (text or '').strip().lower()
-    if '@' in cmd:
-        cmd = cmd.split('@')[0]
+    if '@' in cmd: cmd = cmd.split('@')[0]
 
     print(f"[CMD] chat={chat_id}  cmd={cmd!r}  callback={is_callback}")
 
-    # ── Track user + log activity ──
     if raw_user:
         track_user(FakeUser(raw_user))
-        log_activity(raw_user.get("id", chat_id), 
+        log_activity(raw_user.get("id", chat_id),
                      "callback" if is_callback else "command", cmd)
 
-    # ── Block check ──
     if raw_user and is_blocked(raw_user.get("id", 0)):
         return {"message": None, "keyboard": None} if is_callback else None
 
     results = load_scan_results()
     if not results:
-        msg = "❌ No scan results found.\nPipeline runs at 6:00 AM IST daily."
-        if is_callback:
-            return {"message": msg, "keyboard": None}
+        msg = "No scan results found.\nPipeline runs at 6:00 AM IST daily."
+        if is_callback: return {"message": msg, "keyboard": None}
         send_message(chat_id, msg)
         return None
 
@@ -404,10 +361,9 @@ def handle_command(chat_id, text, is_callback=False, raw_user=None):
     page_size  = results['page_size']
     scan_date  = results['scan_date']
     history    = load_history()
-
-    cur_sort = get_user_sort(chat_id)
-    cur_page = get_user_page(chat_id)
-    cur_view = get_user_view(chat_id)
+    cur_sort   = get_user_sort(chat_id)
+    cur_page   = get_user_page(chat_id)
+    cur_view   = get_user_view(chat_id)
 
     def respond_today(page, sort_mode):
         sorted_stocks = sort_stocks(all_stocks, sort_mode)
@@ -418,8 +374,7 @@ def handle_command(chat_id, text, is_callback=False, raw_user=None):
         set_user_view(chat_id, 'today')
         msg      = format_stock_list(sorted_stocks, safe_page * page_size, page_size, scan_date)
         keyboard = create_inline_keyboard(safe_page, tot_pages, sort_mode, 'today')
-        if is_callback:
-            return {"message": msg, "keyboard": keyboard}
+        if is_callback: return {"message": msg, "keyboard": keyboard}
         send_message(chat_id, msg, reply_markup=keyboard)
         return None
 
@@ -427,79 +382,60 @@ def handle_command(chat_id, text, is_callback=False, raw_user=None):
         set_user_view(chat_id, view_name)
         if keyboard is None:
             keyboard = create_inline_keyboard(0, 1, cur_sort, view_name)
-        if is_callback:
-            return {"message": msg, "keyboard": keyboard}
+        if is_callback: return {"message": msg, "keyboard": keyboard}
         send_message(chat_id, msg, reply_markup=keyboard)
         return None
-
-    # ══════════════════════════════════════════════════════════
-    # EXISTING COMMANDS (all preserved exactly)
-    # ══════════════════════════════════════════════════════════
 
     # ── /start ──
     if cmd == '/start':
         msg = format_welcome()
         set_user_view(chat_id, 'today')
         keyboard = create_inline_keyboard(0, 1, '3m', 'today')
-        if is_callback:
-            return {"message": msg, "keyboard": keyboard}
+        if is_callback: return {"message": msg, "keyboard": keyboard}
         send_message(chat_id, msg, reply_markup=keyboard)
         return None
 
-    # ── /today or view_today ──
     elif cmd in ('/today', 'view_today'):
         msg = format_today_scan(all_stocks, scan_date)
         return respond_view('today', msg)
 
-    # ── /next ──
     elif cmd in ('/next', '/continue', 'next'):
-        if cur_view != 'today':
-            return respond_today(0, cur_sort)
+        if cur_view != 'today': return respond_today(0, cur_sort)
         ss = sort_stocks(all_stocks, cur_sort)
         tot_pages = max(1, (len(ss) + page_size - 1) // page_size)
         if cur_page + 1 >= tot_pages:
-            msg = "📊 You've reached the last page!"
+            msg = "You've reached the last page!"
             if is_callback: return {"message": msg, "keyboard": None}
-            send_message(chat_id, msg)
-            return None
+            send_message(chat_id, msg); return None
         return respond_today(cur_page + 1, cur_sort)
 
-    # ── /prev ──
     elif cmd in ('/prev', 'prev'):
-        if cur_view != 'today':
-            return respond_today(0, cur_sort)
+        if cur_view != 'today': return respond_today(0, cur_sort)
         if cur_page == 0:
-            msg = "📄 Already on the first page!"
+            msg = "Already on the first page!"
             if is_callback: return {"message": msg, "keyboard": None}
-            send_message(chat_id, msg)
-            return None
+            send_message(chat_id, msg); return None
         return respond_today(cur_page - 1, cur_sort)
 
-    # ── /page N ──
     elif cmd.startswith('/page') or cmd.startswith('page_'):
         try:
-            if cmd.startswith('/page'):
-                page_num = int(cmd.split()[1]) - 1
-            else:
-                page_num = int(cmd.split('_')[1])
+            if cmd.startswith('/page'): page_num = int(cmd.split()[1]) - 1
+            else: page_num = int(cmd.split('_')[1])
             return respond_today(page_num, cur_sort)
         except (IndexError, ValueError):
-            msg = "❌ Usage: /page N"
+            msg = "Usage: /page N"
             if is_callback: return {"message": msg, "keyboard": None}
-            send_message(chat_id, msg)
-            return None
+            send_message(chat_id, msg); return None
 
-    # ── Sort ──
     elif cmd == 'sort_3m':    return respond_today(0, '3m')
     elif cmd == 'sort_score': return respond_today(0, 'score')
     elif cmd == 'sort_top10': return respond_today(0, 'top10')
     elif cmd == 'noop':
         return {"message": None, "keyboard": None} if is_callback else None
 
-    # ── /new or view_new ──
     elif cmd in ('/new', 'view_new'):
         if len(history) < 2:
-            msg = ("⏳ <b>History Building...</b>\n\n"
+            msg = ("<b>History Building...</b>\n\n"
                    "Need 2+ days of scan history for New Entries.\n"
                    f"Currently have: {len(history)} day(s)\n\n"
                    "Check back tomorrow after 6 AM scan.")
@@ -508,10 +444,9 @@ def handle_command(chat_id, text, is_callback=False, raw_user=None):
         msg = format_new_stocks(new_stocks, scan_date)
         return respond_view('new', msg)
 
-    # ── /exit or view_exit ──
     elif cmd in ('/exit', 'view_exit'):
         if len(history) < 2:
-            msg = ("⏳ <b>History Building...</b>\n\n"
+            msg = ("<b>History Building...</b>\n\n"
                    "Need 2+ days of scan history for Exit Watch.\n"
                    f"Currently have: {len(history)} day(s)\n\n"
                    "Check back tomorrow after 6 AM scan.")
@@ -520,16 +455,14 @@ def handle_command(chat_id, text, is_callback=False, raw_user=None):
         msg = format_exit_stocks(exit_stocks, scan_date)
         return respond_view('exit', msg)
 
-    # ── /caution or view_caution ──
     elif cmd in ('/caution', 'view_caution'):
         msg = format_caution_stocks(all_stocks, scan_date)
         return respond_view('caution', msg)
 
-    # ── /strong or view_strong ──
     elif cmd in ('/strong', 'view_strong'):
         if len(history) < 5:
             days_left = 5 - len(history)
-            msg = (f"🔥 <b>Strong Signals</b>\n\n"
+            msg = (f"<b>Strong Signals</b>\n\n"
                    f"Needs 5 days of history.\n"
                    f"Currently have: {len(history)} day(s)\n"
                    f"Ready in: {days_left} more trading day(s)")
@@ -538,7 +471,6 @@ def handle_command(chat_id, text, is_callback=False, raw_user=None):
         msg = format_strong_stocks(strong_stocks, scan_date)
         return respond_view('strong', msg)
 
-    # ── /news ──
     elif cmd in ('/news', 'news'):
         sorted_stocks = sort_stocks(all_stocks, cur_sort)
         tot_pages = max(1, (len(sorted_stocks) + page_size - 1) // page_size)
@@ -547,95 +479,75 @@ def handle_command(chat_id, text, is_callback=False, raw_user=None):
                                 page_size, scan_date, include_news=True)
         keyboard = create_inline_keyboard(safe_page, tot_pages, cur_sort, 'today')
         if is_callback: return {"message": msg, "keyboard": keyboard}
-        send_message(chat_id, msg, reply_markup=keyboard)
-        return None
+        send_message(chat_id, msg, reply_markup=keyboard); return None
 
-    # ── /list ──
     elif cmd in ('/list', 'list'):
         top10 = sort_stocks(all_stocks, 'top10')
         sorted_stocks = sort_stocks(all_stocks, cur_sort)
         tot_pages = max(1, (len(sorted_stocks) + page_size - 1) // page_size)
-
         history_line = ""
         if len(history) >= 2:
             new_count    = len(get_new_stocks(history))
             exit_count   = len(get_exit_stocks(history))
             strong_count = len(get_strong_stocks(history))
             history_line = (f"\n<b>Today:</b>\n"
-                           f"🆕 {new_count} new  |  📉 {exit_count} exited  |  🔥 {strong_count} strong\n")
-
-        msg  = f"📊 <b>All Scanned Stocks Summary</b>\n\n"
+                           f"{new_count} new  |  {exit_count} exited  |  {strong_count} strong\n")
+        msg  = f"<b>All Scanned Stocks Summary</b>\n\n"
         msg += f"Total: {len(all_stocks)} stocks  |  Scan: {scan_date}\n"
         msg += history_line
         msg += f"\n<b>Top 10 by 3M Return:</b>\n"
         for j, s in enumerate(top10, 1):
             r3m = float(s.get('return_3m_pct', 0))
             sign = '+' if r3m >= 0 else ''
-            msg += f"{j}. <code>{s['symbol']}</code> — {int(s.get('score',0))}/10 | 3M: {sign}{r3m:.1f}%\n"
+            msg += f"{j}. <code>{s['symbol']}</code> {int(s.get('score',0))}/10 | 3M: {sign}{r3m:.1f}%\n"
         remaining = len(all_stocks) - 10
-        if remaining > 0:
-            msg += f"\n... and {remaining} more\n"
-
+        if remaining > 0: msg += f"\n... and {remaining} more\n"
         keyboard = create_inline_keyboard(cur_page, tot_pages, cur_sort, cur_view)
         if is_callback: return {"message": msg, "keyboard": keyboard}
-        send_message(chat_id, msg, reply_markup=keyboard)
-        return None
+        send_message(chat_id, msg, reply_markup=keyboard); return None
 
-    # ── /help ──
     elif cmd in ('/help', 'help'):
         ss = sort_stocks(all_stocks, cur_sort)
         tot_pages = max(1, (len(ss) + page_size - 1) // page_size)
         keyboard = create_inline_keyboard(cur_page, tot_pages, cur_sort, cur_view)
         msg = format_help()
         if is_callback: return {"message": msg, "keyboard": keyboard}
-        send_message(chat_id, msg, reply_markup=keyboard)
-        return None
+        send_message(chat_id, msg, reply_markup=keyboard); return None
 
-    # ══════════════════════════════════════════════════════════
-    # NEW COMMANDS
-    # ══════════════════════════════════════════════════════════
-
-    # ── /guide or guide ──
+    # ── NEW: Guide ──
     elif cmd in ('/guide', 'guide'):
         if _ADMIN_OK:
             msg = format_guide_message()
         else:
-            msg = ("📖 <b>NSE Scanner Guide</b>\n\n"
+            msg = ("<b>NSE Scanner Guide</b>\n\n"
                    "Learn how to read the scanner signals, "
                    "understand scores, and use trade plans.\n\n"
-                   "👇 Tap below to open the full guide.")
+                   "Tap below to open the full guide.")
         keyboard = create_guide_keyboard()
-        if is_callback:
-            return {"message": msg, "keyboard": keyboard}
-        send_message(chat_id, msg, reply_markup=keyboard)
-        return None
+        if is_callback: return {"message": msg, "keyboard": keyboard}
+        send_message(chat_id, msg, reply_markup=keyboard); return None
 
-    # ── /buckets or view_buckets ──
+    # ── NEW: Buckets ──
     elif cmd in ('/buckets', 'view_buckets'):
         if not _BUCKET_OK:
-            msg = ("🗂 <b>Bucketed View</b>\n\n"
-                   "Coming soon — stocks grouped into categories like:\n"
-                   "📈 Rising, 🚀 Uptrend, 🔝 Peak, 📉 Recovery, 🛡️ Safer, ⚠️ Caution")
+            msg = ("<b>Bucketed View</b>\n\n"
+                   "Coming soon \u2014 stocks grouped into categories.")
             return respond_view('buckets', msg)
-        
         classification, sd = classify_current_scan()
         if classification:
             msg = format_bucketed_message(classification, sd)
-            keyboard = create_bucket_keyboard()
-            return respond_view('buckets', msg, keyboard)
+            return respond_view('buckets', msg, create_bucket_keyboard())
         else:
-            msg = "🗂 No scan data available for bucketed view."
-            return respond_view('buckets', msg)
+            return respond_view('buckets', "No scan data for bucketed view.")
 
-    # ── Bucket detail (bucket_rising, bucket_uptrend, etc.) ──
+    # ── NEW: Bucket detail ──
     elif cmd in BUCKET_CB_MAP and _BUCKET_OK:
         bucket_name = BUCKET_CB_MAP[cmd]
         classification, sd = classify_current_scan()
         if classification:
             msg = format_bucket_detail(bucket_name, classification, sd)
-            keyboard = create_bucket_keyboard()
-            if is_callback:
-                return {"message": msg, "keyboard": keyboard}
+            keyboard = create_bucket_detail_keyboard()
+            if is_callback: return {"message": msg, "keyboard": keyboard}
             send_message(chat_id, msg, reply_markup=keyboard)
         else:
             msg = "No data for this category."
@@ -643,63 +555,59 @@ def handle_command(chat_id, text, is_callback=False, raw_user=None):
             send_message(chat_id, msg)
         return None
 
-    # ── /admin ──
+    # ── NEW: Stock detail card ──
+    elif cmd.startswith('stock_') and not cmd.startswith('stock_news_'):
+        symbol = cmd.replace('stock_', '').upper()
+        if _TRACKER_OK:
+            msg = format_signal_card(symbol)
+        else:
+            msg = f"Signal tracker not available. Stock: <code>{symbol}</code>"
+        keyboard = create_signal_card_keyboard(symbol)
+        if is_callback: return {"message": msg, "keyboard": keyboard}
+        send_message(chat_id, msg, reply_markup=keyboard); return None
+
+    # ── NEW: Back from card ──
+    elif cmd == 'back_from_card':
+        prev_view = get_user_view(chat_id)
+        return handle_command(chat_id, f'view_{prev_view}',
+                              is_callback=is_callback, raw_user=raw_user)
+
+    # ── NEW: Admin ──
     elif cmd in ('/admin', 'admin_health'):
-        if not _ADMIN_OK:
-            msg = "Admin module not installed."
+        if not _ADMIN_OK or not (raw_user and is_admin(raw_user.get("id", 0))):
+            msg = "Admin access only."
             if is_callback: return {"message": msg, "keyboard": None}
-            send_message(chat_id, msg)
-            return None
-        
-        if not (raw_user and is_admin(raw_user.get("id", 0))):
-            msg = "⛔ Admin access only."
-            if is_callback: return {"message": msg, "keyboard": None}
-            send_message(chat_id, msg)
-            return None
-        
+            send_message(chat_id, msg); return None
         report  = generate_health_report()
         msg     = format_health_report(report)
         keyboard = create_admin_keyboard()
         if is_callback: return {"message": msg, "keyboard": keyboard}
-        send_message(chat_id, msg, reply_markup=keyboard)
-        return None
+        send_message(chat_id, msg, reply_markup=keyboard); return None
 
-    # ── /users ──
     elif cmd in ('/users', 'admin_users'):
-        if not _ADMIN_OK:
-            msg = "Admin module not installed."
+        if not _ADMIN_OK or not (raw_user and is_admin(raw_user.get("id", 0))):
+            msg = "Admin access only."
             if is_callback: return {"message": msg, "keyboard": None}
-            send_message(chat_id, msg)
-            return None
-        
-        if not (raw_user and is_admin(raw_user.get("id", 0))):
-            msg = "⛔ Admin access only."
-            if is_callback: return {"message": msg, "keyboard": None}
-            send_message(chat_id, msg)
-            return None
-        
-        msg      = format_user_list()
+            send_message(chat_id, msg); return None
+        msg = format_user_list()
         keyboard = create_admin_keyboard()
         if is_callback: return {"message": msg, "keyboard": keyboard}
-        send_message(chat_id, msg, reply_markup=keyboard)
-        return None
+        send_message(chat_id, msg, reply_markup=keyboard); return None
 
-    # ── /health ──
     elif cmd == '/health':
         if _ADMIN_OK and raw_user and is_admin(raw_user.get("id", 0)):
             report = generate_health_report()
-            msg    = format_health_report(report)
-            send_message(chat_id, msg, reply_markup=create_admin_keyboard())
+            send_message(chat_id, format_health_report(report),
+                         reply_markup=create_admin_keyboard())
         else:
-            send_message(chat_id, "⛔ Admin access only.")
+            send_message(chat_id, "Admin access only.")
         return None
 
-    # ── admin_stats (callback only) ──
     elif cmd == 'admin_stats':
         if _ADMIN_OK and raw_user and is_admin(raw_user.get("id", 0)):
             from nse_bot_admin import get_activity_stats
             stats = get_activity_stats(days=1)
-            msg  = f"📊 <b>Activity Stats (Today)</b>\n\n"
+            msg  = f"<b>Activity Stats (Today)</b>\n\n"
             msg += f"Total actions: {stats['total_actions']}\n"
             msg += f"Unique users: {stats['unique_users']}\n\n"
             if stats.get("top_actions"):
@@ -709,13 +617,13 @@ def handle_command(chat_id, text, is_callback=False, raw_user=None):
             if stats.get("hourly"):
                 msg += "\n<b>Hourly:</b>\n"
                 for hour, count in sorted(stats["hourly"].items()):
-                    bar = "█" * min(count // 2, 15)
+                    bar = "\u2588" * min(count // 2, 15)
                     msg += f"  {hour}:00 {bar} {count}\n"
             keyboard = create_admin_keyboard()
             if is_callback: return {"message": msg, "keyboard": keyboard}
             send_message(chat_id, msg, reply_markup=keyboard)
         else:
-            msg = "⛔ Admin access only."
+            msg = "Admin access only."
             if is_callback: return {"message": msg, "keyboard": None}
             send_message(chat_id, msg)
         return None
@@ -725,17 +633,14 @@ def handle_command(chat_id, text, is_callback=False, raw_user=None):
         ss = sort_stocks(all_stocks, cur_sort)
         tot_pages = max(1, (len(ss) + page_size - 1) // page_size)
         keyboard = create_inline_keyboard(cur_page, tot_pages, cur_sort, cur_view)
-        msg = (f"❓ Didn't understand: <code>{_h(cmd)}</code>\n\n"
+        msg = (f"Didn't understand: <code>{_h(cmd)}</code>\n\n"
                f"Try: <b>hi</b>, <b>today</b>, <b>new</b>, <b>exit</b>, "
                f"<b>strong</b>, <b>caution</b>, <b>buckets</b>, <b>guide</b>, <b>help</b>")
         if is_callback: return {"message": msg, "keyboard": keyboard}
-        send_message(chat_id, msg, reply_markup=keyboard)
-        return None
+        send_message(chat_id, msg, reply_markup=keyboard); return None
 
 
-# ══════════════════════════════════════════════════════════════
-# UPDATE PROCESSOR (updated — passes raw_user for tracking)
-# ══════════════════════════════════════════════════════════════
+# ── Update processor ──────────────────────────────────────────
 
 def process_update(update):
     try:
@@ -751,8 +656,7 @@ def process_update(update):
             if isinstance(result, dict):
                 msg      = result.get('message')
                 keyboard = result.get('keyboard')
-                if msg:
-                    send_message(chat_id, msg, reply_markup=keyboard)
+                if msg: send_message(chat_id, msg, reply_markup=keyboard)
             return
 
         if 'message' in update:
@@ -760,8 +664,7 @@ def process_update(update):
             chat_id  = str(msg_obj['chat']['id'])
             text     = msg_obj.get('text', '').strip()
             raw_user = msg_obj.get('from', {})
-            if not text:
-                return
+            if not text: return
             print(f"[MSG] chat={chat_id}  text={text!r}")
             resolved = resolve_text_to_command(text)
             print(f"[RES] resolved -> {resolved!r}")
@@ -773,43 +676,33 @@ def process_update(update):
         traceback.print_exc()
 
 
-# ══════════════════════════════════════════════════════════════
-# HEALTH CHECK SCHEDULER (background thread)
-# ══════════════════════════════════════════════════════════════
+# ── Health check scheduler ────────────────────────────────────
 
 def health_check_scheduler():
-    """Sends health check to admin at 11:30 PM IST daily."""
     if not _ADMIN_OK:
-        log.info("[SCHEDULER] Admin module not loaded — scheduler disabled")
+        log.info("[SCHEDULER] Admin module not loaded")
         return
-    
     log.info("[SCHEDULER] Health check scheduler started (11:30 PM daily)")
     last_sent_date = None
-    
     while True:
         try:
             now = datetime.now()
-            if (now.hour == 23 and
-                30 <= now.minute < 32 and
-                last_sent_date != now.date()):
-                
+            if (now.hour == 23 and 30 <= now.minute < 32 and
+                    last_sent_date != now.date()):
                 log.info("[SCHEDULER] Sending daily health check...")
                 ok = send_health_check()
                 if ok:
                     last_sent_date = now.date()
-                    log.info("[SCHEDULER] Health check sent ✅")
+                    log.info("[SCHEDULER] Health check sent")
                 else:
-                    log.error("[SCHEDULER] Health check failed ❌")
-            
+                    log.error("[SCHEDULER] Health check failed")
             time.sleep(60)
         except Exception as e:
             log.error(f"[SCHEDULER] Error: {e}")
             time.sleep(60)
 
 
-# ══════════════════════════════════════════════════════════════
-# STARTUP CHECKS (updated — shows new feature status)
-# ══════════════════════════════════════════════════════════════
+# ── Startup checks ────────────────────────────────────────────
 
 def startup_checks():
     ok = True
@@ -824,16 +717,14 @@ def startup_checks():
             print(f"[FAIL] Token invalid: {data.get('description')}")
             ok = False
     except Exception as e:
-        print(f"[FAIL] getMe: {e}")
-        ok = False
+        print(f"[FAIL] getMe: {e}"); ok = False
 
     print("[CHECK] Checking for webhook...")
     try:
         r  = requests.get(f"https://api.telegram.org/bot{config.TELEGRAM_TOKEN}/getWebhookInfo", timeout=5)
         wh = r.json().get('result', {}).get('url', '')
         if wh:
-            print(f"[WARN] Webhook registered — polling blocked")
-            ok = False
+            print(f"[WARN] Webhook registered — polling blocked"); ok = False
         else:
             print("[OK]   No webhook — polling will work")
     except Exception as e:
@@ -844,50 +735,44 @@ def startup_checks():
     if results:
         print(f"[OK]   {len(results['stocks'])} stocks (date: {results['scan_date']})")
     else:
-        print("[FAIL] No scan results")
-        ok = False
+        print("[FAIL] No scan results"); ok = False
 
     history = load_history()
     print(f"[CHECK] History: {len(history)} day(s)")
-    if len(history) < 2:
-        print("[INFO] New/Exit views will show 'building' until 2+ days")
-    if len(history) < 5:
-        print(f"[INFO] Strong view needs {5 - len(history)} more day(s)")
+    if len(history) < 2: print("[INFO] New/Exit need 2+ days")
+    if len(history) < 5: print(f"[INFO] Strong needs {5-len(history)} more day(s)")
 
-    # ── New feature status ──
-    print(f"[CHECK] Admin module: {'✅ loaded' if _ADMIN_OK else '❌ not found'}")
-    print(f"[CHECK] Smart buckets: {'✅ loaded' if _BUCKET_OK else '❌ not found'}")
-    if _ADMIN_OK:
-        print(f"[CHECK] Registered users: {get_user_count()}")
+    print(f"[CHECK] Admin module:    {'loaded' if _ADMIN_OK else 'not found'}")
+    print(f"[CHECK] Smart buckets:   {'loaded' if _BUCKET_OK else 'not found'}")
+    print(f"[CHECK] Signal tracker:  {'loaded' if _TRACKER_OK else 'not found'}")
+    if _ADMIN_OK: print(f"[CHECK] Registered users: {get_user_count()}")
+    if _TRACKER_OK:
+        ts = get_tracker_summary()
+        print(f"[CHECK] Tracked signals: {ts.get('total_active',0)} active, "
+              f"{ts.get('total_exited',0)} exited")
     print(f"[CHECK] Guide URL: {GUIDE_PDF_URL[:60]}...")
 
     return ok
 
 
-# ══════════════════════════════════════════════════════════════
-# MAIN (updated — starts health check scheduler thread)
-# ══════════════════════════════════════════════════════════════
+# ── Main ──────────────────────────────────────────────────────
 
 def main():
     print("=" * 55)
     print("  NSE Momentum Scanner — Telegram Polling Bot")
-    print("  Phase 2.1: Buckets + Guide + Admin + Tracking")
+    print("  Phase 2.1: Buckets + Guide + Admin + Tracker + Probability")
     print("  Views: Today / New / Exit / Caution / Strong / Buckets")
+    print("  Nav: symbol back buttons on all sub-menus")
     print("=" * 55 + "\n")
 
     if not startup_checks():
         print("\n[BOT] Fix issues above then restart")
         return
 
-    # ── Start health check scheduler ──
-    scheduler = threading.Thread(
-        target=health_check_scheduler,
-        daemon=True,
-        name="health-scheduler"
-    )
+    scheduler = threading.Thread(target=health_check_scheduler, daemon=True,
+                                 name="health-scheduler")
     scheduler.start()
-    if _ADMIN_OK:
-        print("[BOT] Health check scheduler running (11:30 PM daily)")
+    if _ADMIN_OK: print("[BOT] Health check scheduler running (11:30 PM daily)")
 
     print(f"\n[BOT] Ready! Listening... (Ctrl+C to stop)\n")
 
