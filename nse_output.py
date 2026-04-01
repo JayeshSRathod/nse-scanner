@@ -1,5 +1,5 @@
 """
-nse_output.py — Report Generator (v5 — Bucketed + Bug fixes)
+nse_output.py — Report Generator (v5 — Bucketed + Tracker integration)
 """
 
 import os
@@ -31,11 +31,11 @@ except ImportError as e:
     PARSE_MODE        = "HTML"
     _HANDLER_OK       = False
     CATEGORY_META = {
-        "rising":     {"icon": "📈", "label": "Consistently Rising"},
-        "uptrend":    {"icon": "🚀", "label": "Clear Uptrend"},
-        "peak":       {"icon": "🔝", "label": "Close to Peak"},
-        "recovering": {"icon": "📉", "label": "Recovering"},
-        "safer":      {"icon": "🛡️", "label": "Safer Bets"},
+        "rising":     {"icon": "\U0001F4C8", "label": "Consistently Rising"},
+        "uptrend":    {"icon": "\U0001F680", "label": "Clear Uptrend"},
+        "peak":       {"icon": "\U0001F51D", "label": "Close to Peak"},
+        "recovering": {"icon": "\U0001F4C9", "label": "Recovering"},
+        "safer":      {"icon": "\U0001F6E1\ufe0f", "label": "Safer Bets"},
     }
     CATEGORY_ORDER = ["uptrend", "rising", "peak", "safer", "recovering"]
     print(f"[WARN] nse_telegram_handler not found: {e}")
@@ -94,7 +94,7 @@ def _fmt_fallback(df, report_date):
         msg += f"  Entry {entry:,.0f} | SL {sl:,.0f} | T1 {t1:,.0f} | T2 {t2:,.0f}\n"
         msg += f"  1M {r1m:+.1f}% | 3M {r3m:+.1f}%\n\n"
     msg += f"Total: {len(df)} stocks scanned\n\n"
-    msg += f"💡 Send /start to the bot to browse all stocks"
+    msg += f"Send /start to the bot to browse all stocks"
     return msg
 
 
@@ -109,10 +109,10 @@ def _fmt_bucketed(results_df, report_date):
     for k in CATEGORY_ORDER:
         if k in cat_groups:
             m = CATEGORY_META.get(k, {})
-            summary.append(f"{m.get('icon','•')} {len(cat_groups[k])} {m.get('label','').split()[0].lower()}")
+            summary.append(f"{m.get('icon','.')} {len(cat_groups[k])} {m.get('label','').split()[0].lower()}")
 
     msg = f"*NSE MOMENTUM SCANNER*\nDate: {d}\n"
-    msg += " | ".join(summary) + "\n" + f"{'─'*28}\n\n"
+    msg += " | ".join(summary) + "\n" + f"{'_'*28}\n\n"
 
     rank = 1
     for k in CATEGORY_ORDER:
@@ -130,20 +130,20 @@ def _fmt_bucketed(results_df, report_date):
             t2  = float(row.get('target2', 0))
             r3  = float(row.get('return_3m_pct', 0))
             st  = int(row.get('streak', 0))
-            stag = f" 🔥{st}d" if st >= 5 else ""
+            stag = f" {st}d" if st >= 5 else ""
             msg += f"*{rank}. {sym}*  [{sc}/10]{stag}\n"
             msg += f"  Entry Rs {e:,.0f} | SL Rs {sl:,.0f}\n"
             msg += f"  T1 Rs {t1:,.0f} | T2 Rs {t2:,.0f} | 3M {r3:+.1f}%\n\n"
             rank += 1
 
-    msg += f"{'─'*28}\nTotal: {len(results_df)} stocks\n"
-    msg += "💡 Send /start to explore all views"
+    msg += f"{'_'*28}\nTotal: {len(results_df)} stocks\n"
+    msg += "Send /start to explore all views"
     return msg
 
 
 def _fmt_summary(results_df, report_date):
     d = report_date.strftime('%d\\-%b\\-%Y')
-    msg = f"*NSE MOMENTUM SCANNER*\nDate: {d} | {len(results_df)} stocks\n{'─'*28}\n\n"
+    msg = f"*NSE MOMENTUM SCANNER*\nDate: {d} | {len(results_df)} stocks\n{'_'*28}\n\n"
     cat_groups = {}
     for _, row in results_df.iterrows():
         cat = str(row.get('category', 'rising'))
@@ -156,27 +156,46 @@ def _fmt_summary(results_df, report_date):
         names = [str(s['symbol']) for s in stocks[:3]]
         more = f" +{len(stocks)-3}" if len(stocks) > 3 else ""
         msg += f"{m.get('icon','')} *{m.get('label',k)}*: {', '.join(names)}{more}\n"
-    msg += f"\n{'─'*28}\n💡 Send /start or /today for full details"
+    msg += f"\n{'_'*28}\nSend /start or /today for full details"
     return msg
 
 
 def _save_pagination_json(results_df, report_date):
+    """Save JSON for bot pagination + update signal tracker."""
     if not _HANDLER_OK or save_scan_results is None:
         log.error("[BOT] Cannot save pagination JSON — handler not loaded")
         return
+
     df = results_df.copy()
     if 'return_3m_pct' in df.columns:
         df = df.sort_values('return_3m_pct', ascending=False).reset_index(drop=True)
+
     try:
         save_scan_results(df, report_date)
-        log.info(f"[BOT] Pagination JSON saved → {RESULTS_FILE}")
+        log.info(f"[BOT] Pagination JSON saved -> {RESULTS_FILE}")
+
         if RESULTS_FILE and os.path.exists(RESULTS_FILE):
             with open(RESULTS_FILE) as f:
                 check = json.load(f)
             log.info(f"[BOT] JSON verified: {check['total_stocks']} stocks, date={check['scan_date']}")
+
+            # ── Update signal tracker (frozen entries + probabilities) ──
+            try:
+                from nse_signal_tracker import update_tracker
+                from nse_telegram_handler import load_history as _load_hist
+                _hist = _load_hist()
+                _summary = update_tracker(
+                    check['stocks'], check['scan_date'], _hist
+                )
+                log.info(f"[TRACKER] {_summary}")
+                print(f"[TRACKER] {_summary}")
+            except Exception as _te:
+                log.warning(f"[TRACKER] Skipped: {_te}")
+                print(f"[TRACKER] Skipped: {_te}")
+
     except Exception as e:
         log.error(f"[BOT] save_scan_results FAILED: {e}", exc_info=True)
-        print(f"[BOT] ❌ Pagination JSON save FAILED: {e}")
+        print(f"[BOT] Pagination JSON save FAILED: {e}")
 
 
 def send_telegram(results_df, report_date):
@@ -191,12 +210,12 @@ def send_telegram(results_df, report_date):
     _save_pagination_json(results_df, report_date)
 
     kb = {"inline_keyboard": [
-        [{"text": "📊 Today",   "callback_data": "view_today"},
-         {"text": "🆕 New",     "callback_data": "view_new"},
-         {"text": "📉 Exit",    "callback_data": "view_exit"}],
-        [{"text": "⚠️ Caution", "callback_data": "view_caution"},
-         {"text": "🔥 Strong",  "callback_data": "view_strong"},
-         {"text": "❓ Help",     "callback_data": "help"}],
+        [{"text": "Today",   "callback_data": "view_today"},
+         {"text": "New",     "callback_data": "view_new"},
+         {"text": "Exit",    "callback_data": "view_exit"}],
+        [{"text": "Caution", "callback_data": "view_caution"},
+         {"text": "Strong",  "callback_data": "view_strong"},
+         {"text": "Help",    "callback_data": "help"}],
     ]}
 
     sent = False
@@ -269,7 +288,10 @@ def generate_report(results_df, report_date=None):
 
     print(f"\n{'='*56}\n  NSE OUTPUT — Generating Reports\n{'='*56}")
 
-    results = {'excel_file': None, 'telegram_sent': False, 'date': report_date, 'stocks_count': len(results_df)}
+    results = {
+        'excel_file': None, 'telegram_sent': False,
+        'date': report_date, 'stocks_count': len(results_df),
+    }
 
     excel_file = save_excel(results_df, report_date)
     if excel_file:
@@ -278,7 +300,7 @@ def generate_report(results_df, report_date=None):
 
     ok = send_telegram(results_df, report_date)
     results['telegram_sent'] = ok
-    print(f"Telegram: {'sent ✅' if ok else 'failed/skipped ❌'}")
+    print(f"Telegram: {'sent' if ok else 'failed/skipped'}")
 
     hc = (results_df['conviction'] == 'HIGH CONVICTION').sum() if 'conviction' in results_df.columns else 0
     wl = (results_df['conviction'] == 'Watchlist').sum() if 'conviction' in results_df.columns else 0
