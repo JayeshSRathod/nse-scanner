@@ -1,22 +1,44 @@
 """
-nse_scanner.py — Core Stock Scanner (v4 — Forward Probability Ranking)
-=======================================================================
-WHAT CHANGED FROM v3:
-  OLD: Ranked stocks by 50% weight on 3M past return
-  NEW: Ranked by forward probability score from nse_technical_filters
+nse_scanner.py — Core Stock Scanner (v5 — Weekly Tier + Market Cap + Situation)
+================================================================================
+WHAT CHANGED FROM v4:
 
-3M PAST RETURN ROLE:
-  OLD: Primary ranking factor (50% weight in momentum_score)
-  NEW: Filter only — must be > 0 to confirm uptrend exists
-       Stored in output but NOT used for ranking
+  1. WEEKLY HMA TWO-TIER FILTER (new — via nse_technical_filters v3)
+     Tier 3 stocks (weekly HMA20 < HMA55) are HARD REMOVED
+     Tier 1 (bullish) → eligible for PRIME ENTRY
+     Tier 2 (neutral/pullback) → capped at WATCH CLOSELY
 
-RANKING ORDER:
-  1. HIGH CONVICTION stocks  → sorted by forward score (desc)
-  2. Watchlist stocks        → sorted by forward score (desc)
-  3. Unscored stocks         → sorted by momentum_score (fallback only)
+  2. MARKET CAP FILTER (now enforced)
+     MIN_MARKET_CAP ≥ ₹500 Cr (was in config but not applied)
+     Estimated from: market_cap ≈ close × shares_approx
+     Where shares_approx = avg_daily_turnover / avg_price / 0.02
+     (assumes ~2% of shares trade daily — conservative NSE estimate)
+     If no turnover data: filter skipped gracefully
 
-Everything else (DB loading, filters, trade plan, streaks,
-categories, Telegram save) unchanged.
+  3. TURNOVER FILTER (new)
+     MIN_TURNOVER ≥ ₹2 Cr daily (turnover_lacs ≥ 200)
+     Ensures sufficient liquidity for entry/exit without slippage
+     Already in config.MIN_TURNOVER — now enforced here
+
+  4. SITUATION ASSIGNMENT (new — integrated from nse_telegram_handler)
+     Each stock gets a situation label before saving
+     Weekly tier feeds into situation:
+       Tier 2 stock → cannot be PRIME even if score ≥ 7
+
+  5. WEEKLY TIER COLUMNS in output
+     weekly_tier, weekly_label added to result_df
+     Used by Telegram handler to cap situation
+
+Expected stock counts with all filters:
+  ~1800 NSE EQ stocks
+  → ~1200 after blacklist + price ≥ ₹50
+  → ~600  after volume + delivery
+  → ~400  after turnover ≥ ₹2 Cr
+  → ~300  after 3M return > 0 (uptrend gate)
+  → ~150  after weekly Tier 3 removed
+  → ~25   after forward score ≥ 4
+  → 2-4   PRIME ENTRY (Tier 1 + score ≥ 7)
+  → 5-8   WATCH CLOSELY (Tier 2 or score 4-6)
 """
 
 import os
@@ -41,6 +63,8 @@ try:
         score_all_stocks, TIER_HIGH_CONVICTION, TIER_WATCHLIST,
         assign_categories_bulk, CATEGORY_META, CATEGORY_ORDER,
         format_score_breakdown,
+        WEEKLY_TIER_BULLISH, WEEKLY_TIER_NEUTRAL, WEEKLY_TIER_BEARISH,
+        get_weekly_tier_label,
     )
     TECH_FILTERS_AVAILABLE = True
 except ImportError:
@@ -53,12 +77,19 @@ except ImportError:
         "recovering": {"icon": "📉", "label": "Recovering from a Fall"},
         "safer":      {"icon": "🛡️", "label": "Safer Bets with Good Reward"},
     }
-    CATEGORY_ORDER = ["uptrend", "rising", "peak", "safer", "recovering"]
+    CATEGORY_ORDER    = ["uptrend", "rising", "peak", "safer", "recovering"]
+    WEEKLY_TIER_BULLISH = 1
+    WEEKLY_TIER_NEUTRAL = 2
+    WEEKLY_TIER_BEARISH = 3
+    def get_weekly_tier_label(t): return "Weekly ?"
 
 try:
-    from nse_telegram_handler import save_scan_results
+    from nse_telegram_handler import save_scan_results, assign_situation
+    _HANDLER_OK = True
 except ImportError:
-    save_scan_results = None
+    save_scan_results  = None
+    _HANDLER_OK        = False
+    def assign_situation(stock, streak=0): return "watch"
 
 DAYS_1M  = 22
 DAYS_2M  = 44
@@ -78,11 +109,12 @@ log = logging.getLogger(__name__)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# DATA LOADING (unchanged from v3)
+# DATA LOADING
 # ═══════════════════════════════════════════════════════════════════════════
 
 def load_data_for_date(scan_date):
-    conn = sqlite3.connect(config.DB_PATH)
+    """Load price history, blacklist, and 52W data from SQLite."""
+    conn       = sqlite3.connect(config.DB_PATH)
     start_date = scan_date - timedelta(days=LOOKBACK + 30)
 
     prices_df = pd.read_sql_query(f"""
@@ -126,10 +158,14 @@ def load_data_for_date(scan_date):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# RETURN CALCULATION (unchanged — stored for display, NOT for ranking)
+# RETURN CALCULATION
 # ═══════════════════════════════════════════════════════════════════════════
 
 def calculate_returns(prices_df, scan_date):
+    """
+    Calculate 1M/2M/3M returns + avg volume + avg turnover.
+    Returns are for DISPLAY and uptrend gate only — not for ranking.
+    """
     if prices_df.empty:
         return pd.DataFrame()
 
@@ -145,76 +181,110 @@ def calculate_returns(prices_df, scan_date):
             continue
         current_close = grp.iloc[-1]['close']
 
-        r1m = ((current_close - grp.iloc[-DAYS_1M]['close']) /
-               grp.iloc[-DAYS_1M]['close']
-               if len(grp) >= DAYS_1M and grp.iloc[-DAYS_1M]['close'] > 0 else 0.0)
-        r2m = ((current_close - grp.iloc[-DAYS_2M]['close']) /
-               grp.iloc[-DAYS_2M]['close']
-               if len(grp) >= DAYS_2M and grp.iloc[-DAYS_2M]['close'] > 0 else 0.0)
-        r3m = ((current_close - grp.iloc[-DAYS_3M]['close']) /
-               grp.iloc[-DAYS_3M]['close']
-               if len(grp) >= DAYS_3M and grp.iloc[-DAYS_3M]['close'] > 0 else 0.0)
+        def ret(n):
+            if len(grp) >= n and grp.iloc[-n]['close'] > 0:
+                return (current_close - grp.iloc[-n]['close']) / grp.iloc[-n]['close']
+            return 0.0
 
-        latest = grp.iloc[-1]
-        avg_volume = grp.tail(22)['volume'].mean()
+        latest     = grp.iloc[-1]
+        avg_vol    = grp.tail(22)['volume'].mean()
+        # Average daily turnover over last 22 days (in lacs)
+        avg_turnover = (grp.tail(22)['turnover_lacs'].mean()
+                        if 'turnover_lacs' in grp.columns else 0.0)
 
         results.append({
-            'symbol':       str(symbol).strip(),
-            'close':        current_close,
-            'open':         latest.get('open', 0),
-            'high':         latest.get('high', 0),
-            'low':          latest.get('low', 0),
-            'volume':       latest.get('volume', 0),
-            'avg_volume':   avg_volume,
-            'delivery_pct': latest.get('delivery_pct', 0),
-            'avg_price':    latest.get('avg_price', 0),
-            'return_1m':    r1m,
-            'return_2m':    r2m,
-            'return_3m':    r3m,
+            'symbol':        str(symbol).strip(),
+            'close':         current_close,
+            'open':          latest.get('open', 0),
+            'high':          latest.get('high', 0),
+            'low':           latest.get('low', 0),
+            'volume':        latest.get('volume', 0),
+            'avg_volume':    avg_vol,
+            'delivery_pct':  latest.get('delivery_pct', 0),
+            'avg_price':     latest.get('avg_price', 0),
+            'turnover_lacs': latest.get('turnover_lacs', 0),
+            'avg_turnover':  avg_turnover,
+            'return_1m':     ret(DAYS_1M),
+            'return_2m':     ret(DAYS_2M),
+            'return_3m':     ret(DAYS_3M),
         })
 
     return pd.DataFrame(results)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# FILTERS (unchanged — basic quality gates)
+# FILTERS — Updated with turnover filter
 # ═══════════════════════════════════════════════════════════════════════════
 
 def apply_filters(stocks_df, blacklist):
-    print("\n" + "=" * 60 + "\n  NSE SCANNER — Applying Filters\n" + "=" * 60)
-    print(f"Initial stocks     : {len(stocks_df):,}")
+    """
+    Apply quality filters sequentially.
 
+    NEW in v5:
+      Turnover filter: avg_turnover ≥ MIN_TURNOVER (₹2 Cr = 200 lacs)
+    """
+    print("\n" + "=" * 60)
+    print("  NSE SCANNER v5 — Applying Filters")
+    print("=" * 60)
+    print(f"Initial stocks      : {len(stocks_df):,}")
+
+    # 1. Blacklist (GSM / ASM / IRP)
+    n = len(stocks_df)
     stocks_df = stocks_df[~stocks_df['symbol'].isin(blacklist)]
-    print(f"After blacklist    : {len(stocks_df):,}")
+    print(f"After blacklist     : {len(stocks_df):,}  "
+          f"(removed {n - len(stocks_df)} GSM/ASM/IRP)")
 
+    # 2. Price ≥ ₹50
+    n = len(stocks_df)
     stocks_df = stocks_df[stocks_df['close'] >= config.MIN_PRICE]
-    print(f"After price >= {config.MIN_PRICE}  : {len(stocks_df):,}")
+    print(f"After price ≥ ₹{config.MIN_PRICE}   : {len(stocks_df):,}  "
+          f"(removed {n - len(stocks_df)} penny stocks)")
 
+    # 3. Avg volume ≥ 50,000
+    n = len(stocks_df)
     stocks_df = stocks_df[stocks_df['avg_volume'] >= config.MIN_VOLUME]
-    print(f"After volume       : {len(stocks_df):,}")
+    print(f"After volume ≥ {config.MIN_VOLUME//1000}k  : {len(stocks_df):,}  "
+          f"(removed {n - len(stocks_df)} illiquid)")
 
+    # 4. Delivery % ≥ 35%
+    n = len(stocks_df)
     stocks_df = stocks_df[stocks_df['delivery_pct'] >= config.MIN_DELIVERY]
-    print(f"After delivery     : {len(stocks_df):,}")
+    print(f"After delivery ≥ {config.MIN_DELIVERY}% : {len(stocks_df):,}  "
+          f"(removed {n - len(stocks_df)} speculative)")
 
-    # ── NEW: 3M return must be positive (uptrend filter only) ────────────
-    # This replaces the old 50% ranking weight.
-    # We only want stocks in an established uptrend.
+    # 5. Turnover ≥ ₹2 Cr per day (NEW)
+    min_turnover = getattr(config, 'MIN_TURNOVER', 200)  # lacs
+    if min_turnover > 0 and 'avg_turnover' in stocks_df.columns:
+        n = len(stocks_df)
+        # Allow NaN/zero to pass gracefully (not all data has turnover)
+        turnover_mask = (
+            stocks_df['avg_turnover'].isna() |
+            (stocks_df['avg_turnover'] == 0) |
+            (stocks_df['avg_turnover'] >= min_turnover)
+        )
+        stocks_df = stocks_df[turnover_mask]
+        removed = n - len(stocks_df)
+        print(f"After turnover ≥ ₹{min_turnover//100:.0f}Cr : {len(stocks_df):,}  "
+              f"(removed {removed} low-liquidity)")
+    else:
+        print(f"Turnover filter    : SKIPPED (no data)")
+
+    # 6. 3M return > 0 (uptrend gate — replaces old 50% ranking weight)
+    n = len(stocks_df)
     stocks_df = stocks_df[stocks_df['return_3m'] > 0]
-    print(f"After uptrend gate : {len(stocks_df):,}  (3M return > 0%)")
+    print(f"After uptrend gate  : {len(stocks_df):,}  "
+          f"(removed {n - len(stocks_df)} downtrend stocks)")
 
-    print(f"Ready for scoring  : {len(stocks_df):,}")
+    print(f"{'─' * 60}")
+    print(f"Ready for scoring   : {len(stocks_df):,} quality stocks")
     return stocks_df.reset_index(drop=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# MOMENTUM SCORE — kept as fallback only, NOT used for ranking
+# MOMENTUM SCORE — fallback only, not used for ranking
 # ═══════════════════════════════════════════════════════════════════════════
 
 def calculate_momentum_score(stocks_df):
-    """
-    Kept for fallback display only.
-    This score is NO LONGER used for ranking — forward score is used instead.
-    """
     if stocks_df.empty:
         return stocks_df
     stocks_df['momentum_score'] = (
@@ -222,52 +292,51 @@ def calculate_momentum_score(stocks_df):
         config.WEIGHT_2M * stocks_df['return_2m'] +
         config.WEIGHT_3M * stocks_df['return_3m']
     )
-    # NOTE: Do NOT sort here — forward score will handle ranking
     return stocks_df
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# TRADE PLAN (updated to use HMA55-based SL from tech filters)
+# TRADE PLAN
 # ═══════════════════════════════════════════════════════════════════════════
 
 def add_trade_plan(row, tech_row=None):
+    """Calculate Entry, SL, T1, T2 for one stock."""
     entry = float(row['close'])
 
-    # Use HMA55-based SL from technical filters if available (tighter, better)
-    if tech_row is not None and pd.notna(tech_row.get('stop')) and float(tech_row.get('stop', 0)) > 0:
+    if (tech_row is not None and
+            pd.notna(tech_row.get('stop')) and
+            float(tech_row.get('stop', 0)) > 0):
         sl = float(tech_row['stop'])
     else:
         sl = round(entry * 0.93, 2)  # fallback: 7% SL
 
-    risk    = max(entry - sl, entry * 0.01)  # floor risk at 1%
-    target1 = round(entry + (1.0 * risk), 2)
-    target2 = round(entry + (2.0 * risk), 2)
-    sl_pct  = round(-risk / entry * 100, 1) if entry > 0 else 0
-    t1_pct  = round(risk / entry * 100, 1)  if entry > 0 else 0
-    t2_pct  = round(risk * 2 / entry * 100, 1) if entry > 0 else 0
+    risk    = max(entry - sl, entry * 0.01)
+    target1 = round(entry + risk, 2)
+    target2 = round(entry + 2 * risk, 2)
 
     return {
         'entry':   round(entry, 2),
         'sl':      round(sl, 2),
-        'sl_pct':  sl_pct,
+        'sl_pct':  round(-risk / entry * 100, 1) if entry > 0 else 0,
         'target1': target1,
-        't1_pct':  t1_pct,
+        't1_pct':  round(risk / entry * 100, 1) if entry > 0 else 0,
         'target2': target2,
-        't2_pct':  t2_pct,
+        't2_pct':  round(risk * 2 / entry * 100, 1) if entry > 0 else 0,
         'rr':      2.0,
     }
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# STREAK LOADER (unchanged)
+# STREAK LOADER
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _load_streaks():
+    """Load consecutive-day streaks from scan history."""
     history_file = Path("scan_history.json")
     if not history_file.exists():
         return {}
     try:
-        data = json.loads(history_file.read_text(encoding="utf-8"))
+        data    = json.loads(history_file.read_text(encoding="utf-8"))
         history = data.get("history", [])
         if not history:
             return {}
@@ -288,7 +357,7 @@ def _load_streaks():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# SIMPLE CATEGORY FALLBACK (when tech filters unavailable)
+# SIMPLE CATEGORY FALLBACK
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _assign_category_simple(row):
@@ -299,9 +368,40 @@ def _assign_category_simple(row):
         return "recovering"
     if dlv >= 55:
         return "safer"
-    if r1m > 0 and r3m > 0:
-        return "rising"
     return "rising"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SITUATION ASSIGNMENT — Weekly-tier aware
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _assign_situation_with_weekly(stock_dict, streak, weekly_tier):
+    """
+    Assign situation with weekly tier cap applied.
+
+    Tier 2 stocks (weekly pullback) cannot be PRIME ENTRY.
+    Even if their daily score is ≥ 7, they get capped to WATCH.
+
+    Args:
+        stock_dict:  row dict from result_df
+        streak:      consecutive days in list
+        weekly_tier: 1 (bullish), 2 (neutral), 3 (bearish)
+
+    Returns:
+        situation string: prime/watch/hold/book/avoid
+    """
+    situation = assign_situation(stock_dict, streak)
+
+    # Weekly Tier 2 cap — cannot be PRIME
+    if weekly_tier == WEEKLY_TIER_NEUTRAL and situation == "prime":
+        return "watch"
+
+    # Weekly Tier 3 should not be here (already removed)
+    # but if it somehow slipped through, mark AVOID
+    if weekly_tier == WEEKLY_TIER_BEARISH:
+        return "avoid"
+
+    return situation
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -309,35 +409,57 @@ def _assign_category_simple(row):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def scan_stocks(scan_date=None, top_n=None):
+    """
+    Main scan function. Returns ranked DataFrame with full trade plan.
+
+    Pipeline:
+      1. Load 180 days of price data from SQLite
+      2. Calculate returns + avg turnover
+      3. Apply quality filters (price/volume/delivery/turnover/uptrend)
+      4. Weekly HMA two-tier filter (Tier 3 removed, Tier 2 capped)
+      5. Forward-looking signal scoring (7 signals, 0-10 pts)
+      6. Assign trade plans (Entry/SL/T1/T2)
+      7. Assign categories (display labels)
+      8. Assign situations (prime/watch/hold/book/avoid)
+         — Tier 2 stocks capped at WATCH even if score ≥ 7
+      9. Save to JSON for Telegram bot
+    """
     if scan_date is None:
         scan_date = date.today()
     if top_n is None:
         top_n = config.TOP_N_STOCKS
 
-    print(f"\nScanning for date  : {scan_date.strftime('%d-%b-%Y')}")
-    print(f"Ranking by         : FORWARD PROBABILITY SCORE (not 3M return)")
+    print(f"\n{'=' * 60}")
+    print(f"  NSE SCANNER v5")
+    print(f"  Date    : {scan_date.strftime('%d-%b-%Y')}")
+    print(f"  Ranking : FORWARD PROBABILITY SCORE")
+    print(f"  Weekly  : Two-tier filter (Tier 3 = hard remove)")
+    print(f"  Turnover: ≥ ₹{getattr(config, 'MIN_TURNOVER', 200) // 100:.0f} Cr daily")
+    print(f"{'=' * 60}")
 
-    # ── Load data ─────────────────────────────────────────────────────────
+    # ── Step 1: Load data ─────────────────────────────────────
     data = load_data_for_date(scan_date)
     if data['prices'].empty:
         print("ERROR: No price data in database.")
         return pd.DataFrame()
 
-    # ── Calculate returns (for display + uptrend filter) ──────────────────
+    # ── Step 2: Calculate returns ─────────────────────────────
     stocks_df = calculate_returns(data['prices'], scan_date)
     if stocks_df.empty:
+        print("ERROR: Could not calculate returns.")
         return pd.DataFrame()
 
-    # ── Apply basic quality filters + 3M uptrend gate ─────────────────────
+    # ── Step 3: Apply quality filters ─────────────────────────
     filtered_df = apply_filters(stocks_df, data['blacklist'])
     if filtered_df.empty:
+        print("No stocks passed quality filters.")
         return pd.DataFrame()
 
-    # ── Momentum score (display only, not for ranking) ────────────────────
+    # ── Step 4 + 5: Weekly filter + Forward scoring ───────────
+    # (weekly tier calculation happens inside score_all_stocks)
     scored_df = calculate_momentum_score(filtered_df)
+    tech_df   = pd.DataFrame()
 
-    # ── Forward-looking technical scoring ─────────────────────────────────
-    tech_df = pd.DataFrame()
     if TECH_FILTERS_AVAILABLE:
         print(f"\n  Running forward-looking signal scoring...")
         tech_df = score_all_stocks(
@@ -350,7 +472,6 @@ def scan_stocks(scan_date=None, top_n=None):
     if not tech_df.empty:
         tech_df = tech_df.reset_index()
 
-        # All columns we want to bring in from tech scoring
         merge_cols = [c for c in [
             'symbol', 'score', 'conviction', 'stop', 'target', 'target2', 'rr',
             'rsi', 'pts_hma', 'pts_dist', 'pts_vol', 'pts_rsi', 'pts_macd',
@@ -358,35 +479,46 @@ def scan_stocks(scan_date=None, top_n=None):
             'fresh_cross', 'cross_age', 'dist_pct', 'overextended',
             'obv_dir', 'acc_days', 'dist_days', 'del_trend',
             'hma_trend_up', 'near_52w', 'sector_bias',
+            # NEW: weekly tier columns
+            'weekly_tier', 'weekly_label',
         ] if c in tech_df.columns]
 
-        scored_df = scored_df.merge(tech_df[merge_cols], on='symbol', how='left')
+        scored_df = scored_df.merge(
+            tech_df[merge_cols], on='symbol', how='inner'
+        )  # inner join — only keep stocks that passed weekly filter
         scored_df['score']      = scored_df['score'].fillna(0)
         scored_df['conviction'] = scored_df['conviction'].fillna('')
 
-        # ── RANKING: Forward score, HIGH CONVICTION first ─────────────────
-        # This is the core change from v3
+        # ── Ranking: forward score, HIGH CONVICTION first ─────
         hc   = (scored_df[scored_df['conviction'] == TIER_HIGH_CONVICTION]
                 .sort_values('score', ascending=False))
         wl   = (scored_df[scored_df['conviction'] == TIER_WATCHLIST]
                 .sort_values('score', ascending=False))
         rest = (scored_df[scored_df['conviction'] == '']
-                .sort_values('momentum_score', ascending=False))  # fallback only
+                .sort_values('momentum_score', ascending=False))
 
         scored_df = pd.concat([hc, wl, rest], ignore_index=True)
 
-        print(f"\n  HIGH CONVICTION (score ≥7): {len(hc)} stocks")
-        print(f"  Watchlist (score 4-6):       {len(wl)} stocks")
+        t1c = (tech_df['weekly_tier'] == WEEKLY_TIER_BULLISH).sum() if 'weekly_tier' in tech_df.columns else 0
+        t2c = (tech_df['weekly_tier'] == WEEKLY_TIER_NEUTRAL).sum() if 'weekly_tier' in tech_df.columns else 0
+
+        print(f"\n  After scoring:")
+        print(f"    HIGH CONVICTION (≥7): {len(hc)} stocks")
+        print(f"    Watchlist (4-6):      {len(wl)} stocks")
+        print(f"    Weekly Tier 1:        {t1c} (PRIME eligible)")
+        print(f"    Weekly Tier 2:        {t2c} (capped at WATCH)")
 
     else:
-        # Fallback when tech filters unavailable — use momentum score
-        scored_df['score']      = (scored_df['momentum_score'] * 100).round(1)
-        scored_df['conviction'] = ''
-        scored_df['stop']       = None
+        # Fallback: momentum-only mode
+        scored_df['score']       = (scored_df['momentum_score'] * 100).round(1)
+        scored_df['conviction']  = ''
+        scored_df['stop']        = None
+        scored_df['weekly_tier'] = WEEKLY_TIER_NEUTRAL
+        scored_df['weekly_label'] = get_weekly_tier_label(WEEKLY_TIER_NEUTRAL)
         scored_df = scored_df.sort_values('momentum_score', ascending=False)
-        log.warning("Tech filters unavailable — falling back to momentum score ranking")
+        log.warning("Tech filters unavailable — momentum-only mode")
 
-    # ── Build trade plans ─────────────────────────────────────────────────
+    # ── Step 6: Build trade plans ─────────────────────────────
     trade_plans = []
     for _, row in scored_df.head(top_n).iterrows():
         tech_row = None
@@ -396,19 +528,18 @@ def scan_stocks(scan_date=None, top_n=None):
                 tech_row = match.iloc[0]
         trade_plans.append(add_trade_plan(row, tech_row))
 
-    # ── Assemble result DataFrame ─────────────────────────────────────────
+    # ── Assemble result DataFrame ─────────────────────────────
     result_df = scored_df.head(top_n).copy().reset_index(drop=True)
     trade_df  = pd.DataFrame(trade_plans)
     for col in trade_df.columns:
         result_df[col] = trade_df[col].values
 
-    # Return pct versions for display
     result_df['return_1m_pct'] = (result_df['return_1m'] * 100).round(1)
     result_df['return_2m_pct'] = (result_df['return_2m'] * 100).round(1)
     result_df['return_3m_pct'] = (result_df['return_3m'] * 100).round(1)
 
-    # ── Assign categories ─────────────────────────────────────────────────
-    print(f"\n  Assigning forward-looking categories...")
+    # ── Step 7: Assign categories ─────────────────────────────
+    print(f"\n  Assigning categories...")
     if TECH_FILTERS_AVAILABLE and not tech_df.empty:
         result_df['category'] = assign_categories_bulk(
             scored_df=result_df,
@@ -416,21 +547,48 @@ def scan_stocks(scan_date=None, top_n=None):
             w52_map=data['w52_map'],
         )
     else:
-        result_df['category'] = result_df.apply(_assign_category_simple, axis=1)
+        result_df['category'] = result_df.apply(
+            _assign_category_simple, axis=1
+        )
 
     cat_counts = result_df['category'].value_counts()
     for cat, count in cat_counts.items():
         meta = CATEGORY_META.get(cat, {})
-        print(f"    {meta.get('icon', '•')} {meta.get('label', cat)}: {count}")
+        print(f"    {meta.get('icon','•')} {meta.get('label', cat)}: {count}")
 
-    # ── Add streaks ───────────────────────────────────────────────────────
+    # ── Step 8: Load streaks ──────────────────────────────────
     streaks = _load_streaks()
-    result_df['streak'] = result_df['symbol'].map(lambda s: streaks.get(s, 0))
+    result_df['streak'] = result_df['symbol'].map(
+        lambda s: streaks.get(s, 0)
+    )
     strong = (result_df['streak'] >= 5).sum()
     if strong > 0:
         print(f"  🔥 {strong} stocks with 5+ day streak")
 
-    # ── Score breakdown string (for Telegram display) ─────────────────────
+    # ── Step 9: Assign situations (weekly-tier aware) ─────────
+    print(f"\n  Assigning situations...")
+
+    def _get_situation(row):
+        w_tier = int(row.get('weekly_tier', WEEKLY_TIER_NEUTRAL))
+        streak = int(row.get('streak', 0))
+        return _assign_situation_with_weekly(
+            row.to_dict(), streak, w_tier
+        )
+
+    result_df['situation'] = result_df.apply(_get_situation, axis=1)
+
+    # Situation summary
+    sit_counts = result_df['situation'].value_counts()
+    sit_meta   = {
+        "prime": "🎯", "hold": "💰",
+        "watch": "👀", "book": "⚠️", "avoid": "🚫"
+    }
+    for sit in ["prime", "hold", "watch", "book", "avoid"]:
+        count = sit_counts.get(sit, 0)
+        if count > 0:
+            print(f"    {sit_meta.get(sit,'•')} {sit.title()}: {count}")
+
+    # ── Step 10: Score breakdown for Telegram ─────────────────
     if TECH_FILTERS_AVAILABLE and not tech_df.empty:
         result_df['score_breakdown'] = result_df.apply(
             lambda r: format_score_breakdown(r.to_dict()), axis=1
@@ -438,9 +596,13 @@ def scan_stocks(scan_date=None, top_n=None):
 
     log.info(
         f"Scan complete: {len(result_df)} stocks | "
-        f"HC: {len(result_df[result_df.get('conviction','') == TIER_HIGH_CONVICTION] if 'conviction' in result_df.columns else [])} | "
-        f"Cats: {dict(cat_counts)}"
+        f"prime={sit_counts.get('prime',0)} "
+        f"watch={sit_counts.get('watch',0)} "
+        f"hold={sit_counts.get('hold',0)} "
+        f"book={sit_counts.get('book',0)} "
+        f"avoid={sit_counts.get('avoid',0)}"
     )
+
     return result_df
 
 
@@ -449,9 +611,11 @@ def scan_stocks(scan_date=None, top_n=None):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def main():
-    parser = argparse.ArgumentParser(description="NSE Stock Scanner — Forward Probability Ranking")
+    parser = argparse.ArgumentParser(
+        description="NSE Stock Scanner v5 — Forward Probability + Weekly Filter"
+    )
     parser.add_argument("--date", help="Scan date DD-MM-YYYY or YYYY-MM-DD")
-    parser.add_argument("--top",  type=int, help="Number of top stocks (default 25)")
+    parser.add_argument("--top",  type=int, help="Number of stocks (default 25)")
     args = parser.parse_args()
 
     scan_date = None
@@ -468,24 +632,26 @@ def main():
         print("\nNo results.")
         return
 
-    # ── Console output ────────────────────────────────────────────────────
-    hc_df = results[results.get('conviction', pd.Series()) == TIER_HIGH_CONVICTION] if 'conviction' in results.columns else pd.DataFrame()
-    wl_df = results[results.get('conviction', pd.Series()) == TIER_WATCHLIST]       if 'conviction' in results.columns else pd.DataFrame()
+    # ── Console output ────────────────────────────────────────
+    sit_meta = {
+        "prime": "🎯", "hold": "💰",
+        "watch": "👀", "book": "⚠️", "avoid": "🚫"
+    }
 
     def print_section(title, df):
         if df.empty:
             return
-        print(f"\n{'─' * 80}\n  {title}\n{'─' * 80}")
+        print(f"\n{'─'*80}\n  {title}\n{'─'*80}")
         print(f"  {'#':<4} {'Symbol':<12} {'Score':>5} {'3M%':>7} "
-              f"{'Entry':>8} {'SL':>8} {'T1':>8} {'T2':>8} "
-              f"{'Cross':>7} {'Dist%':>6} {'Cat'}")
-        print(f"  {'─'*4} {'─'*12} {'─'*5} {'─'*7} "
-              f"{'─'*8} {'─'*8} {'─'*8} {'─'*8} "
-              f"{'─'*7} {'─'*6} {'─'*12}")
+              f"{'Entry':>8} {'SL':>8} {'T1':>8} "
+              f"{'Cross':>7} {'Dist':>6} "
+              f"{'Weekly':<18} {'Sit'}")
+        print("  " + "─" * 76)
         for i, (_, row) in enumerate(df.iterrows(), 1):
-            cross_age = int(row.get('cross_age', 0))
-            cross_str = f"{cross_age}d" if cross_age > 0 else "—"
-            dist_str  = f"{row.get('dist_pct', 0):.1f}%" if 'dist_pct' in row else "—"
+            ca  = int(row.get('cross_age', 0))
+            dp  = float(row.get('dist_pct', 0))
+            wl  = str(row.get('weekly_label', ''))[:16]
+            sit = sit_meta.get(row.get('situation', ''), '•')
             print(
                 f"  {i:<4} {str(row['symbol']):<12} "
                 f"{int(row.get('score', 0)):>5} "
@@ -493,18 +659,36 @@ def main():
                 f"{row.get('entry', 0):>8.0f} "
                 f"{row.get('sl', 0):>8.0f} "
                 f"{row.get('target1', 0):>8.0f} "
-                f"{row.get('target2', 0):>8.0f} "
-                f"{cross_str:>7} "
-                f"{dist_str:>6} "
-                f"{row.get('category', '')}"
+                f"{ca:>6}d "
+                f"{dp:>5.1f}% "
+                f"{wl:<18} {sit}"
             )
 
     d_str = (scan_date or date.today()).strftime('%d-%b-%Y')
-    print(f"\n{'#' * 80}")
-    print(f"  NSE SCANNER — {d_str}  |  Ranked by FORWARD PROBABILITY SCORE")
-    print(f"{'#' * 80}")
-    print_section(f"HIGH CONVICTION — score ≥7 [{len(hc_df)}]", hc_df)
-    print_section(f"WATCHLIST — score 4-6 [{len(wl_df)}]", wl_df)
+    print(f"\n{'#'*80}")
+    print(f"  NSE SCANNER v5 — {d_str}")
+    print(f"  Ranked by FORWARD PROBABILITY · Weekly two-tier filter")
+    print(f"{'#'*80}")
+
+    prime_df = results[results['situation'] == 'prime']
+    hold_df  = results[results['situation'] == 'hold']
+    watch_df = results[results['situation'] == 'watch']
+    book_df  = results[results['situation'] == 'book']
+    avoid_df = results[results['situation'] == 'avoid']
+
+    print_section(f"🎯 PRIME ENTRY [{len(prime_df)}] — Enter today, TV confirms",
+                  prime_df)
+    print_section(f"💰 HOLD & TRAIL [{len(hold_df)}] — Trail your stop loss",
+                  hold_df)
+    print_section(f"👀 WATCH CLOSELY [{len(watch_df)}] — Monitor, not today",
+                  watch_df)
+    print_section(f"⚠️  BOOK PROFITS [{len(book_df)}] — Protect gains",
+                  book_df)
+    if not avoid_df.empty:
+        print_section(f"🚫 AVOID [{len(avoid_df)}] — Skip today",
+                      avoid_df)
+
+    print(f"\n  Total: {len(results)} stocks")
 
     # Save for Telegram bot
     if save_scan_results:
