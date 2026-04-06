@@ -125,6 +125,17 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+# ── nse_output helpers (Option C welcome + morning keyboard) ──
+_OUTPUT_OK = False
+try:
+    from nse_output import format_welcome_scan, build_morning_keyboard
+    _OUTPUT_OK = True
+    print("[POLL] nse_output loaded (Option C welcome)")
+except ImportError as _oe:
+    print(f"[WARN] nse_output not loaded: {_oe}")
+    def format_welcome_scan(name=""): return ("No data yet.", {})
+    def build_morning_keyboard(): return {"inline_keyboard": []}
+
 GUIDE_PDF_URL = os.environ.get(
     "GUIDE_PDF_URL",
     "https://htmlpreview.github.io/?https://github.com/JayeshSRathod/"
@@ -464,12 +475,21 @@ def handle_command(chat_id, text, is_cb=False, raw_user=None):
 
     # ── ROUTES ────────────────────────────────────────────────
 
-    # Start / Welcome
+    # Start / Welcome — Option C: Prime cards + compact rest
     if cmd == '/start':
         st['view'] = 'today'
         st['page'] = 0
         st['sort'] = 'score'
-        return reply(format_welcome(), kb_main(0, 1, 'score', 'today'))
+        # Use Option C format with user first name
+        user_name = (raw_user.get('first_name', '')
+                     if raw_user else '')
+        try:
+            from nse_output import format_welcome_scan, build_morning_keyboard
+            msg, kb = format_welcome_scan(user_name)
+            return reply(msg, kb)
+        except Exception:
+            return reply(format_welcome(user_name or None),
+                         kb_main(0, 1, 'score', 'today'))
 
     # ── PRIME (NEW) ───────────────────────────────────────────
     elif cmd in ('/prime', 'view_prime'):
