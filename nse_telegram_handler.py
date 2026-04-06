@@ -621,62 +621,50 @@ def _stock_card(stock, rank=0, show_prob=True,
 # ═══════════════════════════════════════════════════════════════
 
 def format_welcome(user_name=None):
-    name = f" {user_name}" if user_name else ""
-
-    sit_line = ""
+    """
+    /start and Hi/Hello response.
+    Shows Option C: Prime full cards + compact rest.
+    Delegates to nse_output.format_welcome_scan().
+    Returns message string only (keyboard handled by polling.py).
+    """
+    name = user_name or ""
     try:
-        res = load_scan_results()
-        if res and res.get('stocks'):
-            stocks = res['stocks']
-            ds     = _date_str(res.get('scan_date', ''))
-
-            # Count by situation
-            sit_counts = {}
-            for s in stocks:
-                sit = s.get('situation', SITUATION_WATCH)
-                sit_counts[sit] = sit_counts.get(sit, 0) + 1
-
-            parts = []
-            for sit in SITUATION_ORDER:
-                if sit in sit_counts:
-                    sm = SITUATION_META.get(sit, {})
-                    parts.append(
-                        f"{sm.get('icon','·')} {sit_counts[sit]} "
-                        f"{sm.get('label','').split()[0].lower()}"
-                    )
-
-            prime_count = sit_counts.get(SITUATION_PRIME, 0)
-            prime_note  = (f"\n{_b(f'🎯 {prime_count} stock(s) ready to enter today!')}"
-                           if prime_count > 0 else "")
-
-            sit_line = (
-                f"{_b('NSE Scanner Daily')}\n"
-                f"{ds} · {len(stocks)} stocks scanned\n"
-                f"{SEP_BOLD}\n"
-                f"{_b('Today')}s situation\n"
-                + " · ".join(parts)
-                + prime_note + "\n"
-                f"{SEP_BOLD}\n"
-            )
+        from nse_output import format_welcome_scan
+        msg, _ = format_welcome_scan(name)
+        return msg
     except Exception:
         pass
 
-    if not sit_line:
-        sit_line = f"{_b('NSE Scanner Daily')}\n{SEP_BOLD}\n"
+    # Fallback if nse_output not available
+    greeting = f"👋 {_b('Hello' + (' ' + _h(name) if name else '') + '!')}\n\n"
+    res = load_scan_results()
+    if res and res.get('stocks'):
+        stocks = res['stocks']
+        ds     = _date_str(res.get('scan_date', ''))
+        sit_counts = {}
+        for s in stocks:
+            sit = s.get('situation', SITUATION_WATCH)
+            sit_counts[sit] = sit_counts.get(sit, 0) + 1
+        prime = sit_counts.get(SITUATION_PRIME, 0)
+        parts = []
+        for sit in SITUATION_ORDER:
+            if sit in sit_counts:
+                sm = SITUATION_META.get(sit, {})
+                parts.append(f"{sm.get('icon','·')} {sit_counts[sit]}")
+        return (
+            greeting +
+            f"📊 {_b('NSE Scan — ' + ds)}\n" +
+            f"{len(stocks)} stocks · " + " · ".join(parts) + "\n\n" +
+            (f"🎯 {_b(str(prime) + ' Prime Entry stock(s) today!')}\n\n"
+             if prime > 0 else "") +
+            f"{_i('Tap 🎯 Prime below for entry-ready stocks')}"
+        )
 
     return (
-        f"👋 {_b('Hello' + name + '!')}\n\n"
-        + sit_line +
-        "\n"
-        f"🎯 {_b('Prime')} — Stocks ready to enter today\n"
-        f"📊 {_b('Today')} — Full situation scan\n"
-        f"🆕 {_b('New')} — Stocks added today\n"
-        f"📉 {_b('Exit')} — Stocks removed today\n"
-        f"⚠️ {_b('Caution')} — Risk flags + avoid signals\n"
-        f"💰 {_b('Strong')} — 5+ day streak with frozen P/L\n"
-        f"📅 {_b('Digest')} — Last week performance\n"
-        f"📖 {_b('Guide')} — How to read the scanner\n\n"
-        f"{_i('Tap a view below to explore')}"
+        greeting +
+        f"📊 {_b('NSE Scanner Daily')}\n\n" +
+        f"{_i('Scan data not available yet.')}\n" +
+        "Pipeline runs at 6:00 AM IST daily."
     )
 
 
