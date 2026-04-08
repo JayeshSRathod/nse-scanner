@@ -189,7 +189,8 @@ def resolve_text_to_command(text):
     # Direct callback passthrough
     if c in ('next','prev','list','help','news','sort_score','sort_3m',
              'sort_top10','noop','view_today','view_new','view_exit',
-             'view_caution','view_strong','view_prime','summary') \
+             'view_caution','view_strong','view_prime','summary',
+             'back_from_card','back_to_main','main_menu','guide') \
             or c.startswith('page_') \
             or c.startswith('stock_'):
         return c
@@ -382,14 +383,14 @@ def kb_prime():
 
 def kb_back():
     return {"inline_keyboard": [
-        [{"text": "◀◀ Main", "callback_data": "view_today"}]
+        [{"text": "🏠 Main Menu", "callback_data": "back_to_main"}]
     ]}
 
 
 def kb_guide():
     return {"inline_keyboard": [
         [{"text": "📖 Open full guide", "url": GUIDE_PDF_URL}],
-        [{"text": "◀◀ Main", "callback_data": "view_today"}],
+        [{"text": "🏠 Main Menu", "callback_data": "back_to_main"}],
     ]}
 
 
@@ -401,7 +402,7 @@ def kb_admin():
         ],
         [
             {"text": "Activity", "callback_data": "admin_stats"},
-            {"text": "◀◀ Main",  "callback_data": "view_today"},
+            {"text": "🏠 Main",  "callback_data": "back_to_main"},
         ],
     ]}
 
@@ -409,8 +410,8 @@ def kb_admin():
 def kb_card():
     return {"inline_keyboard": [
         [
-            {"text": "◀ Back",  "callback_data": "back_from_card"},
-            {"text": "◀◀ Main", "callback_data": "view_today"},
+            {"text": "◀ Back",      "callback_data": "back_from_card"},
+            {"text": "🏠 Main Menu","callback_data": "back_to_main"},
         ]
     ]}
 
@@ -497,8 +498,19 @@ def handle_command(chat_id, text, is_cb=False, raw_user=None):
         return reply(format_prime_stocks(stocks, sd), kb_prime())
 
     # ── TODAY ─────────────────────────────────────────────────
-    elif cmd in ('/today', 'view_today'):
-        return view('today', format_today_scan(stocks, sd))
+    elif cmd in ('/today', 'view_today', 'back_to_main', 'main_menu'):
+        # Always show Option C format — same as /start
+        st['view'] = 'today'
+        st['page'] = 0
+        user_name = (raw_user.get('first_name', '')
+                     if raw_user else '')
+        try:
+            from nse_output import format_welcome_scan, build_morning_keyboard
+            msg, kb = format_welcome_scan(user_name)
+            return reply(msg, kb)
+        except Exception:
+            return reply(format_today_scan(stocks, sd),
+                         kb_main(0, 1, st['sort'], 'today'))
 
     # ── PAGINATION ────────────────────────────────────────────
     elif cmd in ('/next', 'next'):
@@ -610,10 +622,18 @@ def handle_command(chat_id, text, is_cb=False, raw_user=None):
         return reply(m, kb_card())
 
     elif cmd == 'back_from_card':
-        return handle_command(
-            chat_id, f'view_{st["view"]}',
-            is_cb=is_cb, raw_user=raw_user
-        )
+        # Always return to main Option C scan view
+        st['view'] = 'today'
+        st['page'] = 0
+        user_name = (raw_user.get('first_name', '')
+                     if raw_user else '')
+        try:
+            from nse_output import format_welcome_scan, build_morning_keyboard
+            msg, kb = format_welcome_scan(user_name)
+            return reply(msg, kb)
+        except Exception:
+            return reply(format_today_scan(stocks, sd),
+                         kb_main(0, 1, st['sort'], 'today'))
 
     # ── DIGEST ────────────────────────────────────────────────
     elif cmd == '/digest':
