@@ -565,9 +565,224 @@ def format_guide_message():
     msg += "  Not guarantees — use as guidance only\n\n"
 
     msg += "━" * 30 + "\n"
-    msg += "👇 <i>Tap the button below for the full PDF guide</i>"
+    msg += "👇 <i>Tap the button below for the full PDF guide</i>\n\n"
+    msg += (
+        "📢 <i>For educational and informational purposes only. "
+        "Not a SEBI registered investment advisor. "
+        "Not investment advice. "
+        "Always consult a qualified financial advisor before trading.</i>"
+    )
 
     return msg
+
+
+# ═══════════════════════════════════════════════════════════════
+# BROADCAST — Send morning message to all registered users
+# ═══════════════════════════════════════════════════════════════
+
+def broadcast_to_all_users(token: str = None,
+                            skip_chat_id: int = None) -> dict:
+    """
+    Broadcast today's Option C scan message to all registered users.
+
+    Called by admin after sending /broadcast and confirming YES.
+
+    Args:
+        token:        Telegram bot token
+        skip_chat_id: Chat ID already sent to (admin's own chat)
+                      These users won't get a duplicate message
+
+    Returns:
+        dict with sent, failed, blocked, skipped counts
+    """
+    if token is None:
+        token = (getattr(config, 'TELEGRAM_TOKEN', None)
+                 if config else None)
+        if not token:
+            token = os.environ.get('TELEGRAM_TOKEN', '')
+
+    if not token:
+        log.error("[BROADCAST] No Telegram token available")
+        return {'sent': 0, 'failed': 0, 'blocked': 0, 'skipped': 0,
+                'error': 'No token'}
+
+    # Load scan data for the message
+    try:
+        from nse_output import format_option_c
+        scan_file = Path("telegram_last_scan.json")
+        if not scan_file.exists():
+            return {'sent': 0, 'failed': 0, 'blocked': 0, 'skipped': 0,
+                    'error': 'No scan data'}
+        with open(scan_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        stocks_list = data.get('stocks', [])
+        scan_date   = data.get('scan_date', '')
+        if not stocks_list:
+            return {'sent': 0, 'failed': 0, 'blocked': 0, 'skipped': 0,
+                    'error': 'Empty scan data'}
+        message = format_option_c(stocks_list, scan_date)
+        if len(message) > 4096:
+            message = message[:4050] + "\n\n<i>... truncated. Open Scanner App for full list.</i>"
+    except Exception as e:
+        log.error(f"[BROADCAST] Failed to build message: {e}")
+        return {'sent': 0, 'failed': 0, 'blocked': 0, 'skipped': 0,
+                'error': str(e)}
+
+    # Load all users
+    users = _load_users()
+    if not users:
+        return {'sent': 0, 'failed': 0, 'blocked': 0, 'skipped': 0,
+                'error': 'No users registered'}
+
+    url     = f"https://api.telegram.org/bot{token}/sendMessage"
+    sent    = 0
+    failed  = 0
+    blocked = 0
+    skipped = 0
+
+    # Build morning keyboard
+    try:
+        from nse_output import build_morning_keyboard
+        kb = build_morning_keyboard()
+    except Exception:
+        kb = None
+
+    log.info(f"[BROADCAST] Starting — {len(users)} users")
+    print(f"[BROADCAST] Sending to {len(users)} users...")
+
+    import time
+    for uid, udata in users.items():
+        # Skip blocked users
+        if udata.get('is_blocked', False):
+            blocked += 1
+            continue
+
+        # Skip already-sent chat (admin)
+        if skip_chat_id and int(uid) == int(skip_chat_id):
+            skipped += 1
+            continue
+
+        try:
+            payload = {
+                'chat_id':    uid,
+                'text':       message,
+                'parse_mode': 'HTML',
+            }
+            if kb:
+                payload['reply_markup'] = json.dumps(kb)
+
+            r = requests.post(url, data=payload, timeout=10)
+
+            if r.status_code == 200:
+                sent += 1
+            elif r.status_code == 403:
+                # User blocked the bot
+                blocked += 1
+                udata['is_blocked'] = True
+                log.info(f"[BROADCAST] {uid} blocked the bot — marking")
+            elif r.status_code == 429:
+                # Rate limited — wait and retry once
+                time.sleep(2)
+                r2 = requests.post(url, data=payload, timeout=10)
+                if r2.status_code == 200:
+                    sent += 1
+                else:
+                    failed += 1
+                    log.warning(f"[BROADCAST] {uid} retry failed: {r2.status_code}")
+            else:
+                failed += 1
+                log.warning(f"[BROADCAST] {uid} failed: {r.status_code}")
+
+        except Exception as e:
+            failed += 1
+            log.error(f"[BROADCAST] {uid} error: {e}")
+
+        # Rate limit: max 20 messages/sec (Telegram allows 30)
+        time.sleep(0.05)
+
+    # Save updated user data (blocked flags)
+    _save_users(users)
+
+    result = {
+        'sent':    sent,
+        'failed':  failed,
+        'blocked': blocked,
+        'skipped': skipped,
+        'total':   len(users),
+    }
+    log.info(f"[BROADCAST] Complete: {result}")
+    print(f"[BROADCAST] Done — sent={sent} failed={failed} "
+          f"blocked={blocked} skipped={skipped}")
+    return result
+
+
+def format_broadcast_summary(result: dict) -> str:
+    """Format broadcast result for admin confirmation message."""
+    total   = result.get('total', 0)
+    sent    = result.get('sent', 0)
+    failed  = result.get('failed', 0)
+    blocked = result.get('blocked', 0)
+    skipped = result.get('skipped', 0)
+
+    if result.get('error'):
+        return (f"❌ <b>Broadcast Failed</b>\n\n"
+                f"Reason: <code>{result['error']}</code>")
+
+    return (
+        f"✅ <b>Broadcast Complete</b>\n\n"
+        f"📤 Sent:    <b>{sent}</b>\n"
+        f"❌ Failed:  <b>{failed}</b>\n"
+        f"🚫 Blocked: <b>{blocked}</b>\n"
+        f"⏭ Skipped: <b>{skipped}</b>\n"
+        f"👥 Total:   <b>{total}</b> registered users\n\n"
+        f"<i>Blocked users auto-marked in user list.</i>"
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
+# PIPELINE CONFIRMATION — Sent at 6:05 AM after scan completes
+# ═══════════════════════════════════════════════════════════════
+
+def send_pipeline_confirmation(scan_date: str = None,
+                                stock_count: int = 0,
+                                prime_count: int = 0,
+                                run_time: str = None) -> bool:
+    """
+    Send one-line pipeline confirmation to admin at 6:05 AM.
+    Called from nse_output.generate_report() after successful scan.
+
+    Args:
+        scan_date:   'YYYY-MM-DD' string
+        stock_count: total stocks in scan
+        prime_count: number of Prime Entry stocks
+        run_time:    time pipeline completed e.g. '6:02 AM IST'
+    """
+    token   = (getattr(config, 'TELEGRAM_TOKEN', None)
+               if config else None) or os.environ.get('TELEGRAM_TOKEN', '')
+    chat_id = ADMIN_CHAT_ID
+    if not token or not chat_id:
+        return False
+
+    try:
+        sd  = scan_date or date.today().strftime('%d-%b-%Y')
+        rt  = run_time or datetime.now().strftime('%I:%M %p IST')
+        msg = (
+            f"✅ <b>Pipeline Complete</b> — {sd}\n"
+            f"📊 {stock_count} stocks · "
+            f"🎯 {prime_count} Prime · "
+            f"⏱ {rt}\n"
+            f"<i>Send /broadcast to push to all users</i>"
+        )
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        r   = requests.post(url, data={
+            'chat_id':    chat_id,
+            'text':       msg,
+            'parse_mode': 'HTML',
+        }, timeout=10)
+        return r.status_code == 200
+    except Exception as e:
+        log.error(f"[PIPELINE CONFIRM] {e}")
+        return False
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -578,14 +793,16 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="NSE Bot Admin Tools")
-    parser.add_argument("--health",  action="store_true",
+    parser.add_argument("--health",    action="store_true",
                         help="Show health report")
-    parser.add_argument("--users",   action="store_true",
+    parser.add_argument("--users",     action="store_true",
                         help="Show user list")
-    parser.add_argument("--send",    action="store_true",
+    parser.add_argument("--send",      action="store_true",
                         help="Send health check to Telegram")
-    parser.add_argument("--stats",   action="store_true",
+    parser.add_argument("--stats",     action="store_true",
                         help="Show activity stats")
+    parser.add_argument("--broadcast", action="store_true",
+                        help="Broadcast today's scan to all users")
     args = parser.parse_args()
 
     if args.health:
@@ -609,6 +826,12 @@ if __name__ == "__main__":
         print(f"  Actions: {stats['total_actions']}")
         print(f"  Users:   {stats['unique_users']}")
         print(f"  Top actions: {stats['top_actions'][:5]}")
+
+    elif args.broadcast:
+        print("Starting broadcast...")
+        result = broadcast_to_all_users()
+        import re
+        print(re.sub(r'<[^>]+>', '', format_broadcast_summary(result)))
 
     else:
         parser.print_help()
