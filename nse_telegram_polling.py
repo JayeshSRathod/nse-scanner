@@ -190,7 +190,8 @@ def resolve_text_to_command(text):
     if c in ('next','prev','list','help','news','sort_score','sort_3m',
              'sort_top10','noop','view_today','view_new','view_exit',
              'view_caution','view_strong','view_prime','summary',
-             'back_from_card','back_to_main','main_menu','guide') \
+             'back_from_card','back_to_main','main_menu','guide',
+             'broadcast_confirm') \
             or c.startswith('page_') \
             or c.startswith('stock_'):
         return c
@@ -719,6 +720,72 @@ def handle_command(chat_id, text, is_cb=False, raw_user=None):
                     m += f"  {_code(a)}: {c}\n"
             return reply(m, kb_admin())
         return reply("Admin access only.")
+
+    # ── BROADCAST ─────────────────────────────────────────────
+    elif cmd == '/broadcast':
+        if not (_ADMIN_OK and raw_user and
+                is_admin(raw_user.get("id", 0))):
+            return reply("Admin access only.")
+        try:
+            from nse_bot_admin import get_user_count
+            ucount = get_user_count()
+        except Exception:
+            ucount = 0
+        # Load scan summary
+        scan_summary = ""
+        try:
+            import json as _json
+            from pathlib import Path as _Path
+            _sf = _Path("telegram_last_scan.json")
+            if _sf.exists():
+                _d = _json.loads(_sf.read_text())
+                _stocks = _d.get('stocks', [])
+                _prime  = sum(1 for s in _stocks
+                              if s.get('situation') == 'prime')
+                _sd     = _d.get('scan_date', '')
+                scan_summary = (
+                    f"\n\n📊 Today's scan: <b>{len(_stocks)} stocks</b> · "
+                    f"🎯 <b>{_prime} Prime</b> · {_sd}"
+                )
+        except Exception:
+            pass
+
+        confirm_msg = (
+            f"📢 {_b('Broadcast Confirmation')}\n\n"
+            f"This will send today's full scan to "
+            f"<b>{ucount} registered users</b>.{scan_summary}\n\n"
+            f"⚠️ Are you sure?"
+        )
+        confirm_kb = {"inline_keyboard": [[
+            {"text": "✅ YES — Send Now",
+             "callback_data": "broadcast_confirm"},
+            {"text": "❌ Cancel",
+             "callback_data": "back_to_main"},
+        ]]}
+        return reply(confirm_msg, confirm_kb)
+
+    elif cmd == 'broadcast_confirm':
+        if not (_ADMIN_OK and raw_user and
+                is_admin(raw_user.get("id", 0))):
+            return reply("Admin access only.")
+        try:
+            from nse_bot_admin import (broadcast_to_all_users,
+                                        format_broadcast_summary)
+            # Send progress message first
+            return_msg = reply(
+                "📢 Broadcasting… please wait.",
+                {"inline_keyboard": []}
+            )
+            # Run broadcast (skip admin's own chat)
+            result = broadcast_to_all_users(
+                skip_chat_id=int(chat_id)
+            )
+            summary = format_broadcast_summary(result)
+            return reply(summary, kb_admin())
+        except Exception as e:
+            log.error(f"Broadcast error: {e}")
+            return reply(f"❌ Broadcast failed: {_code(str(e))}",
+                         kb_admin())
 
     # ── Unknown ───────────────────────────────────────────────
     else:
