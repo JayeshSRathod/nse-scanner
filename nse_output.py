@@ -568,6 +568,20 @@ def generate_report(results_df, report_date=None):
     print(f"Telegram: {'sent ✅' if ok else 'failed ❌'}")
     print(f"Stocks: {len(results_df)} | 🎯 Prime: {prime}")
 
+    # Send pipeline confirmation to admin (6:05 AM)
+    if ok:
+        try:
+            from nse_bot_admin import send_pipeline_confirmation
+            run_time = datetime.now().strftime('%I:%M %p IST')
+            send_pipeline_confirmation(
+                scan_date   = report_date.strftime('%d-%b-%Y'),
+                stock_count = len(results_df),
+                prime_count = int(prime),
+                run_time    = run_time,
+            )
+        except Exception as _pe:
+            log.warning(f"Pipeline confirmation skipped: {_pe}")
+
     if RESULTS_FILE and os.path.exists(RESULTS_FILE):
         try:
             with open(RESULTS_FILE, encoding='utf-8') as f:
