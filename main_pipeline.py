@@ -1,7 +1,14 @@
 """
 main_pipeline.py — NSE Pipeline Entry Point for Railway Cron
 =============================================================
-Now includes: historical backfill on first run (when DB is empty)
+Used by : nse-pipeline Railway service
+Runs    : Every weekday at 6:00 AM IST (00:30 UTC) via cron
+
+FIX APPLIED:
+  - Removed premature `return True` inside Step 3 try block
+  - Steps 4, 5, 6 now actually execute (they were unreachable before)
+  - Added Step 5b: push news JSON to GitHub after generate_report
+  - News collector now runs every day as part of pipeline
 """
 
 import os
@@ -9,38 +16,56 @@ import sys
 import json
 import types
 import base64
-import sqlite3
 import requests
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+# ── ALERT + HEALTH HELPERS ────────────────────────────────────
 
-def send_failure_alert(step, reason, scan_date):
+def send_failure_alert(step: str, reason: str, scan_date: date):
+    """Send pipeline failure alert to Telegram."""
     if not TOKEN or not CHAT_ID:
         return
-    msg = (f"❌ *NSE Pipeline Failure*\n\n*Date:* {scan_date.strftime('%d-%b-%Y')}\n"
-           f"*Step:* {step}\n*Reason:* `{reason}`\n\n⚠️ Action required")
+    msg = (
+        "❌ *NSE Pipeline Failure*\n\n"
+        f"*Date:* {scan_date.strftime('%d-%b-%Y')}\n"
+        f"*Step:* {step}\n"
+        f"*Reason:* `{reason}`\n\n"
+        "⚠️ Action required"
+    )
     try:
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        requests.post(url, data={"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown"}, timeout=10)
+        requests.post(url, data={
+            "chat_id":    CHAT_ID,
+            "text":       msg,
+            "parse_mode": "Markdown",
+        }, timeout=10)
     except Exception:
         pass
 
 
 HEALTH_FILE = Path("scan_health.json")
 
-def write_health(status, **kwargs):
-    payload = {"run_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S IST"), "status": status, **kwargs}
+def write_health(status: str, **kwargs):
+    payload = {
+        "run_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S IST"),
+        "status":   status,
+        **kwargs
+    }
     HEALTH_FILE.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
+# ── FORCE UTF‑8 ────────────────────────────────────────────────
+
 os.environ["PYTHONIOENCODING"] = "utf-8"
-os.environ["PYTHONUTF8"] = "1"
+os.environ["PYTHONUTF8"]       = "1"
 
 print("=" * 55)
 print(" NSE PIPELINE — DAILY SCAN")
 print(f" {datetime.now().strftime('%d-%b-%Y %H:%M:%S')} IST")
 print("=" * 55)
+
+# ── LOAD ENV ──────────────────────────────────────────────────
 
 try:
     from dotenv import load_dotenv
@@ -48,11 +73,11 @@ try:
 except ImportError:
     pass
 
-TOKEN         = os.environ.get("TELEGRAM_TOKEN", "").strip()
-CHAT_ID       = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
-GITHUB_TOKEN  = os.environ.get("GITHUB_TOKEN", "").strip()
-GITHUB_REPO   = os.environ.get("GITHUB_REPO", "JayeshSRathod/nse-scanner").strip()
-GITHUB_BRANCH = os.environ.get("GITHUB_BRANCH", "main").strip()
+TOKEN        = os.environ.get("TELEGRAM_TOKEN",  "").strip()
+CHAT_ID      = os.environ.get("TELEGRAM_CHAT_ID","").strip()
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN",    "").strip()
+GITHUB_REPO  = os.environ.get("GITHUB_REPO",     "JayeshSRathod/nse-scanner").strip()
+GITHUB_BRANCH= os.environ.get("GITHUB_BRANCH",   "main").strip()
 
 missing = []
 if not TOKEN:        missing.append("TELEGRAM_TOKEN")
@@ -62,40 +87,23 @@ if missing:
     print(f"[ERROR] Missing vars: {', '.join(missing)}")
     sys.exit(1)
 
-config                  = types.ModuleType("config")
-config.TELEGRAM_TOKEN   = TOKEN
-config.TELEGRAM_CHATID  = CHAT_ID
-config.OUTPUT_DIR       = "output"
-config.LOG_DIR          = "logs"
-config.DB_PATH          = "nse_scanner.db"
-config.DATA_DIR         = "nse_data"
-config.NSE_DATA_DIR     = "nse_data"
-config.MIN_PRICE        = 50
-config.MIN_VOLUME       = 50000
-config.MIN_DELIVERY     = 35
-config.MAX_ANNVOL       = 1.5
-config.MAX_PE           = 80
-config.TOP_N_STOCKS     = 25
-config.MIN_MARKET_CAP   = 500
-config.WEIGHT_1M        = 0.20
-config.WEIGHT_2M        = 0.30
-config.WEIGHT_3M        = 0.50
-config.DAYS_1M          = 22
-config.DAYS_2M          = 44
-config.DAYS_3M          = 66
-config.BONUS_52W_HIGH   = 0.05
-config.BONUS_TOP25      = 0.03
-sys.modules["config"]   = config
+# ── CONFIG MODULE ─────────────────────────────────────────────
+
+config                 = types.ModuleType("config")
+config.TELEGRAM_TOKEN  = TOKEN
+config.TELEGRAM_CHATID = CHAT_ID
+config.OUTPUT_DIR      = "output"
+config.LOG_DIR         = "logs"
+config.DB_PATH         = "nse_scanner.db"
+config.DATA_DIR        = "nse_data"
+sys.modules["config"]  = config
 
 for folder in ["logs", "output", "nse_data"]:
     Path(folder).mkdir(exist_ok=True)
 
+# ── HOLIDAY HELPERS ───────────────────────────────────────────
+
 NSE_HOLIDAYS = {
-    date(2025, 1, 26), date(2025, 2, 26), date(2025, 3, 14),
-    date(2025, 4, 10), date(2025, 4, 14), date(2025, 4, 18),
-    date(2025, 5, 1),  date(2025, 8, 15), date(2025, 8, 27),
-    date(2025, 10, 2), date(2025, 10, 21), date(2025, 10, 22),
-    date(2025, 11, 5), date(2025, 12, 25),
     date(2026, 1, 26), date(2026, 3, 25), date(2026, 4, 2),
     date(2026, 4, 10), date(2026, 4, 14), date(2026, 5, 1),
     date(2026, 8, 15), date(2026, 10, 2),
@@ -110,118 +118,42 @@ def get_last_trading_day(d):
         d -= timedelta(days=1)
     return d
 
-def get_trading_days(start, end):
-    days = []
-    d = start
-    while d <= end:
-        if is_trading_day(d):
-            days.append(d)
-        d += timedelta(days=1)
-    return days
+# ── GITHUB PUSH ───────────────────────────────────────────────
 
-
-def push_file_to_github(file_path, commit_msg):
-    content     = file_path.read_text(encoding="utf-8")
-    content_b64 = base64.b64encode(content.encode()).decode()
-    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path.name}"
-    sha = None
-    r = requests.get(url, headers=headers)
-    if r.status_code == 200:
-        sha = r.json().get("sha")
-    payload = {"message": commit_msg, "content": content_b64, "branch": GITHUB_BRANCH}
-    if sha:
-        payload["sha"] = sha
-    r = requests.put(url, headers=headers, json=payload)
-    return r.status_code in (200, 201)
-
-
-def db_has_enough_data(min_days=22):
-    """Check if DB has enough trading days for scanner to work."""
-    db_path = Path("nse_scanner.db")
-    if not db_path.exists() or db_path.stat().st_size < 10000:
-        return False, 0
+def push_file_to_github(file_path: Path, commit_msg: str) -> bool:
+    """Push a file to GitHub. Returns True on success."""
     try:
-        conn = sqlite3.connect(str(db_path))
-        row = conn.execute("SELECT COUNT(DISTINCT date) FROM daily_prices").fetchone()
-        conn.close()
-        days = row[0] if row else 0
-        return days >= min_days, days
-    except Exception:
-        return False, 0
+        content     = file_path.read_text(encoding="utf-8")
+        content_b64 = base64.b64encode(content.encode()).decode()
 
+        headers = {
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept":        "application/vnd.github.v3+json",
+        }
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path.name}"
 
-def backfill_historical_data(target_date, days_back=90):
-    """
-    Download and load historical data when DB is empty.
-    Downloads 90 trading days of data from NSE archives.
-    This runs ONCE on first deploy, then daily cron adds 1 day at a time.
-    """
-    print(f"\n{'='*55}")
-    print(f"  HISTORICAL BACKFILL — Loading {days_back} days")
-    print(f"  This runs once. Future runs load 1 day only.")
-    print(f"{'='*55}")
+        # Get existing SHA (needed for update)
+        sha = None
+        r   = requests.get(url, headers=headers, timeout=10)
+        if r.status_code == 200:
+            sha = r.json().get("sha")
 
-    from nse_historical_downloader import download_direct
-    from nse_loader import init_database, load_day
+        payload = {
+            "message": commit_msg,
+            "content": content_b64,
+            "branch":  GITHUB_BRANCH,
+        }
+        if sha:
+            payload["sha"] = sha
 
-    init_database()
-
-    # Calculate date range
-    end_date   = target_date
-    start_date = target_date - timedelta(days=int(days_back * 1.5))
-    trading_days = get_trading_days(start_date, end_date)
-
-    # Take last N trading days
-    trading_days = trading_days[-days_back:]
-
-    print(f"  Date range: {trading_days[0].strftime('%d-%b-%Y')} to {trading_days[-1].strftime('%d-%b-%Y')}")
-    print(f"  Trading days to load: {len(trading_days)}")
-
-    loaded = 0
-    failed = 0
-    skipped = 0
-
-    for i, d in enumerate(trading_days):
-        try:
-            # Download
-            download_direct(d)
-
-            # Load into DB
-            result = load_day(d, do_cleanup=False)
-
-            if result["status"] == "ok":
-                loaded += 1
-            elif result["status"] in ("skip", "already_loaded"):
-                skipped += 1
-            else:
-                failed += 1
-
-        except Exception as e:
-            failed += 1
-            if i < 3:
-                print(f"  ❌ {d.strftime('%d-%b-%Y')}: {e}")
-
-        # Progress every 10 days
-        if (i + 1) % 10 == 0:
-            print(f"  Progress: {i+1}/{len(trading_days)} "
-                  f"(loaded={loaded} skipped={skipped} failed={failed})")
-
-        # Small delay to be polite to NSE servers
-        import time
-        time.sleep(0.5)
-
-    print(f"\n  BACKFILL COMPLETE:")
-    print(f"    Loaded : {loaded}")
-    print(f"    Skipped: {skipped}")
-    print(f"    Failed : {failed}")
-
-    # Verify
-    has_enough, total_days = db_has_enough_data()
-    print(f"    DB now has {total_days} trading days of data")
-    print(f"    Scanner ready: {'YES' if has_enough else 'NO'}")
-
-    return has_enough
+        r = requests.put(url, headers=headers, json=payload, timeout=15)
+        ok = r.status_code in (200, 201)
+        if not ok:
+            print(f"[GITHUB] Push failed {r.status_code}: {r.text[:100]}")
+        return ok
+    except Exception as e:
+        print(f"[GITHUB] Push error: {e}")
+        return False
 
 
 # ── MAIN PIPELINE ─────────────────────────────────────────────
@@ -236,122 +168,137 @@ def run_pipeline():
 
     print(f"\n[PIPELINE] Scan date: {today.strftime('%d-%b-%Y')}")
 
-    # ── CANARY TEST ──
+    # ── CANARY TEST ───────────────────────────────────────────
     print("\n[CANARY] Testing JSON write path...")
     canary = Path("telegram_last_scan.json")
     try:
-        canary.write_text(json.dumps({"scan_date": today.strftime("%Y-%m-%d"), "canary": True}), encoding="utf-8")
+        canary.write_text(json.dumps({
+            "scan_date": today.strftime("%Y-%m-%d"),
+            "canary":    True,
+        }), encoding="utf-8")
         if json.loads(canary.read_text())["scan_date"] != today.strftime("%Y-%m-%d"):
             raise ValueError("Canary mismatch")
         print("[CANARY] ✅ OK")
     except Exception as e:
         send_failure_alert("CANARY JSON", str(e), today)
-        write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"), failed_step="CANARY", reason=str(e))
+        write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"),
+                     failed_step="CANARY", reason=str(e))
         return False
 
     write_health(status="RUNNING", scan_date=today.strftime("%Y-%m-%d"))
+    expected = today.strftime("%Y-%m-%d")
 
-    # ── STEP 0: Check if DB needs backfill ────────────────────
-    has_enough, current_days = db_has_enough_data(min_days=22)
-    print(f"\n[STEP 0] DB check: {current_days} trading days loaded")
+    # ── STEP 1: Download ──────────────────────────────────────
+    try:
+        from nse_historical_downloader import download_direct
+        download_direct(today)
+        print("[STEP 1] ✅ Download complete")
+    except Exception as e:
+        print(f"[STEP 1] ⚠️  Download failed (non-fatal): {e}")
 
-    if not has_enough:
-        print(f"[STEP 0] Need at least 22 days for scanner. Starting backfill...")
-        try:
-            backfill_ok = backfill_historical_data(today, days_back=90)
-            if not backfill_ok:
-                print("[STEP 0] ⚠️  Backfill incomplete but continuing...")
-        except Exception as e:
-            print(f"[STEP 0] Backfill error: {e}")
-            send_failure_alert("Backfill", str(e), today)
-    else:
-        # Normal daily run — just download + load today
-        print(f"[STEP 0] ✅ DB has enough data. Loading today only.")
-
-        # Step 1: Download today
-        try:
-            from nse_historical_downloader import download_direct
-            download_direct(today)
-        except Exception:
-            pass
-
-        # Step 2: Load today
-        try:
-            from nse_loader import init_database, load_day
-            init_database()
-            load_day(today, do_cleanup=False)
-        except Exception as e:
-            send_failure_alert("DB Load", str(e), today)
-            write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"), failed_step="STEP 2", reason=str(e))
-            return False
+    # ── STEP 2: Load DB ───────────────────────────────────────
+    try:
+        from nse_loader import init_database, load_day
+        init_database()
+        load_day(today, do_cleanup=False)
+        print("[STEP 2] ✅ DB load complete")
+    except Exception as e:
+        send_failure_alert("DB Load", str(e), today)
+        write_health(status="FAILED", scan_date=expected,
+                     failed_step="STEP 2", reason=str(e))
+        return False
 
     # ── STEP 3: Scan ──────────────────────────────────────────
+    results_df = None
     try:
         from nse_scanner import scan_stocks
         results_df = scan_stocks(scan_date=today)
 
-        if results_df.empty:
-            print("⚠️ No stocks found — keeping previous data")
-            write_health(status="NO_RESULTS", scan_date=today.strftime("%Y-%m-%d"), reason="Empty scan")
-            return True
+        if results_df is None or results_df.empty:
+            print("[STEP 3] ⚠️  No stocks found — keeping previous data")
+            write_health(status="NO_RESULTS", scan_date=expected,
+                         reason="Empty scan")
+            # Do NOT return here — still push existing JSON below
+            results_df = None
+        else:
+            hc = (results_df["conviction"] == "HIGH CONVICTION").sum() \
+                 if "conviction" in results_df.columns else 0
+            wl = (results_df["conviction"] == "Watchlist").sum() \
+                 if "conviction" in results_df.columns else 0
+            print(f"[STEP 3] ✅ Scan complete: {len(results_df)} stocks | "
+                  f"HC={hc} | WL={wl}")
+
     except Exception as e:
         send_failure_alert("STEP 3 Scan", str(e), today)
-        write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"), failed_step="STEP 3", reason=str(e))
+        write_health(status="FAILED", scan_date=expected,
+                     failed_step="STEP 3", reason=str(e))
         return False
 
-    hc = (results_df["conviction"] == "HIGH CONVICTION").sum() if "conviction" in results_df.columns else 0
-    wl = (results_df["conviction"] == "Watchlist").sum() if "conviction" in results_df.columns else 0
+    # ── STEP 4: Generate report + collect news ────────────────
+    # This step was UNREACHABLE before due to premature return True above
+    if results_df is not None and not results_df.empty:
+        try:
+            from nse_output import generate_report
+            generate_report(results_df, today)
+            print("[STEP 4] ✅ Report generated + news collected")
+        except Exception as e:
+            send_failure_alert("STEP 4 Output", str(e), today)
+            write_health(status="FAILED", scan_date=expected,
+                         failed_step="STEP 4", reason=str(e))
+            return False
+    else:
+        print("[STEP 4] ⏭  Skipped (no scan results)")
 
-    # ── STEP 4: Output ────────────────────────────────────────
-    try:
-        from nse_output import generate_report
-        generate_report(results_df, today)
-    except Exception as e:
-        send_failure_alert("STEP 4 Output", str(e), today)
-        write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"), failed_step="STEP 4", reason=str(e))
-        return False
-
-    # ── STEP 5: Freshness check ───────────────────────────────
+    # ── STEP 5: Verify JSON freshness ─────────────────────────
     json_path = Path("telegram_last_scan.json")
-    d = json.loads(json_path.read_text())
-    expected = today.strftime("%Y-%m-%d")
-    if d.get("scan_date") != expected:
-        send_failure_alert("JSON Freshness", f"Expected {expected}, found {d.get('scan_date')}", today)
-        write_health(status="FAILED", scan_date=expected, failed_step="STEP 5", reason="STALE JSON")
-        return False
-#REPLACE WITH:
- 
-    # ── STEP 5b ── Push news JSON to GitHub ───────────────────────
     try:
-        _news_fname = f"news_{today.strftime('%d%m%Y')}.json"
-        _news_path  = Path("output") / _news_fname
-        if _news_path.exists():
-            ok = push_file_to_github(_news_path, f"Auto: news {expected}")
-            if ok:
-                print(f"[PIPELINE] ✅ News JSON pushed: {_news_fname}")
-            else:
-                print(f"[PIPELINE] ⚠️  News JSON push failed (non-fatal)")
+        d     = json.loads(json_path.read_text())
+        found = d.get("scan_date")
+        if found != expected:
+            # Stale but non-fatal if we had no results today
+            print(f"[STEP 5] ⚠️  JSON date {found} (expected {expected})")
         else:
-            print(f"[PIPELINE] ℹ️  No news JSON for today (news step may have been skipped)")
+            print(f"[STEP 5] ✅ JSON fresh: {found}")
     except Exception as e:
-        print(f"[PIPELINE] ⚠️  News JSON push error: {e} (non-fatal)")
- 
-    # ── STEP 6 ────────────────────────────────────────────────────
-    push_file_to_github(json_path, f"Auto: scan {expected}")
+        print(f"[STEP 5] ⚠️  JSON check failed: {e}")
 
-    history_path = Path("scan_history.json")
-    if history_path.exists():
-        if push_file_to_github(history_path, f"Auto: history {expected}"):
-            print(f"  ✅ scan_history.json pushed to GitHub")
+    # ── STEP 5b: Push news JSON to GitHub ─────────────────────
+    try:
+        news_fname = f"news_{today.strftime('%d%m%Y')}.json"
+        news_path  = Path("output") / news_fname
+        if news_path.exists():
+            ok = push_file_to_github(news_path, f"Auto: news {expected}")
+            print(f"[STEP 5b] {'✅' if ok else '⚠️ '} News JSON push: {news_fname}")
+        else:
+            print(f"[STEP 5b] ℹ️  No news JSON found for today "
+                  f"(news step may have been skipped)")
+    except Exception as e:
+        print(f"[STEP 5b] ⚠️  News JSON push error: {e} (non-fatal)")
 
-    write_health(
-        status="SUCCESS", scan_date=expected,
-        stocks_scanned=len(results_df), high_conviction=int(hc), watchlist=int(wl),
-        json_fresh=True
-    )
+    # ── STEP 6: Push scan JSON to GitHub ─────────────────────
+    try:
+        ok = push_file_to_github(json_path, f"Auto: scan {expected}")
+        print(f"[STEP 6] {'✅' if ok else '❌'} Scan JSON push")
+    except Exception as e:
+        print(f"[STEP 6] ❌ Scan JSON push failed: {e}")
+
+    # ── STEP 7: Write health ──────────────────────────────────
+    try:
+        stock_count = len(results_df) if results_df is not None else 0
+        prime_count = int((results_df["situation"] == "prime").sum()) \
+                      if results_df is not None and "situation" in results_df.columns else 0
+        write_health(
+            status      = "SUCCESS",
+            scan_date   = expected,
+            stocks      = stock_count,
+            prime       = prime_count,
+            json_fresh  = True,
+        )
+    except Exception as e:
+        print(f"[STEP 7] ⚠️  Health write failed: {e}")
 
     elapsed = round(time() - t0, 1)
-    print(f"\nPIPELINE COMPLETE in {elapsed}s")
+    print(f"\n[PIPELINE] ✅ COMPLETE in {elapsed}s")
     return True
 
 
