@@ -25,7 +25,7 @@ import base64
 import requests
 from datetime import date, datetime, timedelta
 from pathlib import Path
-
+print("🔥 NEW PIPELINE VERSION LOADED")
 # ── FORCE UTF‑8 ────────────────────────────────────────────────
 
 os.environ["PYTHONIOENCODING"] = "utf-8"
