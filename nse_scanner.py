@@ -444,56 +444,10 @@ def scan_stocks(scan_date=None, top_n=None):
         return pd.DataFrame()
 
     # ── Step 2: Calculate returns ─────────────────────────────
-    def calculate_returns(prices_df, scan_date):
-    if prices_df.empty:
-        log.error("No price data available for returns calculation.")
+    stocks_df = calculate_returns(data['prices'], scan_date)
+    if stocks_df.empty:
+        print("ERROR: Could not calculate returns.")
         return pd.DataFrame()
-
-    recent = prices_df[prices_df['date'] <= pd.Timestamp(scan_date)].copy()
-    recent['symbol'] = recent['symbol'].astype(str).str.strip()
-    recent = recent.dropna(subset=['symbol', 'date', 'close'])
-    recent = recent.sort_values(['symbol', 'date'])
-    results = []
-    skipped = 0
-
-    for symbol, grp in recent.groupby('symbol'):
-        grp = grp.tail(DAYS_3M + 5)
-        if len(grp) < DAYS_1M:
-            skipped += 1
-            continue
-
-        current_close = grp.iloc[-1]['close']
-
-        def ret(n):
-            if len(grp) >= n and grp.iloc[-n]['close'] > 0:
-                return (current_close - grp.iloc[-n]['close']) / grp.iloc[-n]['close']
-            return 0.0
-
-        latest = grp.iloc[-1]
-        avg_vol = grp.tail(22)['volume'].mean()
-        avg_turnover = grp.tail(22)['turnover_lacs'].mean() if 'turnover_lacs' in grp.columns else 0.0
-
-        results.append({
-            'symbol': symbol,
-            'close': current_close,
-            'open': latest.get('open', 0),
-            'high': latest.get('high', 0),
-            'low': latest.get('low', 0),
-            'volume': latest.get('volume', 0),
-            'avg_volume': avg_vol,
-            'delivery_pct': latest.get('delivery_pct', 0),
-            'avg_price': latest.get('avg_price', 0),
-            'turnover_lacs': latest.get('turnover_lacs', 0),
-            'avg_turnover': avg_turnover,
-            'return_1m': ret(DAYS_1M),
-            'return_2m': ret(DAYS_2M),
-            'return_3m': ret(DAYS_3M),
-        })
-
-    df = pd.DataFrame(results)
-    log.info(f"Returns calculated for {len(df)} symbols, skipped {skipped} (insufficient history).")
-    return df
-
 
     # ── Step 3: Apply quality filters ─────────────────────────
     filtered_df = apply_filters(stocks_df, data['blacklist'])
@@ -502,7 +456,6 @@ def scan_stocks(scan_date=None, top_n=None):
         return pd.DataFrame()
 
     # ── Step 4 + 5: Weekly filter + Forward scoring ───────────
-    # (weekly tier calculation happens inside score_all_stocks)
     scored_df = calculate_momentum_score(filtered_df)
     tech_df   = pd.DataFrame()
 
@@ -531,11 +484,10 @@ def scan_stocks(scan_date=None, top_n=None):
 
         scored_df = scored_df.merge(
             tech_df[merge_cols], on='symbol', how='inner'
-        )  # inner join — only keep stocks that passed weekly filter
+        )
         scored_df['score']      = scored_df['score'].fillna(0)
         scored_df['conviction'] = scored_df['conviction'].fillna('')
 
-        # ── Ranking: forward score, HIGH CONVICTION first ─────
         hc   = (scored_df[scored_df['conviction'] == TIER_HIGH_CONVICTION]
                 .sort_values('score', ascending=False))
         wl   = (scored_df[scored_df['conviction'] == TIER_WATCHLIST]
@@ -555,7 +507,6 @@ def scan_stocks(scan_date=None, top_n=None):
         print(f"    Weekly Tier 2:        {t2c} (capped at WATCH)")
 
     else:
-        # Fallback: momentum-only mode
         scored_df['score']       = (scored_df['momentum_score'] * 100).round(1)
         scored_df['conviction']  = ''
         scored_df['stop']        = None
@@ -574,7 +525,6 @@ def scan_stocks(scan_date=None, top_n=None):
                 tech_row = match.iloc[0]
         trade_plans.append(add_trade_plan(row, tech_row))
 
-    # ── Assemble result DataFrame ─────────────────────────────
     result_df = scored_df.head(top_n).copy().reset_index(drop=True)
     trade_df  = pd.DataFrame(trade_plans)
     for col in trade_df.columns:
@@ -584,7 +534,6 @@ def scan_stocks(scan_date=None, top_n=None):
     result_df['return_2m_pct'] = (result_df['return_2m'] * 100).round(1)
     result_df['return_3m_pct'] = (result_df['return_3m'] * 100).round(1)
 
-    # ── Step 7: Assign categories ─────────────────────────────
     print(f"\n  Assigning categories...")
     if TECH_FILTERS_AVAILABLE and not tech_df.empty:
         result_df['category'] = assign_categories_bulk(
@@ -597,44 +546,16 @@ def scan_stocks(scan_date=None, top_n=None):
             _assign_category_simple, axis=1
         )
 
-    cat_counts = result_df['category'].value_counts()
-    for cat, count in cat_counts.items():
-        meta = CATEGORY_META.get(cat, {})
-        print(f"    {meta.get('icon','•')} {meta.get('label', cat)}: {count}")
-
-    # ── Step 8: Load streaks ──────────────────────────────────
     streaks = _load_streaks()
-    result_df['streak'] = result_df['symbol'].map(
-        lambda s: streaks.get(s, 0)
-    )
-    strong = (result_df['streak'] >= 5).sum()
-    if strong > 0:
-        print(f"  🔥 {strong} stocks with 5+ day streak")
-
-    # ── Step 9: Assign situations (weekly-tier aware) ─────────
-    print(f"\n  Assigning situations...")
+    result_df['streak'] = result_df['symbol'].map(lambda s: streaks.get(s, 0))
 
     def _get_situation(row):
         w_tier = int(row.get('weekly_tier', WEEKLY_TIER_NEUTRAL))
         streak = int(row.get('streak', 0))
-        return _assign_situation_with_weekly(
-            row.to_dict(), streak, w_tier
-        )
+        return _assign_situation_with_weekly(row.to_dict(), streak, w_tier)
 
     result_df['situation'] = result_df.apply(_get_situation, axis=1)
 
-    # Situation summary
-    sit_counts = result_df['situation'].value_counts()
-    sit_meta   = {
-        "prime": "🎯", "hold": "💰",
-        "watch": "👀", "book": "⚠️", "avoid": "🚫"
-    }
-    for sit in ["prime", "hold", "watch", "book", "avoid"]:
-        count = sit_counts.get(sit, 0)
-        if count > 0:
-            print(f"    {sit_meta.get(sit,'•')} {sit.title()}: {count}")
-
-    # ── Step 10: Score breakdown for Telegram ─────────────────
     if TECH_FILTERS_AVAILABLE and not tech_df.empty:
         result_df['score_breakdown'] = result_df.apply(
             lambda r: format_score_breakdown(r.to_dict()), axis=1
@@ -642,16 +563,14 @@ def scan_stocks(scan_date=None, top_n=None):
 
     log.info(
         f"Scan complete: {len(result_df)} stocks | "
-        f"prime={sit_counts.get('prime',0)} "
-        f"watch={sit_counts.get('watch',0)} "
-        f"hold={sit_counts.get('hold',0)} "
-        f"book={sit_counts.get('book',0)} "
-        f"avoid={sit_counts.get('avoid',0)}"
+        f"prime={(result_df['situation'] == 'prime').sum()} "
+        f"watch={(result_df['situation'] == 'watch').sum()} "
+        f"hold={(result_df['situation'] == 'hold').sum()} "
+        f"book={(result_df['situation'] == 'book').sum()} "
+        f"avoid={(result_df['situation'] == 'avoid').sum()}"
     )
 
     return result_df
-
-
 # ═══════════════════════════════════════════════════════════════════════════
 # CLI ENTRY POINT
 # ═══════════════════════════════════════════════════════════════════════════
