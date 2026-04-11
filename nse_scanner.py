@@ -444,10 +444,56 @@ def scan_stocks(scan_date=None, top_n=None):
         return pd.DataFrame()
 
     # ── Step 2: Calculate returns ─────────────────────────────
-    stocks_df = calculate_returns(data['prices'], scan_date)
-    if stocks_df.empty:
-        print("ERROR: Could not calculate returns.")
+    def calculate_returns(prices_df, scan_date):
+    if prices_df.empty:
+        log.error("No price data available for returns calculation.")
         return pd.DataFrame()
+
+    recent = prices_df[prices_df['date'] <= pd.Timestamp(scan_date)].copy()
+    recent['symbol'] = recent['symbol'].astype(str).str.strip()
+    recent = recent.dropna(subset=['symbol', 'date', 'close'])
+    recent = recent.sort_values(['symbol', 'date'])
+    results = []
+    skipped = 0
+
+    for symbol, grp in recent.groupby('symbol'):
+        grp = grp.tail(DAYS_3M + 5)
+        if len(grp) < DAYS_1M:
+            skipped += 1
+            continue
+
+        current_close = grp.iloc[-1]['close']
+
+        def ret(n):
+            if len(grp) >= n and grp.iloc[-n]['close'] > 0:
+                return (current_close - grp.iloc[-n]['close']) / grp.iloc[-n]['close']
+            return 0.0
+
+        latest = grp.iloc[-1]
+        avg_vol = grp.tail(22)['volume'].mean()
+        avg_turnover = grp.tail(22)['turnover_lacs'].mean() if 'turnover_lacs' in grp.columns else 0.0
+
+        results.append({
+            'symbol': symbol,
+            'close': current_close,
+            'open': latest.get('open', 0),
+            'high': latest.get('high', 0),
+            'low': latest.get('low', 0),
+            'volume': latest.get('volume', 0),
+            'avg_volume': avg_vol,
+            'delivery_pct': latest.get('delivery_pct', 0),
+            'avg_price': latest.get('avg_price', 0),
+            'turnover_lacs': latest.get('turnover_lacs', 0),
+            'avg_turnover': avg_turnover,
+            'return_1m': ret(DAYS_1M),
+            'return_2m': ret(DAYS_2M),
+            'return_3m': ret(DAYS_3M),
+        })
+
+    df = pd.DataFrame(results)
+    log.info(f"Returns calculated for {len(df)} symbols, skipped {skipped} (insufficient history).")
+    return df
+
 
     # ── Step 3: Apply quality filters ─────────────────────────
     filtered_df = apply_filters(stocks_df, data['blacklist'])
@@ -697,6 +743,35 @@ def main():
             print(f"\n[OK] Results saved to telegram_last_scan.json")
         except Exception as e:
             print(f"[WARNING] Failed to save: {e}")
+          
+def scan_stocks_fallback(scan_date=None, top_n=None):
+    """
+    Fallback scan: runs with whatever OHLC data is available.
+    Skips conviction tiers and advanced scoring.
+    """
+    if scan_date is None:
+        scan_date = date.today()
+    if top_n is None:
+        top_n = config.TOP_N_STOCKS
+
+    data = load_data_for_date(scan_date)
+    stocks_df = calculate_returns(data['prices'], scan_date)
+    if stocks_df.empty:
+        print("Fallback: No price data available.")
+        return pd.DataFrame()
+
+    filtered_df = apply_filters(stocks_df, data['blacklist'])
+    if filtered_df.empty:
+        print("Fallback: No stocks passed filters.")
+        return pd.DataFrame()
+
+    scored_df = calculate_momentum_score(filtered_df)
+    scored_df['score'] = (scored_df['momentum_score'] * 100).round(1)
+    scored_df['conviction'] = ''
+    scored_df['weekly_tier'] = WEEKLY_TIER_NEUTRAL
+    scored_df['weekly_label'] = get_weekly_tier_label(WEEKLY_TIER_NEUTRAL)
+
+    return scored_df.head(top_n).reset_index(drop=True)
 
 
 if __name__ == "__main__":
