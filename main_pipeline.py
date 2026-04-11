@@ -20,6 +20,9 @@ import requests
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+# Add this line just below the standard imports:
+from pipeline_utils import db_has_enough_data, backfill_historical_data
+
 # ── ALERT + HEALTH HELPERS ────────────────────────────────────
 
 def send_failure_alert(step: str, reason: str, scan_date: date):
