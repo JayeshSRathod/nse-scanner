@@ -226,8 +226,13 @@ def run_pipeline():
     # ── STEP 3: Scan ──────────────────────────────────────────
     results_df = None
     try:
-        from nse_scanner import scan_stocks
+        from nse_scanner import scan_stocks, scan_stocks_fallback
+
         results_df = scan_stocks(scan_date=today)
+        if results_df.empty:
+            print("[STEP 3] ⚠️ No results from full scan — running fallback")
+            results_df = scan_stocks_fallback(scan_date=today)
+
 
         if results_df is None or results_df.empty:
             print("[STEP 3] ⚠️  No stocks found — keeping previous data")
