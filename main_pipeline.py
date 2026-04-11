@@ -203,6 +203,20 @@ def run_pipeline():
     write_health(status="RUNNING", scan_date=today.strftime("%Y-%m-%d"))
     expected = today.strftime("%Y-%m-%d")
 
+    # ── STEP 0: DB health check ───────────────────────────────
+    has_enough, current_days = db_has_enough_data(min_days=180)
+    print(f"[STEP 0] DB check: {current_days} trading days loaded")
+
+    if not has_enough:
+        print("[STEP 0] Need at least 180 days for scanner. Starting backfill...")
+        try:
+            backfill_ok = backfill_historical_data(today, days_back=180)
+            if not backfill_ok:
+                print("[STEP 0] ⚠️ Backfill incomplete — will run fallback scan")
+        except Exception as e:
+            print(f"[STEP 0] Backfill error: {e}")
+            send_failure_alert("Backfill", str(e), today)
+
     # ── STEP 1: Download ──────────────────────────────────────
     try:
         from nse_historical_downloader import download_direct
@@ -233,12 +247,10 @@ def run_pipeline():
             print("[STEP 3] ⚠️ No results from full scan — running fallback")
             results_df = scan_stocks_fallback(scan_date=today)
 
-
         if results_df is None or results_df.empty:
             print("[STEP 3] ⚠️  No stocks found — keeping previous data")
             write_health(status="NO_RESULTS", scan_date=expected,
                          reason="Empty scan")
-            # Do NOT return here — still push existing JSON below
             results_df = None
         else:
             hc = (results_df["conviction"] == "HIGH CONVICTION").sum() \
@@ -255,7 +267,6 @@ def run_pipeline():
         return False
 
     # ── STEP 4: Generate report + collect news ────────────────
-    # This step was UNREACHABLE before due to premature return True above
     if results_df is not None and not results_df.empty:
         try:
             from nse_output import generate_report
@@ -275,7 +286,6 @@ def run_pipeline():
         d     = json.loads(json_path.read_text())
         found = d.get("scan_date")
         if found != expected:
-            # Stale but non-fatal if we had no results today
             print(f"[STEP 5] ⚠️  JSON date {found} (expected {expected})")
         else:
             print(f"[STEP 5] ✅ JSON fresh: {found}")
