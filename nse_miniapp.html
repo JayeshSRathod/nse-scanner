@@ -6,7 +6,6 @@
 <meta name="theme-color" content="#07101f">
 <title>NSE Scanner</title>
 <style>
-
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap');
 
 :root {
@@ -33,6 +32,10 @@ html{-webkit-text-size-adjust:100%}
 body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5;min-height:100dvh;overscroll-behavior:none;-webkit-font-smoothing:antialiased}
 button{cursor:pointer;border:none;background:none;color:inherit;font:inherit;-webkit-tap-highlight-color:transparent}
 
+@keyframes spin   {to{transform:rotate(360deg)}}
+@keyframes fadeUp {from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes slideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
 /* ── Header ── */
 .hdr{position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:1px solid var(--border);padding:12px 14px 0}
 .hrow{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -40,8 +43,6 @@ button{cursor:pointer;border:none;background:none;color:inherit;font:inherit;-we
 .dt{font-size:11px;color:var(--muted);font-family:var(--mono)}
 .rbtn{width:30px;height:30px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:15px;transition:transform 0.3s}
 .rbtn.spin{animation:spin 0.8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-@keyframes slideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
 /* ── Tabs ── */
 .tabs{display:flex;gap:5px;overflow-x:auto;padding:8px 14px 7px;scrollbar-width:none}
@@ -81,7 +82,6 @@ button{cursor:pointer;border:none;background:none;color:inherit;font:inherit;-we
 .card.open{border-color:rgba(255,255,255,0.12)}
 .card:active{opacity:0.88;transform:scale(0.99)}
 
-/* Card top */
 .ctop{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px}
 .sym{font-size:17px;font-weight:800;letter-spacing:0.02em;display:inline-flex;align-items:center;gap:5px}
 .sym-ico{font-size:12px;opacity:0.4;transition:opacity 0.15s}
@@ -98,7 +98,6 @@ button{cursor:pointer;border:none;background:none;color:inherit;font:inherit;-we
 .t-watch{color:var(--watch);border-color:rgba(96,165,250,0.3);background:rgba(96,165,250,0.09)}
 .t-book {color:var(--book); border-color:rgba(251,146,60,0.3);background:rgba(251,146,60,0.09)}
 .t-avoid{color:var(--avoid);border-color:rgba(248,113,113,0.3);background:rgba(248,113,113,0.09)}
-/* Matrix tags */
 .t-hc   {color:#0fd49c;border-color:rgba(15,212,156,0.25);background:rgba(15,212,156,0.07)}
 .t-inst {color:#6ee7b7;border-color:rgba(110,231,183,0.25);background:rgba(110,231,183,0.07)}
 .t-solid{color:#a3e635;border-color:rgba(163,230,53,0.25);background:rgba(163,230,53,0.07)}
@@ -151,15 +150,19 @@ button{cursor:pointer;border:none;background:none;color:inherit;font:inherit;-we
 .mv{color:var(--text);font-weight:600}
 
 /* ── Expand hint ── */
-.hint{text-align:center;font-size:11px;color:var(--muted);padding:8px 0 2px;font-family:var(--sans);transition:color 0.15s}
+.hint{text-align:center;font-size:11px;color:var(--muted);padding:8px 0 2px;font-family:var(--sans);transition:color 0.15s;user-select:none}
 .card.open .hint{color:var(--accent)}
 
-/* ── Expandable section — HIDDEN BY DEFAULT ── */
-.extra{display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);animation:fadeUp 0.2s ease}
-.card.open .extra{display:block}
-@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+/* ── Two-tab expand ── */
+.expand-wrap{display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);animation:fadeUp 0.2s ease}
+.card.open .expand-wrap{display:block}
+.card-tabs{display:flex;gap:6px;margin-bottom:10px}
+.ct-btn{flex:1;padding:8px 4px;font-size:12px;font-weight:600;border-radius:8px;color:var(--muted);font-family:var(--sans);transition:all 0.15s;border:1px solid var(--border);background:var(--bg3)}
+.ct-btn.on{background:rgba(255,255,255,0.08);color:var(--text);border-color:rgba(255,255,255,0.15)}
+.ct-pane{display:none}
+.ct-pane.show{display:block}
 
-/* Info boxes inside extra */
+/* Info boxes */
 .ibox{border-radius:9px;padding:10px 12px}
 .ib-prime{background:rgba(15,212,156,0.05);border:1px solid rgba(15,212,156,0.2)}
 .ib-hold {background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.2)}
@@ -172,7 +175,23 @@ button{cursor:pointer;border:none;background:none;color:inherit;font:inherit;-we
 .ibox-item.bad {color:var(--avoid)}
 .ibox-note{font-size:10px;margin-top:7px;padding-top:7px;border-top:1px solid var(--border);opacity:0.7;font-family:var(--sans)}
 
-/* ── Compact card (Watch compact) ── */
+/* ── News pane ── */
+.news-item{display:flex;gap:8px;padding:9px 0;border-bottom:1px solid var(--border)}
+.news-item:last-child{border-bottom:none;padding-bottom:0}
+.news-ico{font-size:14px;flex-shrink:0;margin-top:1px}
+.news-body{flex:1;min-width:0}
+.news-title{font-size:12px;font-weight:600;color:var(--text);line-height:1.4;margin-bottom:3px}
+.news-meta{font-size:10px;color:var(--muted);font-family:var(--sans)}
+.ntag{font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;border:1px solid;margin-right:4px;display:inline-block;vertical-align:middle}
+.nt-o{color:#0fd49c;border-color:rgba(15,212,156,0.35);background:rgba(15,212,156,0.08)}
+.nt-r{color:#60a5fa;border-color:rgba(96,165,250,0.35);background:rgba(96,165,250,0.08)}
+.nt-d{color:#f59e0b;border-color:rgba(245,158,11,0.35);background:rgba(245,158,11,0.08)}
+.nt-x{color:#f87171;border-color:rgba(248,113,113,0.35);background:rgba(248,113,113,0.08)}
+.nt-b{color:#a78bfa;border-color:rgba(167,139,250,0.35);background:rgba(167,139,250,0.08)}
+.nt-n{color:var(--muted);border-color:var(--border);background:var(--bg3)}
+.news-empty{font-size:12px;color:var(--muted);padding:18px 0;text-align:center;font-family:var(--sans)}
+
+/* ── Compact card ── */
 .ccard{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 12px 10px 16px;margin-bottom:7px;position:relative;overflow:hidden;display:flex;align-items:center;gap:10px;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .ccard::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px}
 .cc-w::before{background:var(--watch)}
@@ -196,10 +215,23 @@ button{cursor:pointer;border:none;background:none;color:inherit;font:inherit;-we
 .cp-note{padding:7px 16px;font-size:11px;color:var(--muted);text-align:center;border-top:1px solid var(--border);flex-shrink:0;font-family:var(--sans)}
 .tv-open{padding:6px 12px;background:var(--accent);color:#fff;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;font-family:var(--sans)}
 
+/* ── Weekly Digest ── */
+.dcard{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:13px 14px;margin-bottom:10px;font-family:var(--sans)}
+.dcard-title{font-size:13px;font-weight:700;margin-bottom:10px;color:var(--accent)}
+.drow{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:7px 0;border-bottom:1px solid var(--border)}
+.drow:last-child{border-bottom:none;padding-bottom:0}
+.dsym{font-weight:700;font-size:13px;font-family:var(--mono)}
+.dmeta{font-size:10px;color:var(--muted);margin-top:2px}
+.dret{font-family:var(--mono);font-size:12px;font-weight:700}
+.dstats{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.dstat{flex:1;min-width:60px;background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:9px 8px;text-align:center}
+.dstat-v{font-family:var(--mono);font-size:16px;font-weight:700;line-height:1}
+.dstat-l{font-size:10px;color:var(--muted);margin-top:3px;font-family:var(--sans)}
+
 /* ── Bottom nav ── */
 .bnav{position:fixed;bottom:0;left:0;right:0;background:var(--bg);border-top:1px solid var(--border);display:flex;padding:7px 10px;padding-bottom:max(7px,env(safe-area-inset-bottom));gap:2px;z-index:200}
-.nb{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px;border-radius:9px;font-size:11px;color:var(--muted);font-weight:600;transition:all 0.15s;font-family:var(--sans)}
-.nb .ni{font-size:21px;line-height:1}
+.nb{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px;border-radius:9px;font-size:10px;color:var(--muted);font-weight:600;transition:all 0.15s;font-family:var(--sans)}
+.nb .ni{font-size:19px;line-height:1}
 .nb.on{background:var(--bg3);color:var(--accent)}
 
 /* ── Misc ── */
@@ -210,48 +242,7 @@ button{cursor:pointer;border:none;background:none;color:inherit;font:inherit;-we
 .empty-ttl{font-size:17px;font-weight:700;color:var(--text);margin-bottom:8px}
 .empty-dsc{font-size:13px;line-height:1.65}
 .fade{animation:fadeUp 0.2s ease}
-
-/* ── Expand hint ── */
-.hint{text-align:center;font-size:11px;color:var(--muted);padding:7px 0 2px;font-family:var(--sans);user-select:none}
-/* ── Two-tab expand ── */
-.expand-wrap{display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
-.card.open .expand-wrap{display:block}
-.card-tabs{display:flex;gap:6px;margin-bottom:10px}
-.ct-btn{flex:1;padding:8px 4px;font-size:12px;font-weight:600;border-radius:8px;color:var(--muted);font-family:var(--sans);transition:all 0.15s;border:1px solid var(--border);background:var(--bg3)}
-.ct-btn.on{background:rgba(255,255,255,0.08);color:var(--text);border-color:rgba(255,255,255,0.15)}
-.ct-pane{display:none}
-.ct-pane.show{display:block}
-
-/* ── News pane ── */
-.news-item{display:flex;gap:8px;padding:9px 0;border-bottom:1px solid var(--border)}
-.news-item:last-child{border-bottom:none;padding-bottom:0}
-.news-ico{font-size:14px;flex-shrink:0;margin-top:1px}
-.news-body{flex:1;min-width:0}
-.news-title{font-size:12px;font-weight:600;color:var(--text);line-height:1.4;margin-bottom:3px}
-.news-meta{font-size:10px;color:var(--muted);font-family:var(--sans)}
-.ntag{font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;border:1px solid;margin-right:4px;display:inline-block;vertical-align:middle}
-.nt-o{color:#0fd49c;border-color:rgba(15,212,156,0.35);background:rgba(15,212,156,0.08)}
-.nt-r{color:#60a5fa;border-color:rgba(96,165,250,0.35);background:rgba(96,165,250,0.08)}
-.nt-d{color:#f59e0b;border-color:rgba(245,158,11,0.35);background:rgba(245,158,11,0.08)}
-.nt-x{color:#f87171;border-color:rgba(248,113,113,0.35);background:rgba(248,113,113,0.08)}
-.nt-b{color:#a78bfa;border-color:rgba(167,139,250,0.35);background:rgba(167,139,250,0.08)}
-.nt-n{color:var(--muted);border-color:var(--border);background:var(--bg3)}
-.news-empty{font-size:12px;color:var(--muted);padding:18px 0;text-align:center;font-family:var(--sans)}
-/* ── Weekly Digest ── */
-.dcard{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:13px 14px;margin-bottom:10px;font-family:var(--sans)}
-.dcard-title{font-size:13px;font-weight:700;margin-bottom:10px;color:var(--accent)}
-.drow{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:7px 0;border-bottom:1px solid var(--border);font-family:var(--sans)}
-.drow:last-child{border-bottom:none;padding-bottom:0}
-.dsym{font-weight:700;font-size:13px;font-family:var(--mono)}
-.dmeta{font-size:10px;color:var(--muted);margin-top:2px}
-.dret{font-family:var(--mono);font-size:12px;font-weight:700}
-.dstats{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
-.dstat{flex:1;min-width:60px;background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:9px 8px;text-align:center}
-.dstat-v{font-family:var(--mono);font-size:16px;font-weight:700;line-height:1}
-.dstat-l{font-size:10px;color:var(--muted);margin-top:3px;font-family:var(--sans)}
-
 </style>
-
 </head>
 <body>
 
@@ -262,54 +253,23 @@ button{cursor:pointer;border:none;background:none;color:inherit;font:inherit;-we
     <div class="dt" id="scanDate">—</div>
     <button class="rbtn" id="rbtn" onclick="reload()">↻</button>
   </div>
-
-  <!-- Status Bar -->
-      <div class="st-row"><span>🏦</span><span style="color:#6ee7b7">High</span><span class="st-n" id="s-dhigh" style="color:#6ee7b7">—</span></div>
-      <div class="st-row"><span>⚖️</span><span style="color:#fbbf24">Bal</span><span class="st-n" id="s-dbal" style="color:#fbbf24">—</span></div>
-      <div class="st-row"><span>🛒</span><span style="color:#f87171">Retail</span><span class="st-n" id="s-dret" style="color:#f87171">—</span></div>
-    </div>
-    <!-- Tile 2: Signal Strength -->
-    <div class="st">
-      <div class="st-lbl">Signals</div>
-      <div class="st-row"><span>🟢</span><span style="color:#0fd49c">Strong</span><span class="st-n" id="s-sstr" style="color:#0fd49c">—</span></div>
-      <div class="st-row"><span>🟡</span><span style="color:#fbbf24">Mod</span><span class="st-n" id="s-smod" style="color:#fbbf24">—</span></div>
-      <div class="st-row"><span>🔴</span><span style="color:#f87171">Weak</span><span class="st-n" id="s-swk" style="color:#f87171">—</span></div>
-    </div>
-    <!-- Tile 3: Top Sectors -->
-    <div class="st">
-      <div class="st-lbl">Sectors</div>
-      <div class="sec-chips" id="s-sectors"></div>
-    </div>
-    <!-- Tile 4: Market Bias -->
-    <div class="st">
-      <div class="st-lbl">Mkt Bias</div>
-      <div class="bias-val" id="s-biasval" style="color:#fbbf24">—</div>
-      <div class="bias-track"><div class="bias-pin" id="s-biaspin" style="left:50%"></div></div>
-      <div class="bias-lbls">
-        <span style="color:#f87171">Bear</span>
-        <span style="color:#fbbf24">Neu</span>
-        <span style="color:#0fd49c">Bull</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- Tabs -->
+  <!-- Situation filter tabs -->
   <div class="tabs" id="tabsRow">
     <button class="tab on" data-sit="all"   onclick="setFilter('all')">All</button>
-    <button class="tab"    data-sit="prime"  onclick="setFilter('prime')">🎯 Prime</button>
-    <button class="tab"    data-sit="hold"   onclick="setFilter('hold')">💰 Hold</button>
-    <button class="tab"    data-sit="watch"  onclick="setFilter('watch')">👀 Watch</button>
-    <button class="tab"    data-sit="book"   onclick="setFilter('book')">⚠️ Book</button>
-    <button class="tab"    data-sit="avoid"  onclick="setFilter('avoid')">🚫 Avoid</button>
+    <button class="tab"    data-sit="prime" onclick="setFilter('prime')">🎯 Prime</button>
+    <button class="tab"    data-sit="hold"  onclick="setFilter('hold')">💰 Hold</button>
+    <button class="tab"    data-sit="watch" onclick="setFilter('watch')">👀 Watch</button>
+    <button class="tab"    data-sit="book"  onclick="setFilter('book')">⚠️ Book</button>
+    <button class="tab"    data-sit="avoid" onclick="setFilter('avoid')">🚫 Avoid</button>
   </div>
 </div>
 
-<!-- Content -->
+<!-- Main content -->
 <div class="content" id="content">
   <div class="loader"><div class="lring"></div><div>Loading scan data…</div></div>
 </div>
 
-<!-- Chart Panel -->
+<!-- Chart panel -->
 <div class="cpanel" id="cpanel">
   <div class="cp-hdr">
     <div class="cp-sym" id="cpSym">—</div>
@@ -317,8 +277,8 @@ button{cursor:pointer;border:none;background:none;color:inherit;font:inherit;-we
     <button class="cp-close" onclick="closeChart()">✕</button>
   </div>
   <div class="cp-tabs">
-    <button class="cp-tab on" onclick="setRange('1M',this)">1M</button>
-    <button class="cp-tab"    onclick="setRange('3M',this)">3M</button>
+    <button class="cp-tab"    onclick="setRange('1M',this)">1M</button>
+    <button class="cp-tab on" onclick="setRange('3M',this)">3M</button>
     <button class="cp-tab"    onclick="setRange('6M',this)">6M</button>
     <button class="cp-tab"    onclick="setRange('1Y',this)">1Y</button>
   </div>
@@ -326,476 +286,357 @@ button{cursor:pointer;border:none;background:none;color:inherit;font:inherit;-we
   <div class="cp-note">TradingView chart · Tap "Open TV ↗" for HMA indicators</div>
 </div>
 
-<!-- Bottom Nav -->
+<!-- Bottom Nav — 5 tabs -->
 <div class="bnav">
-  <button class="nb on" id="nbScan"   onclick="switchView('scan')"><span class="ni">📊</span>Scan</button>
-  <button class="nb"    id="nbPrime"  onclick="switchView('prime')"><span class="ni">🎯</span>Prime</button>
+  <button class="nb on" id="nbScan"   onclick="switchView('scan')"  ><span class="ni">📊</span>Scan</button>
+  <button class="nb"    id="nbPrime"  onclick="switchView('prime')" ><span class="ni">🎯</span>Prime</button>
   <button class="nb"    id="nbDigest" onclick="switchView('digest')"><span class="ni">📅</span>Digest</button>
-  <button class="nb"    id="nbList"   onclick="switchView('list')"><span class="ni">☰</span>List</button>
-  <button class="nb"    id="nbGuide"  onclick="switchView('guide')"><span class="ni">📖</span>Guide</button>
+  <button class="nb"    id="nbList"   onclick="switchView('list')"  ><span class="ni">☰</span>List</button>
+  <button class="nb"    id="nbGuide"  onclick="switchView('guide')" ><span class="ni">📖</span>Guide</button>
 </div>
 
 <script>
-
 // ── Config ────────────────────────────────────────────────
-const DATA_URL  = 'https://raw.githubusercontent.com/JayeshSRathod/nse-scanner/main/telegram_last_scan.json';
-const CACHE_KEY = 'nse_v4';
-const tg = window.Telegram?.WebApp;
-if(tg){tg.ready();tg.expand();tg.setHeaderColor('#07101f');tg.setBackgroundColor('#07101f')}
+var DATA_URL   = 'https://raw.githubusercontent.com/JayeshSRathod/nse-scanner/main/telegram_last_scan.json';
+var CACHE_KEY  = 'nse_v5';
+var GITHUB_RAW = 'https://raw.githubusercontent.com/JayeshSRathod/nse-scanner/main/';
+var tg = window.Telegram ? window.Telegram.WebApp : null;
+if(tg){ tg.ready(); tg.expand(); tg.setHeaderColor('#07101f'); tg.setBackgroundColor('#07101f'); }
 
 // ── State ──────────────────────────────────────────────────
-let stocks=[], scanDate='', filter='all', view='scan', expanded=null, chartSym=null, chartRange='3M';
-let newsData={}, newsLoaded=false;
-const GITHUB_RAW='https://raw.githubusercontent.com/JayeshSRathod/nse-scanner/main/';
+var stocks=[], scanDate='', filter='all', view='scan', expanded=null, chartSym=null, chartRange='3M';
+var newsData={}, newsLoaded=false;
 
 // ── Situation config ──────────────────────────────────────
-const SIT={
+var SIT={
   prime:{icon:'🎯',label:'Prime Entry',   action:'Enter today — confirm on TradingView', cls:'sh-prime'},
   hold: {icon:'💰',label:'Hold & Trail',  action:'Already in move — trail your stop loss up', cls:'sh-hold'},
   watch:{icon:'👀',label:'Watch Closely', action:'Good setup — one signal missing. Check tomorrow.', cls:'sh-watch'},
   book: {icon:'⚠️',label:'Book Profits', action:'Move maturing — consider booking 50-100%', cls:'sh-book'},
-  avoid:{icon:'🚫',label:'Avoid Now',     action:'Weak signal or bearish — skip today', cls:'sh-avoid'},
+  avoid:{icon:'🚫',label:'Avoid Now',     action:'Weak signal or bearish — skip today', cls:'sh-avoid'}
 };
-const SORD=['prime','hold','watch','book','avoid'];
+var SORD=['prime','hold','watch','book','avoid'];
 
-// ── Matrix label calculation ──────────────────────────────
+// ── Matrix label ──────────────────────────────────────────
 function getMatrixLabel(s){
-  const sc=s.score||0, del=s.delivery_pct||0, ca=s.cross_age??999;
-  const overext=s.overextended||false, acc=s.acc_days||0, obv=s.obv_dir||'flat';
-
-  // Delivery column
-  let delCol = del>=50?'inst': del>=30?'bal':'retail';
-
-  // Trend row
-  let trendRow;
-  if(sc>=7 && ca<=20 && !overext) trendRow='strong';
-  else if(sc>=5 && ca<=30)        trendRow='reversal';
-  else if(overext || sc<=4)       trendRow='exhaust';
-  else                            trendRow='flat';
-
-  const matrix={
-    strong:  {inst:{t:'t-hc',   l:'🏆 High Conviction'}, bal:{t:'t-solid', l:'⚡ Solid Momentum'}, retail:{t:'t-hype',   l:'⚠️ Retail Hype'}},
-    reversal:{inst:{t:'t-rebound',l:'🔄 Potential Rebound'},bal:{t:'t-bal',  l:'👁 Watch & Wait'},  retail:{t:'t-hype',   l:'🎲 Retail Bounce'}},
-    exhaust: {inst:{t:'t-fade', l:'📉 Fading Move'},      bal:{t:'t-fade',  l:'💨 Losing Steam'},   retail:{t:'t-fade',   l:'🔴 Retail Exhaustion'}},
-    flat:    {inst:{t:'t-bal',  l:'🔍 Accumulation?'},    bal:{t:'t-bal',   l:'↔ Sideways Mode'},   retail:{t:'t-retail', l:'😴 Low Interest'}},
+  var sc=s.score||0, del=s.delivery_pct||0, ca=(s.cross_age!==undefined&&s.cross_age!==null)?s.cross_age:999;
+  var overext=s.overextended||false;
+  var delCol = del>=50?'inst': del>=30?'bal':'retail';
+  var trendRow;
+  if(sc>=7 && ca<=20 && !overext)  trendRow='strong';
+  else if(sc>=5 && ca<=30)         trendRow='reversal';
+  else if(overext || sc<=4)        trendRow='exhaust';
+  else                             trendRow='flat';
+  var matrix={
+    strong:  {inst:{t:'t-hc',     l:'🏆 High Conviction'},  bal:{t:'t-solid',  l:'⚡ Solid Momentum'},  retail:{t:'t-hype',   l:'⚠️ Retail Hype'}},
+    reversal:{inst:{t:'t-rebound',l:'🔄 Potential Rebound'}, bal:{t:'t-bal',    l:'👁 Watch & Wait'},    retail:{t:'t-hype',   l:'🎲 Retail Bounce'}},
+    exhaust: {inst:{t:'t-fade',   l:'📉 Fading Move'},       bal:{t:'t-fade',   l:'💨 Losing Steam'},    retail:{t:'t-fade',   l:'🔴 Retail Exhaustion'}},
+    flat:    {inst:{t:'t-bal',    l:'🔍 Accumulation?'},     bal:{t:'t-bal',    l:'↔ Sideways Mode'},    retail:{t:'t-retail', l:'😴 Low Interest'}}
   };
-  const delTag={inst:{t:'t-inst',l:'🏦 Institutional Backed'},bal:{t:'t-bal',l:'⚖️ Balanced'},retail:{t:'t-retail',l:'📉 Retail Driven'}};
-  const trendDesc={strong:'Strong Trend',reversal:'Short-term Reversal',exhaust:'Exhaustion',flat:'Flat / Weak'};
-  const delDesc={inst:'>50% delivery',bal:'30-50% delivery',retail:'<30% delivery'};
-
-  const mx  = matrix[trendRow][delCol];
-  const dt  = delTag[delCol];
-  const desc= trendDesc[trendRow]+' · '+delDesc[delCol];
-  return {mx, dt, desc};
+  var delTag={
+    inst:  {t:'t-inst',   l:'🏦 Institutional Backed'},
+    bal:   {t:'t-bal',    l:'⚖️ Balanced'},
+    retail:{t:'t-retail', l:'📉 Retail Driven'}
+  };
+  var trendDesc={strong:'Strong Trend',reversal:'Short-term Reversal',exhaust:'Exhaustion',flat:'Flat / Weak'};
+  var delDesc  ={inst:'>50% delivery',bal:'30-50% delivery',retail:'<30% delivery'};
+  var mx  = matrix[trendRow][delCol];
+  var dt  = delTag[delCol];
+  var desc= trendDesc[trendRow]+' · '+delDesc[delCol];
+  return {mx:mx, dt:dt, desc:desc};
 }
 
 // ── DATA ──────────────────────────────────────────────────
-async function loadData(force=false){
-  const btn=document.getElementById('rbtn'); btn.classList.add('spin');
-  try{
-    if(!force){const c=sessionStorage.getItem(CACHE_KEY); if(c){const p=JSON.parse(c); if(p.stocks?.length){renderAll(p);btn.classList.remove('spin');return;}}}
-    const r=await fetch(DATA_URL+'?t='+Date.now()); if(!r.ok)throw new Error();
-    const d=await r.json(); sessionStorage.setItem(CACHE_KEY,JSON.stringify(d)); renderAll(d);
-  }catch(e){const c=sessionStorage.getItem(CACHE_KEY); if(c)renderAll(JSON.parse(c)); else renderSample();}
-  finally{btn.classList.remove('spin');}
+function loadData(force){
+  var btn=document.getElementById('rbtn'); btn.classList.add('spin');
+  if(!force){
+    var c=sessionStorage.getItem(CACHE_KEY);
+    if(c){ try{ var p=JSON.parse(c); if(p.stocks&&p.stocks.length){ renderAll(p); btn.classList.remove('spin'); return; } }catch(e){} }
+  }
+  fetch(DATA_URL+'?t='+Date.now())
+    .then(function(r){ if(!r.ok) throw new Error('bad'); return r.json(); })
+    .then(function(d){ sessionStorage.setItem(CACHE_KEY,JSON.stringify(d)); renderAll(d); })
+    .catch(function(){ var c=sessionStorage.getItem(CACHE_KEY); if(c){ try{ renderAll(JSON.parse(c)); }catch(e){ renderSample(); } }else{ renderSample(); } })
+    .finally(function(){ btn.classList.remove('spin'); });
 }
-function reload(){sessionStorage.removeItem(CACHE_KEY);loadData(true);}
+function reload(){ sessionStorage.removeItem(CACHE_KEY); loadData(true); }
 
 // ── RENDER ALL ────────────────────────────────────────────
 function renderAll(data){
   stocks=data.stocks||[]; scanDate=data.scan_date||'';
-  try{const d=new Date(scanDate+'T00:00:00'); document.getElementById('scanDate').textContent=d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});}catch(e){}
-  updateBadges(); renderCards(); fetchNews(scanDate);
-}
-
-// ── STATUS BAR ────────────────────────────────────────────
-);
-  document.getElementById('s-dhigh').textContent=dh;
-  document.getElementById('s-dbal').textContent=db;
-  document.getElementById('s-dret').textContent=dr;
-
-  // Signal strength
-  let ss=0,sm=0,sw=0;
-  stocks.forEach(s=>{ const sc=s.score||0; if(sc>=7)ss++; else if(sc>=4)sm++; else sw++; });
-  document.getElementById('s-sstr').textContent=ss;
-  document.getElementById('s-smod').textContent=sm;
-  document.getElementById('s-swk').textContent=sw;
-
-  // Top sectors — comprehensive NSE symbol mapping
-  const SECTOR_MAP={
-    // Pharma & Healthcare
-    'SUNPHARMA':'Pharma','CIPLA':'Pharma','DRREDDY':'Pharma','DIVISLAB':'Pharma',
-    'BIOCON':'Pharma','ALKEM':'Pharma','LUPIN':'Pharma','AUROPHARMA':'Pharma',
-    'TORNTPHARM':'Pharma','IPCALAB':'Pharma','ABBOTINDIA':'Pharma','PFIZER':'Pharma',
-    'GLAXO':'Pharma','GLENMARK':'Pharma','GRANULES':'Pharma','NATCOPHARM':'Pharma',
-    'AJANTPHARM':'Pharma','JBCHEPHARM':'Pharma','SUVEN':'Pharma','LALPATHLAB':'Pharma',
-    'METROPOLIS':'Pharma','ASTER':'Pharma','ASTERDM':'Pharma','FORTIS':'Pharma',
-    'APOLLOHOSP':'Pharma','MAXHEALTH':'Pharma','EMCURE':'Pharma',
-    // IT & Tech
-    'TCS':'IT','INFY':'IT','WIPRO':'IT','HCLTECH':'IT','TECHM':'IT',
-    'LTIM':'IT','MPHASIS':'IT','COFORGE':'IT','PERSISTENT':'IT','OFSS':'IT',
-    'KPIT':'IT','TATAELXSI':'IT','LTTS':'IT','CYIENT':'IT','MASTEK':'IT',
-    'BIRLASOFT':'IT','ZENSAR':'IT','NIIT':'IT','RATEGAIN':'IT','NEWGEN':'IT',
-    'DIXON':'Electronics','KAYNES':'Electronics','SYRMA':'Electronics',
-    'AVALON':'Electronics','AMBER':'Electronics','VDLSEC':'Electronics',
-    // Banks & Finance
-    'HDFCBANK':'Banks','ICICIBANK':'Banks','SBIN':'Banks','AXISBANK':'Banks',
-    'KOTAKBANK':'Banks','INDUSINDBK':'Banks','BANDHANBNK':'Banks','FEDERALBNK':'Banks',
-    'IDFCFIRSTB':'Banks','RBLBANK':'Banks','PNB':'Banks','BANKBARODA':'Banks',
-    'CANARABANK':'Banks','UNIONBANK':'Banks','INDIANB':'Banks',
-    'BAJFINANCE':'NBFC','BAJAJFINSV':'NBFC','CHOLAFIN':'NBFC','MUTHOOTFIN':'NBFC',
-    'MANAPPURAM':'NBFC','M&MFIN':'NBFC','ABCAPITAL':'NBFC','SHRIRAMFIN':'NBFC',
-    'HDFCAMC':'AMC','NIPPONLIFE':'AMC','MFSL':'Insurance','SBILIFE':'Insurance',
-    'HDFCLIFE':'Insurance','ICICIPRULI':'Insurance','LICI':'Insurance',
-    // FMCG & Consumer
-    'HINDUNILVR':'FMCG','ITC':'FMCG','NESTLEIND':'FMCG','BRITANNIA':'FMCG',
-    'DABUR':'FMCG','MARICO':'FMCG','GODREJCP':'FMCG','COLPAL':'FMCG',
-    'PGHH':'FMCG','EMAMILTD':'FMCG','VBL':'FMCG','TATACONSUM':'FMCG',
-    'VARUNBEV':'FMCG','RADICO':'FMCG','UBL':'FMCG','MCDOWELL-N':'FMCG',
-    'HONASA':'FMCG','NYKAA':'FMCG','BIKAJI':'FMCG','PATANJALI':'FMCG',
-    // Auto & Auto Ancillary
-    'MARUTI':'Auto','TATAMOTORS':'Auto','M&M':'Auto','BAJAJ-AUTO':'Auto',
-    'HEROMOTOCO':'Auto','EICHERMOT':'Auto','TVSMOTOR':'Auto','ASHOKLEY':'Auto',
-    'BHARATFORG':'Auto','MOTHERSON':'Auto','BOSCHLTD':'Auto','MRF':'Auto',
-    'APOLLOTYRE':'Auto','CEATLTD':'Auto','BALKRISIND':'Auto','EXIDEIND':'Auto',
-    'AMARAJABAT':'Auto','SUPRAJIT':'Auto','ENDURANCE':'Auto','SUNDRMFAST':'Auto',
-    // Power & Energy
-    'NTPC':'Power','POWERGRID':'Power','TATAPOWER':'Power','ADANIPOWER':'Power',
-    'ADANIGRENT':'Power','CESC':'Power','TORNTPOWER':'Power','JSPL':'Power',
-    'NHPC':'Power','SJVN':'Power','IREDA':'Power','RPOWER':'Power',
-    'RELIANCE':'Energy','ONGC':'Energy','IOC':'Energy','BPCL':'Energy',
-    'HINDPETRO':'Energy','GAIL':'Energy','PETRONET':'Energy','IGL':'Energy',
-    'MGL':'Energy','GUJGASLTD':'Energy','ATGL':'Energy',
-    // Metals & Mining
-    'TATASTEEL':'Metals','JSWSTEEL':'Metals','SAIL':'Metals','HINDALCO':'Metals',
-    'VEDL':'Metals','NATIONALUM':'Metals','NMDC':'Metals','COALINDIA':'Metals',
-    'HINDCOPPER':'Metals','APLAPOLLO':'Metals','JINDALSAW':'Metals',
-    // Capital Goods & Industrial
-    'LT':'CapGoods','SIEMENS':'CapGoods','ABB':'CapGoods','HAVELLS':'CapGoods',
-    'CROMPTON':'CapGoods','VOLTAS':'CapGoods','WHIRLPOOL':'CapGoods',
-    'BHEL':'CapGoods','THERMAX':'CapGoods','CUMMINSIND':'CapGoods',
-    'KEC':'CapGoods','KALPATPOWR':'CapGoods','SUZLON':'CapGoods',
-    'INOXWIND':'CapGoods','TRITURBINE':'CapGoods',
-    // Defence
-    'HAL':'Defence','BEL':'Defence','MIDHANI':'Defence','BEML':'Defence',
-    'COCHINSHIP':'Defence','MAZDOCK':'Defence','GRSE':'Defence',
-    // Realty
-    'DLF':'Realty','GODREJPROP':'Realty','OBEROIRLTY':'Realty','BRIGADE':'Realty',
-    'PRESTIGE':'Realty','PHOENIXLTD':'Realty','SOBHA':'Realty','LODHA':'Realty',
-    // Chemicals & Specialty
-    'PIDILITIND':'Chemicals','ASIANPAINT':'Chemicals','BERGERPAINTS':'Chemicals',
-    'KANSAINER':'Chemicals','VINATIORGA':'Chemicals','DEEPAKNTR':'Chemicals',
-    'AARTI IND':'Chemicals','CLEAN SCI':'Chemicals','NAVINFLUOR':'Chemicals',
-    // Telecom & Media
-    'BHARTIARTL':'Telecom','INDUSTOWER':'Telecom','TATACOMM':'Telecom',
-    'ZEEL':'Media','SUNTV':'Media','PVRINOX':'Media',
-    // Retail & QSR
-    'DMART':'Retail','TRENT':'Retail','ABFRL':'Retail','SHOPERSTOP':'Retail',
-    'WESTLIFE':'QSR','JUBLFOOD':'QSR','DEVYANI':'QSR','SAPPHIRE':'QSR',
-    // Cement
-    'ULTRACEMCO':'Cement','SHREECEM':'Cement','AMBUJACEM':'Cement',
-    'ACC':'Cement','DALMIA':'Cement','JKCEMENT':'Cement',
-    // Agri & Fertilizers
-    'COROMANDEL':'Agri','PIIND':'Agri','CHAMBAL':'Agri','GNFC':'Agri',
-    'RALLIS':'Agri','BAYER':'Agri',
-  };
-
-  const secCount={};
-  stocks.forEach(s=>{
-    const sym=(s.symbol||'').toUpperCase().trim();
-    const sec=SECTOR_MAP[sym];
-    if(sec) secCount[sec]=(secCount[sec]||0)+1;
-  });
-  const top=Object.entries(secCount).sort((a,b)=>b[1]-a[1]).slice(0,4).map(e=>e[0]);
-  const el=document.getElementById('s-sectors');
-  el.innerHTML=top.length
-    ? top.map(s=>`<span class="sec-chip">${s}</span>`).join('')
-    : '<span class="sec-chip" style="color:var(--muted);border-color:var(--border);background:var(--bg4)">Varied</span>';
-
-  // Market bias
-  const t1=stocks.filter(s=>(s.weekly_tier||2)===1).length;
-  const pct=stocks.length ? t1/stocks.length : 0.5;
-  let biasLabel,biasColor,pinLeft;
-  if(pct>0.6){biasLabel='Bullish';biasColor='#0fd49c';pinLeft=Math.min(85,60+pct*30);}
-  else if(pct>0.4){biasLabel='Neutral';biasColor='#fbbf24';pinLeft=50;}
-  else{biasLabel='Bearish';biasColor='#f87171';pinLeft=Math.max(15,pct*60);}
-  document.getElementById('s-biasval').textContent=biasLabel;
-  document.getElementById('s-biasval').style.color=biasColor;
-  document.getElementById('s-biaspin').style.left=pinLeft+'%';
-
-  document.getElementById('sbar').style.display='grid';
+  try{
+    var d=new Date(scanDate+'T00:00:00');
+    document.getElementById('scanDate').textContent=d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+  }catch(e){}
+  updateBadges();
+  renderCards();
+  fetchNews(scanDate);
 }
 
 // ── BADGES ────────────────────────────────────────────────
 function updateBadges(){
-  const c={all:stocks.length};
-  stocks.forEach(s=>{const sit=s.situation||'watch';c[sit]=(c[sit]||0)+1;});
-  document.querySelectorAll('.tab').forEach(t=>{
-    const sit=t.dataset.sit,n=c[sit]||0;
-    t.querySelectorAll('.cnt').forEach(b=>b.remove());
-    if(n>0){const b=document.createElement('span');b.className='cnt';b.textContent=n;t.appendChild(b);}
+  var c={all:stocks.length};
+  stocks.forEach(function(s){ var sit=s.situation||'watch'; c[sit]=(c[sit]||0)+1; });
+  document.querySelectorAll('.tab').forEach(function(t){
+    var sit=t.dataset.sit, n=c[sit]||0;
+    t.querySelectorAll('.cnt').forEach(function(b){ b.remove(); });
+    if(n>0){ var b=document.createElement('span'); b.className='cnt'; b.textContent=n; t.appendChild(b); }
   });
 }
 
 // ── RENDER CARDS ─────────────────────────────────────────
 function renderCards(){
-  const el=document.getElementById('content');
-  const filtered=filter==='all'?stocks:stocks.filter(s=>s.situation===filter);
+  var el=document.getElementById('content');
+  var filtered=filter==='all' ? stocks : stocks.filter(function(s){ return s.situation===filter; });
   if(!filtered.length){
-    el.innerHTML=`<div class="empty fade"><div class="empty-ico">🔍</div>
-      <div class="empty-ttl">Nothing here today</div>
-      <div class="empty-dsc">${filter==='prime'?'No Prime stocks today. Market may be consolidating.<br>Check Watch Closely for setups building up.':'Nothing in this category today.'}</div></div>`;
+    el.innerHTML='<div class="empty fade"><div class="empty-ico">🔍</div>'
+      +'<div class="empty-ttl">Nothing here today</div>'
+      +'<div class="empty-dsc">'+(filter==='prime'?'No Prime stocks today. Market may be consolidating.<br>Check Watch Closely for setups building up.':'Nothing in this category today.')+'</div></div>';
     return;
   }
-  let html='';
+  var html='';
   if(filter==='all'){
-    SORD.forEach(sit=>{
-      const grp=filtered.filter(s=>s.situation===sit); if(!grp.length)return;
-      const sm=SIT[sit];
-      html+=`<div class="sh ${sm.cls}"><span style="font-size:17px">${sm.icon}</span>
-        <span class="sh-body">${sm.label}<span class="sh-sub">${sm.action}</span></span>
-        <span class="sh-n">${grp.length}</span></div>`;
-      grp.forEach((s,i)=>{ html+=buildCard(s,i*35); });
+    SORD.forEach(function(sit){
+      var grp=filtered.filter(function(s){ return s.situation===sit; }); if(!grp.length) return;
+      var sm=SIT[sit];
+      html+='<div class="sh '+sm.cls+'"><span style="font-size:17px">'+sm.icon+'</span>'
+           +'<span class="sh-body">'+sm.label+'<span class="sh-sub">'+sm.action+'</span></span>'
+           +'<span class="sh-n">'+grp.length+'</span></div>';
+      grp.forEach(function(s,i){ html+=buildCard(s,i*35); });
     });
   } else {
-    const sm=SIT[filter];
-    if(sm) html+=`<div class="sh ${sm.cls}"><span style="font-size:17px">${sm.icon}</span>
-      <span class="sh-body">${sm.label}<span class="sh-sub">${sm.action}</span></span>
-      <span class="sh-n">${filtered.length}</span></div>`;
-    filtered.forEach((s,i)=>{ html+=buildCard(s,i*35); });
+    var sm=SIT[filter];
+    if(sm) html+='<div class="sh '+sm.cls+'"><span style="font-size:17px">'+sm.icon+'</span>'
+                +'<span class="sh-body">'+sm.label+'<span class="sh-sub">'+sm.action+'</span></span>'
+                +'<span class="sh-n">'+filtered.length+'</span></div>';
+    filtered.forEach(function(s,i){ html+=buildCard(s,i*35); });
   }
   el.innerHTML=html;
-  el.querySelectorAll('.card').forEach((c,i)=>c.style.animationDelay=`${i*30}ms`);
+  el.querySelectorAll('.card').forEach(function(c,i){ c.style.animationDelay=(i*30)+'ms'; });
 }
 
 // ── BUILD CARD ────────────────────────────────────────────
-function buildCard(s,delay=0){
-  const sit =s.situation||'watch';
-  const sc  =Math.round(s.score||0);
-  const e   =s.close||0, sl=s.sl||e*0.93, t1=s.target1||e+(e-sl), t2=s.target2||e+2*(e-sl);
-  const r3  =s.return_3m_pct||0, r1=s.return_1m_pct||0;
-  const str =s.streak||0, ca=s.cross_age??999, dp=s.dist_pct||0;
-  const wt  =s.weekly_tier||2, del=s.delivery_pct||0;
-  const prog=t2>sl?Math.max(0,Math.min(100,(e-sl)/(t2-sl)*100)):20;
-  const slp =e>0?((sl-e)/e*100).toFixed(1):0;
-  const t1p =e>0?((t1-e)/e*100).toFixed(1):0;
-  const t2p =e>0?((t2-e)/e*100).toFixed(1):0;
+function buildCard(s,delay){
+  delay=delay||0;
+  var sit =s.situation||'watch';
+  var sc  =Math.round(s.score||0);
+  var e   =s.close||0, sl=s.sl||e*0.93, t1=s.target1||e+(e-sl), t2=s.target2||e+2*(e-sl);
+  var r3  =s.return_3m_pct||0, r1=s.return_1m_pct||0;
+  var str =s.streak||0;
+  var ca  =(s.cross_age!==undefined&&s.cross_age!==null)?s.cross_age:999;
+  var dp  =s.dist_pct||0;
+  var wt  =s.weekly_tier||2, del=s.delivery_pct||0;
+  var prog=t2>sl ? Math.max(0,Math.min(100,(e-sl)/(t2-sl)*100)) : 20;
+  var slp =e>0 ? ((sl-e)/e*100).toFixed(1) : 0;
+  var t1p =e>0 ? ((t1-e)/e*100).toFixed(1) : 0;
+  var t2p =e>0 ? ((t2-e)/e*100).toFixed(1) : 0;
 
-  // Matrix
-  const {mx,dt,desc}=getMatrixLabel(s);
-  const sitTag=`t-${sit}`;
-  const wlabels={1:'W✅',2:'W🟡',3:'W❌'};
-  const scColors={9:'var(--prime)',8:'#34d399',7:'#60a5fa',6:'#818cf8',5:'var(--hold)',4:'var(--book)'};
-  const scCol=scColors[sc]||'var(--avoid)';
+  var ml=getMatrixLabel(s);
+  var sitTag='t-'+sit;
+  var wlabels={1:'W✅',2:'W🟡',3:'W❌'};
+  var scColors={9:'var(--prime)',8:'#34d399',7:'#60a5fa',6:'#818cf8',5:'var(--hold)',4:'var(--book)'};
+  var scCol=scColors[sc]||'var(--avoid)';
 
-  // Frozen entry (for hold)
-  let frozenHtml='';
+  var frozenHtml='';
   if(sit==='hold' && str>=3){
-    const entryPL=e>0&&str>0?`+${((e/(e*0.97)-1)*100).toFixed(1)}%`:'';
-    frozenHtml=`<div class="frozen">🔒 Entry frozen · entered ${str} days ago · P/L ${entryPL}</div>`;
+    var entryPL=e>0 ? '+'+((e/(e*0.97)-1)*100).toFixed(1)+'%' : '';
+    frozenHtml='<div class="frozen">🔒 Entry frozen · entered '+str+' days ago · P/L '+entryPL+'</div>';
   }
 
-  // Pills
-  const pills=buildPills(s);
+  var pills=buildPills(s);
+  var extra=buildExtra(s);
 
-  // Expandable info box (hidden by default — appears on tap)
-  const extra=buildExtra(s);
+  var sym=s.symbol||'';
+  var wkl=s.weekly_label||wlabels[wt]||'';
+  var r3cls=r3>=0?'rp':'rn', r1cls=r1>=0?'rp':'rn';
 
-  return `
-  <div class="card" data-sit="${sit}" data-sym="${s.symbol}" onclick="toggleCard(this)" style="animation:slideUp 0.3s ease ${delay}ms both;opacity:0">
-    
-    <div class="ctop">
-      <div>
-        <div class="sym" onclick="openChart(event,'${s.symbol}')">${s.symbol} <span class="sym-ico">📈</span></div>
-      </div>
-      <div class="sring" style="border-color:${scCol}">
-        <div class="sv">${sc}</div><div class="sm">/10</div>
-      </div>
-    </div>
-
-    <div class="tags">
-      <span class="tag ${sitTag}">${SIT[sit].icon} ${SIT[sit].label}</span>
-      <span class="tag ${mx.t}">${mx.l}</span>
-      <span class="tag ${dt.t}">${dt.l}</span>
-    </div>
-    <div class="mdesc">${desc}</div>
-
-    ${frozenHtml}
-
-    <div class="prow">
-      <div class="price"><span class="rs">₹</span>${fmt(e)}</div>
-      <span class="ret ${r3>=0?'rp':'rn'}">${r3>=0?'+':''}${r3.toFixed(1)}% <span class="rl">3M</span></span>
-      <span class="ret ${r1>=0?'rp':'rn'}" style="font-size:10px">${r1>=0?'+':''}${r1.toFixed(1)}% <span class="rl">1M</span></span>
-    </div>
-
-    <div class="pb-wrap">
-      <div class="pb-lbls"><span>SL ${fmt(sl)}</span><span style="color:var(--watch)">T1 ${fmt(t1)}</span><span style="color:var(--prime)">T2 ${fmt(t2)}</span></div>
-      <div class="pb-track"><div class="pb-fill" style="width:100%"></div><div class="pb-dot" style="left:${prog}%"></div></div>
-    </div>
-
-    <div class="lvls">
-      <div class="lr"><span class="ll">Entry</span><span class="lv">₹${fmt(e)}</span><span class="ll mla">SL</span><span class="lv lsl">₹${fmt(sl)}</span><span class="lc">${slp}%</span></div>
-      <div class="lr"><span class="ll">T1</span><span class="lv lt1">₹${fmt(t1)}</span><span class="lc">+${t1p}%</span><span class="ll mla">T2</span><span class="lv lt2">₹${fmt(t2)}</span><span class="lc">+${t2p}%</span></div>
-    </div>
-
-    <div class="pills">${pills}</div>
-
-    <div class="meta">
-      <div>📦 <span class="mv">${del.toFixed(0)}%</span> delivery</div>
-      ${str>=3?`<div>🔥 <span class="mv">${str}d</span> streak</div>`:''}
-      <div style="margin-left:auto;font-size:10px">${s.weekly_label||wlabels[wt]||''}</div>
-    </div>
-
-    <!-- Two-tab expand -->
-    <div class="expand-wrap">
-      <div class="card-tabs">
-        <button class="ct-btn on" onclick="cardTab(event,'dt-${s.symbol}','nt-${s.symbol}',this)">📺 Details</button>
-        <button class="ct-btn"    onclick="cardTab(event,'nt-${s.symbol}','dt-${s.symbol}',this)">📰 News</button>
-      </div>
-      <div class="ct-pane show" id="dt-${s.symbol}">${extra}</div>
-      <div class="ct-pane"      id="nt-${s.symbol}"><div class="news-empty">📰 Loading news…</div></div>
-    </div>
-    <div class="hint">▾ Tap for details</div>
-  </div>\`;
+  var html='<div class="card" data-sit="'+sit+'" data-sym="'+sym+'" onclick="toggleCard(this)"'
+    +' style="animation:slideUp 0.3s ease '+delay+'ms both;opacity:0">'
+    +'<div class="ctop">'
+    +'<div><div class="sym" onclick="openChart(event,\''+sym+'\')">'+sym+' <span class="sym-ico">📈</span></div></div>'
+    +'<div class="sring" style="border-color:'+scCol+'"><div class="sv">'+sc+'</div><div class="sm">/10</div></div>'
+    +'</div>'
+    +'<div class="tags">'
+    +'<span class="tag '+sitTag+'">'+SIT[sit].icon+' '+SIT[sit].label+'</span>'
+    +'<span class="tag '+ml.mx.t+'">'+ml.mx.l+'</span>'
+    +'<span class="tag '+ml.dt.t+'">'+ml.dt.l+'</span>'
+    +'</div>'
+    +'<div class="mdesc">'+ml.desc+'</div>'
+    +frozenHtml
+    +'<div class="prow">'
+    +'<div class="price"><span class="rs">₹</span>'+fmt(e)+'</div>'
+    +'<span class="ret '+r3cls+'">'+(r3>=0?'+':'')+r3.toFixed(1)+'% <span class="rl">3M</span></span>'
+    +'<span class="ret '+r1cls+'" style="font-size:10px">'+(r1>=0?'+':'')+r1.toFixed(1)+'% <span class="rl">1M</span></span>'
+    +'</div>'
+    +'<div class="pb-wrap">'
+    +'<div class="pb-lbls"><span>SL '+fmt(sl)+'</span><span style="color:var(--watch)">T1 '+fmt(t1)+'</span><span style="color:var(--prime)">T2 '+fmt(t2)+'</span></div>'
+    +'<div class="pb-track"><div class="pb-fill" style="width:100%"></div><div class="pb-dot" style="left:'+prog+'%"></div></div>'
+    +'</div>'
+    +'<div class="lvls">'
+    +'<div class="lr"><span class="ll">Entry</span><span class="lv">₹'+fmt(e)+'</span><span class="ll mla">SL</span><span class="lv lsl">₹'+fmt(sl)+'</span><span class="lc">'+slp+'%</span></div>'
+    +'<div class="lr"><span class="ll">T1</span><span class="lv lt1">₹'+fmt(t1)+'</span><span class="lc">+'+t1p+'%</span><span class="ll mla">T2</span><span class="lv lt2">₹'+fmt(t2)+'</span><span class="lc">+'+t2p+'%</span></div>'
+    +'</div>'
+    +'<div class="pills">'+pills+'</div>'
+    +'<div class="meta">'
+    +'<div>📦 <span class="mv">'+del.toFixed(0)+'%</span> delivery</div>'
+    +(str>=3 ? '<div>🔥 <span class="mv">'+str+'d</span> streak</div>' : '')
+    +'<div style="margin-left:auto;font-size:10px">'+wkl+'</div>'
+    +'</div>'
+    +'<div class="expand-wrap">'
+    +'<div class="card-tabs">'
+    +'<button class="ct-btn on" onclick="cardTab(event,\'dt-'+sym+'\',\'nt-'+sym+'\',this)">📺 Details</button>'
+    +'<button class="ct-btn"    onclick="cardTab(event,\'nt-'+sym+'\',\'dt-'+sym+'\',this)">📰 News</button>'
+    +'</div>'
+    +'<div class="ct-pane show" id="dt-'+sym+'">'+extra+'</div>'
+    +'<div class="ct-pane"      id="nt-'+sym+'"><div class="news-empty">📰 Loading news…</div></div>'
+    +'</div>'
+    +'<div class="hint">▾ Tap for details</div>'
+    +'</div>';
+  return html;
 }
 
-// ── BUILD EXTRA (expandable content per situation) ────────
+// ── BUILD EXTRA ───────────────────────────────────────────
 function buildExtra(s){
-  const sit=s.strike||s.situation||'watch';
-  const ca=s.cross_age??999, sl=s.sl||0, e=s.close||0;
-  const str=s.streak||0;
+  var sit=s.situation||'watch';
+  var ca =(s.cross_age!==undefined&&s.cross_age!==null)?s.cross_age:999;
+  var sl =s.sl||0, e=s.close||0, str=s.streak||0;
 
-  if(s.situation==='prime') return `
-    <div class="ibox ib-prime">
-      <div class="ibox-title" style="color:var(--prime)">📺 TradingView Confirmation</div>
-      <div class="ibox-item"><span>○</span>REGIME = TREND (not Range or Correction)</div>
-      <div class="ibox-item"><span>○</span>ADX ≥ 20 — trend strength confirmed</div>
-      <div class="ibox-item"><span>○</span>W.Trend = BULL — weekly direction aligned</div>
-      <div class="ibox-item"><span>○</span>HMA Hull V16.1 — all green, no warnings</div>
-      <div class="ibox-item ok"><span>✓</span>All 4 confirmed → Enter at market open</div>
-    </div>`;
-
-  if(s.situation==='hold') return `
-    <div class="ibox ib-hold">
-      <div class="ibox-title" style="color:var(--hold)">📺 TradingView Trail Check</div>
-      <div class="ibox-item"><span>○</span>HMA55 still pointing UP → trail SL up to it</div>
-      <div class="ibox-item"><span>○</span>Price above HMA20 → short-term momentum intact</div>
-      <div class="ibox-item"><span>○</span>REGIME still TREND → continue holding</div>
-      <div class="ibox-item warn"><span>→</span>All green → Trail SL to ₹${fmt(sl)} (current HMA55)</div>
-      <div class="ibox-note">${str>=5&&s.t1_hit_date?'T1 already hit → SL moved to entry. Free trade — let T2 run.':'T1 not yet hit → hold full position. Move SL up each week.'}</div>
-    </div>`;
-
-  if(s.situation==='watch') return `
-    <div class="ibox ib-watch">
-      <div class="ibox-title" style="color:var(--watch)">📺 What to Wait For</div>
-      <div class="ibox-item"><span>○</span>Weekly HMA20 slope must turn UP (currently flat)</div>
-      <div class="ibox-item"><span>○</span>Fresh volume surge needed — acc days ≥ 3</div>
-      <div class="ibox-item"><span>○</span>Price must close convincingly above HMA55</div>
-      <div class="ibox-item" style="color:var(--watch)"><span>→</span>Check again tomorrow after 6 AM scan</div>
-      <div class="ibox-note">Do NOT enter yet. Wait for weekly alignment to confirm.</div>
-    </div>`;
-
-  if(s.situation==='book') return `
-    <div class="ibox" style="background:rgba(251,146,60,0.05);border:1px solid rgba(251,146,60,0.2)">
-      <div class="ibox-title" style="color:var(--book)">⚠️ Profit Booking Guidance</div>
-      <div class="ibox-item"><span>○</span>${ca>30?`HMA cross was ${ca} days ago — move is very mature`:'Price stretched well above HMA55'}</div>
-      <div class="ibox-item"><span>○</span>Consider booking 50% of open position now</div>
-      <div class="ibox-item"><span>○</span>Move remaining SL to entry price (protect capital)</div>
-      <div class="ibox-item" style="color:var(--book)"><span>→</span>Don't be greedy — protect what you have</div>
-      <div class="ibox-note">Strong stocks can remain in list but late entry is risky.</div>
-    </div>`;
-
-  if(s.situation==='avoid') return `
-    <div class="ibox ib-avoid">
-      <div class="ibox-title" style="color:var(--avoid)">🚫 Why to Avoid Today</div>
-      ${buildAvoidReasons(s).map(r=>`<div class="ibox-item bad"><span>×</span>${r}</div>`).join('')}
-      <div class="ibox-note" style="color:rgba(248,113,113,0.7)">Skip this trade. Capital preservation is key.</div>
-    </div>`;
-
+  if(sit==='prime'){
+    return '<div class="ibox ib-prime">'
+      +'<div class="ibox-title" style="color:var(--prime)">📺 TradingView Confirmation</div>'
+      +'<div class="ibox-item"><span>○</span>REGIME = TREND (not Range or Correction)</div>'
+      +'<div class="ibox-item"><span>○</span>ADX ≥ 20 — trend strength confirmed</div>'
+      +'<div class="ibox-item"><span>○</span>W.Trend = BULL — weekly direction aligned</div>'
+      +'<div class="ibox-item"><span>○</span>HMA Hull V16.1 — all green, no warnings</div>'
+      +'<div class="ibox-item ok"><span>✓</span>All 4 confirmed → Enter at market open</div>'
+      +'</div>';
+  }
+  if(sit==='hold'){
+    var t1hit=str>=5&&s.t1_hit_date;
+    return '<div class="ibox ib-hold">'
+      +'<div class="ibox-title" style="color:var(--hold)">📺 TradingView Trail Check</div>'
+      +'<div class="ibox-item"><span>○</span>HMA55 still pointing UP → trail SL up to it</div>'
+      +'<div class="ibox-item"><span>○</span>Price above HMA20 → short-term momentum intact</div>'
+      +'<div class="ibox-item"><span>○</span>REGIME still TREND → continue holding</div>'
+      +'<div class="ibox-item warn"><span>→</span>All green → Trail SL to ₹'+fmt(sl)+' (current HMA55)</div>'
+      +'<div class="ibox-note">'+(t1hit?'T1 already hit → SL moved to entry. Free trade — let T2 run.':'T1 not yet hit → hold full position. Move SL up each week.')+'</div>'
+      +'</div>';
+  }
+  if(sit==='watch'){
+    return '<div class="ibox ib-watch">'
+      +'<div class="ibox-title" style="color:var(--watch)">📺 What to Wait For</div>'
+      +'<div class="ibox-item"><span>○</span>Weekly HMA20 slope must turn UP (currently flat)</div>'
+      +'<div class="ibox-item"><span>○</span>Fresh volume surge needed — acc days ≥ 3</div>'
+      +'<div class="ibox-item"><span>○</span>Price must close convincingly above HMA55</div>'
+      +'<div class="ibox-item" style="color:var(--watch)"><span>→</span>Check again tomorrow after 6 AM scan</div>'
+      +'<div class="ibox-note">Do NOT enter yet. Wait for weekly alignment to confirm.</div>'
+      +'</div>';
+  }
+  if(sit==='book'){
+    var msg=ca>30 ? 'HMA cross was '+ca+' days ago — move is very mature' : 'Price stretched well above HMA55';
+    return '<div class="ibox" style="background:rgba(251,146,60,0.05);border:1px solid rgba(251,146,60,0.2)">'
+      +'<div class="ibox-title" style="color:var(--book)">⚠️ Profit Booking Guidance</div>'
+      +'<div class="ibox-item"><span>○</span>'+msg+'</div>'
+      +'<div class="ibox-item"><span>○</span>Consider booking 50% of open position now</div>'
+      +'<div class="ibox-item"><span>○</span>Move remaining SL to entry price (protect capital)</div>'
+      +'<div class="ibox-item" style="color:var(--book)"><span>→</span>Don\'t be greedy — protect what you have</div>'
+      +'<div class="ibox-note">Strong stocks can remain in list but late entry is risky.</div>'
+      +'</div>';
+  }
+  if(sit==='avoid'){
+    var reasons=buildAvoidReasons(s);
+    return '<div class="ibox ib-avoid">'
+      +'<div class="ibox-title" style="color:var(--avoid)">🚫 Why to Avoid Today</div>'
+      +reasons.map(function(r){ return '<div class="ibox-item bad"><span>×</span>'+r+'</div>'; }).join('')
+      +'<div class="ibox-note" style="color:rgba(248,113,113,0.7)">Skip this trade. Capital preservation is key.</div>'
+      +'</div>';
+  }
   return '';
 }
 
 // ── AVOID REASONS ─────────────────────────────────────────
 function buildAvoidReasons(s){
-  const r=[], ca=s.cross_age??999, dp=s.dist_pct||0;
-  const wt=s.weekly_tier||2, sc=s.score||0, dd=s.dist_days||0;
-  const obv=s.obv_dir||'flat', del=s.delivery_pct||0;
-  if(ca===-1)          r.push('HMA20 is <b>below</b> HMA55 — daily trend is bearish');
-  else if(ca>30)       r.push(`HMA cross was <b>${ca} days ago</b> — very late in the move`);
-  if(s.overextended)   r.push(`Price <b>${dp.toFixed(0)}% above</b> HMA55 — severely overextended`);
-  if(dd>=4&&obv==='falling') r.push(`Distribution volume — ${dd} of last 5 days sell-side pressure`);
+  var r=[];
+  var ca  =(s.cross_age!==undefined&&s.cross_age!==null)?s.cross_age:999;
+  var dp  =s.dist_pct||0, wt=s.weekly_tier||2, sc=s.score||0;
+  var dd  =s.dist_days||0, obv=s.obv_dir||'flat', del=s.delivery_pct||0;
+  if(ca===-1)           r.push('HMA20 is below HMA55 — daily trend is bearish');
+  else if(ca>30)        r.push('HMA cross was '+ca+' days ago — very late in the move');
+  if(s.overextended)    r.push('Price '+dp.toFixed(0)+'% above HMA55 — severely overextended');
+  if(dd>=4&&obv==='falling') r.push('Distribution volume — '+dd+' of last 5 days sell-side pressure');
   else if(obv==='falling')   r.push('OBV trend falling — institutions selling into price');
-  if(wt===3)           r.push('Weekly HMA20 <b>below</b> HMA55 — long-term trend broken');
-  if(del<35)           r.push(`Low delivery ${del.toFixed(0)}% — mostly speculative retail trades`);
-  if(sc<=3)            r.push(`Score ${sc}/10 — below quality threshold for safe entry`);
-  if(r.length===0)     r.push('Multiple weak signals across HMA, volume and weekly trend');
+  if(wt===3)            r.push('Weekly HMA20 below HMA55 — long-term trend broken');
+  if(del<35)            r.push('Low delivery '+del.toFixed(0)+'% — mostly speculative retail trades');
+  if(sc<=3)             r.push('Score '+sc+'/10 — below quality threshold for safe entry');
+  if(r.length===0)      r.push('Multiple weak signals across HMA, volume and weekly trend');
   return r;
 }
 
 // ── PILLS ─────────────────────────────────────────────────
 function buildPills(s){
-  const p=[], ca=s.cross_age??999, dp=s.dist_pct||0;
-  const acc=s.acc_days||0, dd=s.dist_days||0, obv=s.obv_dir||'flat', sb=s.sector_bias||0;
-  if     (ca===-1)        p.push({l:'HMA ❌',c:'pb2'});
-  else if(s.fresh_cross)  p.push({l:`🟢 Cross ${ca}d`,c:'pk'});
-  else if(ca<=20)         p.push({l:`Cross ${ca}d`,c:'pm'});
-  else if(ca<999)         p.push({l:`Cross ${ca}d`,c:''});
-  if     (s.overextended) p.push({l:`${dp.toFixed(0)}% ⚠️`,c:'pb2'});
-  else if(dp<=5&&dp>0)    p.push({l:`${dp.toFixed(1)}% ✅ room`,c:'pk'});
-  else if(dp>0)           p.push({l:`${dp.toFixed(1)}% above`,c:''});
-  if     (acc>=4&&obv==='rising') p.push({l:'Accum vol ✅',c:'pk'});
-  else if(dd>=4||obv==='falling') p.push({l:'Dist vol ❌',c:'pb2'});
-  else                            p.push({l:'Vol neutral',c:''});
+  var p=[];
+  var ca =(s.cross_age!==undefined&&s.cross_age!==null)?s.cross_age:999;
+  var dp =s.dist_pct||0, acc=s.acc_days||0, dd=s.dist_days||0;
+  var obv=s.obv_dir||'flat', sb=s.sector_bias||0;
+  if     (ca===-1)       p.push({l:'HMA ❌',c:'pb2'});
+  else if(s.fresh_cross) p.push({l:'🟢 Cross '+ca+'d',c:'pk'});
+  else if(ca<=20)        p.push({l:'Cross '+ca+'d',c:'pm'});
+  else if(ca<999)        p.push({l:'Cross '+ca+'d',c:''});
+  if     (s.overextended)     p.push({l:dp.toFixed(0)+'% ⚠️',c:'pb2'});
+  else if(dp<=5 && dp>0)      p.push({l:dp.toFixed(1)+'% ✅ room',c:'pk'});
+  else if(dp>0)               p.push({l:dp.toFixed(1)+'% above',c:''});
+  if     (acc>=4&&obv==='rising')   p.push({l:'Accum vol ✅',c:'pk'});
+  else if(dd>=4||obv==='falling')   p.push({l:'Dist vol ❌',c:'pb2'});
+  else                              p.push({l:'Vol neutral',c:''});
   if     (sb===1)  p.push({l:'Sector ✅',c:'pk'});
   else if(sb===-1) p.push({l:'Sector ❌',c:'pb2'});
-  return p.map(x=>`<span class="pill ${x.c}">${x.l}</span>`).join('');
+  return p.map(function(x){ return '<span class="pill '+x.c+'">'+x.l+'</span>'; }).join('');
 }
 
-// ── INTERACTIONS ──────────────────────────────────────────
+// ── CARD INTERACTIONS ─────────────────────────────────────
 function toggleCard(el){
-  const sym=el.dataset.sym;
-  if(expanded&&expanded!==sym){
-    const prev=document.querySelector(\`.card[data-sym="${expanded}"]\`);
+  var sym=el.dataset.sym;
+  if(expanded && expanded!==sym){
+    var prev=document.querySelector('.card[data-sym="'+expanded+'"]');
     if(prev){
       prev.classList.remove('open');
-      const h=prev.querySelector('.hint');
-      if(h) h.textContent='▾ Tap for details';
+      var ph=prev.querySelector('.hint');
+      if(ph) ph.textContent='▾ Tap for details';
     }
   }
   el.classList.toggle('open');
-  const isOpen=el.classList.contains('open');
+  var isOpen=el.classList.contains('open');
   expanded=isOpen?sym:null;
-  const hint=el.querySelector('.hint');
+  var hint=el.querySelector('.hint');
   if(hint) hint.textContent=isOpen?'▴ Tap to close':'▾ Tap for details';
   if(isOpen){
-    const np=document.getElementById('nt-'+sym);
-    if(np&&np.querySelector('.news-empty')){
+    var np=document.getElementById('nt-'+sym);
+    if(np && np.querySelector('.news-empty')){
       if(newsLoaded){
         np.innerHTML=buildNewsPane(sym);
       } else {
-        fetchNews(scanDate).then(()=>{ np.innerHTML=buildNewsPane(sym); });
+        fetchNews(scanDate).then(function(){ np.innerHTML=buildNewsPane(sym); });
       }
     }
   }
-  if(tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+  if(tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
 }
 
 function cardTab(e,showId,hideId,btn){
   e.stopPropagation();
-  const sp=document.getElementById(showId);
-  const hp=document.getElementById(hideId);
+  var sp=document.getElementById(showId);
+  var hp=document.getElementById(hideId);
   if(sp) sp.classList.add('show');
   if(hp) hp.classList.remove('show');
-  const tabs=btn.parentElement.querySelectorAll('.ct-btn');
-  tabs.forEach(b=>b.classList.remove('on'));
+  var tabs=btn.parentElement.querySelectorAll('.ct-btn');
+  tabs.forEach(function(b){ b.classList.remove('on'); });
   btn.classList.add('on');
 }
 
 function setFilter(sit){
   filter=sit;
-  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.sit===sit));
+  document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('on',t.dataset.sit===sit); });
   document.getElementById('tabsRow').style.display='';
-  document.getElementById('sbar').style.display='grid';
   expanded=null;
   renderCards();
   window.scrollTo({top:0,behavior:'smooth'});
@@ -803,14 +644,15 @@ function setFilter(sit){
 
 function switchView(v){
   view=v;
-  ['Scan','Prime','Digest','List','Guide'].forEach(x=>
-    document.getElementById('nb'+x)?.classList.toggle('on',x.toLowerCase()===v));
-  const showTabs=['scan','prime'].includes(v);
+  ['Scan','Prime','Digest','List','Guide'].forEach(function(x){
+    var el=document.getElementById('nb'+x);
+    if(el) el.classList.toggle('on',x.toLowerCase()===v);
+  });
+  var showTabs=['scan','prime'].includes(v);
   document.getElementById('tabsRow').style.display=showTabs?'':'none';
-  document.getElementById('sbar').style.display=v==='scan'?'grid':'none';
   expanded=null;
-  if     (v==='scan')  setFilter('all');
-  else if(v==='prime') setFilter('prime');
+  if     (v==='scan')   setFilter('all');
+  else if(v==='prime')  setFilter('prime');
   else if(v==='digest') renderDigest();
   else if(v==='list')   renderList();
   else if(v==='guide')  renderGuide();
@@ -821,283 +663,181 @@ function openChart(e,sym){
   e.stopPropagation();
   chartSym=sym; chartRange='3M';
   document.getElementById('cpSym').textContent=sym+' — NSE';
-  document.getElementById('cpTvLink').href=`https://www.tradingview.com/chart/?symbol=NSE%3A${sym}`;
-  document.querySelectorAll('.cp-tab').forEach((t,i)=>t.classList.toggle('on',i===1));
+  document.getElementById('cpTvLink').href='https://www.tradingview.com/chart/?symbol=NSE%3A'+sym;
+  document.querySelectorAll('.cp-tab').forEach(function(t,i){ t.classList.toggle('on',i===1); });
   renderChart();
   document.getElementById('cpanel').classList.add('open');
-  if(tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+  if(tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
 }
-function closeChart(){ document.getElementById('cpanel').classList.remove('open'); document.getElementById('cpBody').innerHTML=''; chartSym=null; }
-function setRange(r,btn){ chartRange=r; document.querySelectorAll('.cp-tab').forEach(t=>t.classList.remove('on')); btn.classList.add('on'); renderChart(); }
+function closeChart(){
+  document.getElementById('cpanel').classList.remove('open');
+  document.getElementById('cpBody').innerHTML='';
+  chartSym=null;
+}
+function setRange(r,btn){
+  chartRange=r;
+  document.querySelectorAll('.cp-tab').forEach(function(t){ t.classList.remove('on'); });
+  btn.classList.add('on');
+  renderChart();
+}
 function renderChart(){
   if(!chartSym) return;
-  const rm={'1M':'1M','3M':'3M','6M':'6M','1Y':'12M'};
-  document.getElementById('cpBody').innerHTML=`<iframe src="https://s.tradingview.com/widgetembed/?frameElementId=tv&symbol=NSE%3A${chartSym}&interval=D&theme=dark&style=1&timezone=Asia%2FKolkata&withdateranges=1&daterange=${rm[chartRange]||'3M'}&hide_side_toolbar=1&allow_symbol_change=0" width="100%" height="100%" frameborder="0"></iframe>`;
+  var rm={'1M':'1M','3M':'3M','6M':'6M','1Y':'12M'};
+  document.getElementById('cpBody').innerHTML='<iframe src="https://s.tradingview.com/widgetembed/?frameElementId=tv&symbol=NSE%3A'+chartSym+'&interval=D&theme=dark&style=1&timezone=Asia%2FKolkata&withdateranges=1&daterange='+(rm[chartRange]||'3M')+'&hide_side_toolbar=1&allow_symbol_change=0" width="100%" height="100%" frameborder="0"></iframe>';
 }
 
-// ── LIST VIEW ─────────────────────────────────────────────
-function renderList(){
-  const el=document.getElementById('content');
-  const sorted=[...stocks].sort((a,b)=>(b.score||0)-(a.score||0));
-  let h=`<div style="margin-bottom:8px;font-size:12px;color:var(--muted);padding-top:4px;font-family:var(--sans)">${sorted.length} stocks · sorted by forward score</div>`;
-  sorted.forEach((s,i)=>{
-    const sit=s.situation||'watch',sm=SIT[sit]||{};
-    const rCls=(s.return_3m_pct||0)>=0?'rp':'rn';
-    const slp=s.close>0?((s.sl-s.close)/s.close*100).toFixed(1):0;
-    const t2p=s.close>0?((s.target2-s.close)/s.close*100).toFixed(1):0;
-    h+=`<div class="card" data-sit="${sit}" data-sym="${s.symbol}" onclick="toggleCard(this)" style="animation:slideUp 0.3s ease ${i*25}ms both;opacity:0">
-      
-      <div style="display:flex;align-items:center;gap:10px">
-        <div style="font-family:var(--mono);font-size:12px;color:var(--muted);min-width:22px">${i+1}</div>
-        <div style="flex:1">
-          <div style="display:flex;align-items:center;gap:7px">
-            <span class="sym" style="font-size:15px" onclick="openChart(event,'${s.symbol}')">${s.symbol} <span class="sym-ico">📈</span></span>
-            <span class="tag t-${sit}" style="font-size:9px">${sm.icon||''} ${sit}</span>
-          </div>
-          <div style="font-size:11px;color:var(--muted);margin-top:3px;font-family:var(--sans)">₹${fmt(s.close)} · SL ${slp}% · T2 +${t2p}%</div>
-        </div>
-        <div style="text-align:right">
-          <div class="ret ${rCls}" style="font-size:11px">${(s.return_3m_pct||0)>=0?'+':''}${(s.return_3m_pct||0).toFixed(1)}%</div>
-          <div style="font-family:var(--mono);font-size:14px;font-weight:700;margin-top:3px">${Math.round(s.score||0)}/10</div>
-        </div>
-      </div>
-      <div class="extra">${buildExtra(s)}</div>
-      <div class="hint">▾ Tap for details</div>
-    </div>`;
-  });
-  el.innerHTML=h;
+// ── NEWS ──────────────────────────────────────────────────
+function fetchNews(dateStr){
+  if(newsLoaded) return Promise.resolve();
+  if(!dateStr) return Promise.resolve();
+  var parts=dateStr.split('-');
+  if(parts.length!==3){ newsLoaded=true; return Promise.resolve(); }
+  var fname='news_'+parts[2]+parts[1]+parts[0]+'.json';
+  var url=GITHUB_RAW+'output/'+fname+'?t='+Date.now();
+  return fetch(url)
+    .then(function(r){ if(r.ok) return r.json(); throw new Error('no news'); })
+    .then(function(d){ newsData=d; })
+    .catch(function(){})
+    .then(function(){ newsLoaded=true; });
 }
 
-// ── GUIDE ─────────────────────────────────────────────────
-function renderGuide(){
-  document.getElementById('content').innerHTML=`
-  <div class="fade" style="padding-top:6px">
-    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:13px;padding:15px;margin-bottom:10px">
-      <div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:11px;font-family:var(--sans)">📋 Daily Workflow</div>
-      ${[['1','6 AM','Scan runs automatically. Bot sends morning message.'],['2','Open Prime','Check Prime Entry stocks — ready to enter today.'],['3','TradingView','Confirm on TradingView Hull V16.1 — all 4 signals green.'],['4','Enter','Take the trade at market open.'],['5','T1 hit','Book 50%, move SL to entry price (free trade).'],['6','T2 hit','Book remaining 50%. Exit fully.']].map(([n,s,d])=>`<div style="display:flex;gap:10px;margin-bottom:9px;font-family:var(--sans)"><div style="font-family:var(--mono);font-size:11px;color:var(--muted);min-width:18px;padding-top:2px">${n}</div><div><div style="font-size:13px;font-weight:700">${s}</div><div style="font-size:12px;color:var(--muted);margin-top:1px">${d}</div></div></div>`).join('')}
-    </div>
-
-    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:13px;padding:15px;margin-bottom:10px">
-      <div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:11px;font-family:var(--sans)">🎯 Situation Labels</div>
-      ${[{sit:'prime',color:'var(--prime)',title:'Prime Entry',desc:'Best forward setup. Fresh HMA cross ≤10d, room to run ≤5% above HMA55, accumulation volume. Tap card for TV checklist.'},
-         {sit:'hold',color:'var(--hold)',title:'Hold & Trail',desc:'In top 25 for 5+ days. Already in a move. Trail SL up. Tap card for trail guidance.'},
-         {sit:'watch',color:'var(--watch)',title:'Watch Closely',desc:'Good setup, one signal missing. Could turn Prime in 1-3 days. Tap card to see what to wait for.'},
-         {sit:'book',color:'var(--book)',title:'Book Profits',desc:'Move maturing — cross 30d+ ago or price stretched. Tap card for profit booking guidance.'},
-         {sit:'avoid',color:'var(--avoid)',title:'Avoid Now',desc:'Weak signal, distribution, or bearish trend. Tap card to see the exact reasons why.'}
-      ].map(g=>`<div style="display:flex;gap:10px;margin-bottom:11px;padding:10px;background:var(--bg3);border-radius:9px;font-family:var(--sans)">
-        <div style="font-size:20px;flex-shrink:0">${SIT[g.sit].icon}</div>
-        <div><div style="font-size:13px;font-weight:700;color:${g.color};margin-bottom:3px">${g.title}</div>
-        <div style="font-size:12px;color:var(--muted);line-height:1.5">${g.desc}</div></div></div>`).join('')}
-    </div>
-
-    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:13px;padding:15px;margin-bottom:10px">
-      <div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:11px;font-family:var(--sans)">📊 Score (0–10)</div>
-      ${[['+2','HMA Freshness','Cross ≤10d=2pts · 11-20d=1pt · older=0'],
-         ['+2','Room to Run','Within 5% of HMA55=2pts · 5-10%=1pt · overextended=-1'],
-         ['+2','Volume Quality','4+ accum days + OBV rising=2pts · distribution=-1'],
-         ['+1','RSI Sweet Spot','RSI 40-65 = ideal entry zone'],
-         ['+1','MACD','MACD above signal line = 1pt'],
-         ['+1','Sector Alignment','Strong sector tailwind = +1, headwind = -1'],
-         ['+1','Risk/Reward','SL within 7% of entry = 1pt (RR ≥ 2x)']
-      ].map(([p,s,d])=>`<div style="display:flex;gap:8px;margin-bottom:8px;font-family:var(--sans)">
-        <div style="font-family:var(--mono);font-size:12px;color:var(--prime);min-width:28px">${p}</div>
-        <div><div style="font-size:12px;font-weight:700">${s}</div>
-        <div style="font-size:11px;color:var(--muted)">${d}</div></div></div>`).join('')}
-    </div>
-
-    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:13px;padding:15px;margin-bottom:10px">
-      <div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:11px;font-family:var(--sans)">📈 Charts</div>
-      <div style="font-size:12px;color:var(--muted);line-height:1.6;font-family:var(--sans)">
-        Tap any stock <b style="color:var(--text)">symbol name</b> (with 📈) to open a live TradingView chart.<br><br>
-        Switch timeframes: 1M · 3M · 6M · 1Y<br><br>
-        Tap <b style="color:var(--accent)">Open TV ↗</b> to open full TradingView app with HMA Hull V16.1 indicators.
-      </div>
-    </div>
-
-    <div style="text-align:center;padding:12px 0 6px;color:var(--muted);font-size:11px;font-family:var(--sans)">
-      Scan updates daily at 6 AM IST · Confirm on TradingView Hull V16.1
-    </div>
-    <div style="text-align:center;padding:8px 16px 24px;color:var(--muted);font-size:11px;font-family:var(--sans);border-top:1px solid var(--border);line-height:1.7;margin-top:4px">
-      ⚠️ For educational &amp; informational purposes only<br>
-      Not SEBI registered · Not investment advice<br>
-      Always do your own research before trading
-    </div>
-  </div>`;
-}
-
-// ── UTILS ─────────────────────────────────────────────────
-function fmt(n){const v=parseFloat(n)||0;return v>=1000?v.toLocaleString('en-IN',{maximumFractionDigits:0}):v.toFixed(v>=100?0:2);}
-
-function renderSample(){
-  renderAll({scan_date:new Date().toISOString().split('T')[0],stocks:[
-    {rank:1,symbol:'KAYNES', score:9,return_1m_pct:8.5, return_3m_pct:21.6,close:5840,sl:5600,target1:6080,target2:6320,situation:'prime',streak:3, cross_age:4, dist_pct:3.2, fresh_cross:true, delivery_pct:72.4,weekly_tier:1,weekly_label:'Weekly ✅ Bullish',overextended:false,acc_days:4,dist_days:0,obv_dir:'rising', sector_bias:1},
-    {rank:2,symbol:'DIXON',  score:8,return_1m_pct:7.1, return_3m_pct:19.3,close:8420,sl:8060,target1:8780,target2:9140,situation:'prime',streak:1, cross_age:7, dist_pct:4.1, fresh_cross:true, delivery_pct:61.2,weekly_tier:1,weekly_label:'Weekly ✅ Bullish',overextended:false,acc_days:3,dist_days:1,obv_dir:'rising', sector_bias:0},
-    {rank:3,symbol:'SYRMA',  score:7,return_1m_pct:4.2, return_3m_pct:11.4,close:796, sl:757, target1:835, target2:874, situation:'hold', streak:6, cross_age:12,dist_pct:5.8, fresh_cross:false,delivery_pct:55.1,weekly_tier:2,weekly_label:'Weekly 🟡 Pullback',overextended:false,acc_days:3,dist_days:1,obv_dir:'flat',   sector_bias:1},
-    {rank:4,symbol:'ASTERDM',score:6,return_1m_pct:3.1, return_3m_pct:12.6,close:688, sl:655, target1:721, target2:754, situation:'watch',streak:2, cross_age:18,dist_pct:6.2, fresh_cross:false,delivery_pct:58.3,weekly_tier:2,weekly_label:'Weekly 🟡 Pullback',overextended:false,acc_days:2,dist_days:1,obv_dir:'rising',sector_bias:1},
-    {rank:5,symbol:'EMCURE', score:5,return_1m_pct:2.1, return_3m_pct:13.3,close:1590,sl:1477,target1:1703,target2:1816,situation:'book', streak:8, cross_age:42,dist_pct:18.2,fresh_cross:false,delivery_pct:48.3,weekly_tier:1,weekly_label:'Weekly ✅ Bullish',overextended:true, acc_days:1,dist_days:4,obv_dir:'falling',sector_bias:1},
-    {rank:6,symbol:'HONASA', score:3,return_1m_pct:-2.1,return_3m_pct:9.5, close:307, sl:280, target1:334, target2:361, situation:'avoid',streak:1, cross_age:-1,dist_pct:0,   fresh_cross:false,delivery_pct:38.5,weekly_tier:3,weekly_label:'Weekly ❌ Bearish',overextended:false,acc_days:1,dist_days:3,obv_dir:'falling',sector_bias:0},
-  ]});
-}
-
-document.addEventListener('DOMContentLoaded',()=>loadData());
-
-// ═══════════════════════════════════════════════════════════
-// FETCH NEWS
-// ═══════════════════════════════════════════════════════════
-async function fetchNews(dateStr){
-  if(newsLoaded) return;
-  if(!dateStr) return;
-  try{
-    const p=dateStr.split('-');
-    if(p.length!==3) return;
-    const fname='news_'+p[2]+p[1]+p[0]+'.json';
-    const url=GITHUB_RAW+'output/'+fname+'?t='+Date.now();
-    const r=await fetch(url);
-    if(r.ok){ newsData=await r.json(); }
-  }catch(e){ console.log('News fetch:',e); }
-  newsLoaded=true;
-}
-
-// ═══════════════════════════════════════════════════════════
-// BUILD NEWS PANE
-// ═══════════════════════════════════════════════════════════
 function buildNewsPane(sym){
-  const nd=newsData[sym];
-  if(!nd){
+  var nd=newsData[sym];
+  if(!nd) return '<div class="news-empty">📰 No recent news for '+sym+'</div>';
+  var anns =(nd.announcements||[]).slice(0,4);
+  var deals=(nd.deals||[]).slice(0,3);
+  var hls  =(nd.headlines||[]).slice(0,4);
+  if(!anns.length&&!deals.length&&!hls.length)
     return '<div class="news-empty">📰 No recent news for '+sym+'</div>';
-  }
-  const anns=(nd.announcements||[]).slice(0,4);
-  const deals=(nd.deals||[]).slice(0,3);
-  const hls=(nd.headlines||[]).slice(0,4);
-  if(!anns.length&&!deals.length&&!hls.length){
-    return '<div class="news-empty">📰 No recent news for '+sym+'</div>';
-  }
-  const tmap={
-    ORDER_WIN:  {c:'nt-o',l:'Order'},
-    RESULTS:    {c:'nt-r',l:'Results'},
-    DEAL:       {c:'nt-d',l:'Deal'},
-    FUNDRAISING:{c:'nt-d',l:'Funds'},
-    REGULATORY: {c:'nt-x',l:'Regulatory'},
-    CORPORATE_ACTION:{c:'nt-b',l:'Corp Action'},
-    MEETING:    {c:'nt-n',l:'Meeting'},
-    EXPANSION:  {c:'nt-o',l:'Expansion'},
-    PROMOTER:   {c:'nt-x',l:'Promoter'},
-    GENERAL:    {c:'nt-n',l:'Ann'}
+  var tmap={
+    ORDER_WIN:  {c:'nt-o',l:'Order'},    RESULTS:{c:'nt-r',l:'Results'},
+    DEAL:       {c:'nt-d',l:'Deal'},      FUNDRAISING:{c:'nt-d',l:'Funds'},
+    REGULATORY: {c:'nt-x',l:'Regulatory'},CORPORATE_ACTION:{c:'nt-b',l:'Corp Action'},
+    MEETING:    {c:'nt-n',l:'Meeting'},   EXPANSION:{c:'nt-o',l:'Expansion'},
+    PROMOTER:   {c:'nt-x',l:'Promoter'}, GENERAL:{c:'nt-n',l:'Ann'}
   };
-  let html='';
+  var html='';
   anns.forEach(function(a){
-    const tm=tmap[a.type]||{c:'nt-n',l:'Ann'};
-    const subj=(a.subject||'').substring(0,80);
-    html+='<div class="news-item">'
-      +'<div class="news-ico">📢</div>'
-      +'<div class="news-body">'
-      +'<div class="news-title"><span class="ntag '+tm.c+'">'+tm.l+'</span>'+subj+'</div>'
-      +'<div class="news-meta">'+(a.date||'').substring(0,10)+'</div>'
-      +'</div></div>';
+    var tm=tmap[a.type]||{c:'nt-n',l:'Ann'};
+    var subj=(a.subject||'').substring(0,80);
+    html+='<div class="news-item"><div class="news-ico">📢</div>'
+      +'<div class="news-body"><div class="news-title"><span class="ntag '+tm.c+'">'+tm.l+'</span>'+subj+'</div>'
+      +'<div class="news-meta">'+((a.date||'').substring(0,10))+'</div></div></div>';
   });
   deals.forEach(function(d){
-    const bs=(d.buy_sell||'').toUpperCase();
-    const flg=d.flag||'';
-    const ico=bs==='B'?'🏦':'⚠️';
-    const cls=flg.indexOf('INSTITUTION_BUY')>=0?'nt-o':
-              flg.indexOf('PROMOTER_SELL')>=0?'nt-x':'nt-b';
-    const client=(d.client||'').substring(0,35);
-    const qty=d.quantity?parseInt(d.quantity).toLocaleString('en-IN'):'';
-    html+='<div class="news-item">'
-      +'<div class="news-ico">'+ico+'</div>'
-      +'<div class="news-body">'
-      +'<div class="news-title"><span class="ntag '+cls+'">'+(bs==='B'?'Buy':'Sell')+'</span>'+client+'</div>'
-      +'<div class="news-meta">'+(qty?qty+' shares':'')+' '+(d.date||'')+'</div>'
-      +'</div></div>';
+    var bs=(d.buy_sell||'').toUpperCase();
+    var flg=d.flag||'';
+    var ico=bs==='B'?'🏦':'⚠️';
+    var cls=flg.indexOf('INSTITUTION_BUY')>=0?'nt-o':flg.indexOf('PROMOTER_SELL')>=0?'nt-x':'nt-b';
+    var client=(d.client||'').substring(0,35);
+    var qty=d.quantity?parseInt(d.quantity).toLocaleString('en-IN'):'';
+    html+='<div class="news-item"><div class="news-ico">'+ico+'</div>'
+      +'<div class="news-body"><div class="news-title"><span class="ntag '+cls+'">'+(bs==='B'?'Buy':'Sell')+'</span>'+client+'</div>'
+      +'<div class="news-meta">'+(qty?qty+' shares · ':'')+(d.date||'')+'</div></div></div>';
   });
   hls.forEach(function(h){
-    const sent=h.sentiment||'NEUTRAL';
-    const ico=sent==='POSITIVE'?'📈':sent==='NEGATIVE'?'📉':'📰';
-    const title=(h.title||'').substring(0,80);
-    const src2=h.news_source||'';
-    const dt=h.date||'';
-    html+='<div class="news-item">'
-      +'<div class="news-ico">'+ico+'</div>'
-      +'<div class="news-body">'
-      +'<div class="news-title">'+title+'</div>'
-      +'<div class="news-meta">'+src2+(src2&&dt?' · ':'')+dt+'</div>'
-      +'</div></div>';
+    var sent=h.sentiment||'NEUTRAL';
+    var ico=sent==='POSITIVE'?'📈':sent==='NEGATIVE'?'📉':'📰';
+    var title=(h.title||'').substring(0,80);
+    var src2=h.news_source||'';
+    var dt  =h.date||'';
+    html+='<div class="news-item"><div class="news-ico">'+ico+'</div>'
+      +'<div class="news-body"><div class="news-title">'+title+'</div>'
+      +'<div class="news-meta">'+src2+(src2&&dt?' · ':'')+dt+'</div></div></div>';
   });
   return html;
 }
 
-// ═══════════════════════════════════════════════════════════
-// WEEKLY DIGEST
-// ═══════════════════════════════════════════════════════════
-async function renderDigest(){
-  const el=document.getElementById('content');
-  el.innerHTML='<div class="loader"><div class="lring"></div><div>Loading digest…</div></div>';
-  let hist=[];
-  try{
-    const r=await fetch(GITHUB_RAW+'scan_history.json?t='+Date.now());
-    if(r.ok){
-      const d=await r.json();
-      hist=d.history||[];
-    }
-  }catch(e){ console.log('Digest fetch:',e); }
-
-  if(!hist.length){
-    el.innerHTML='<div class="empty fade">'
-      +'<div class="empty-ico">📅</div>'
-      +'<div class="empty-ttl">No digest yet</div>'
-      +'<div class="empty-dsc">History builds after a few trading days.</div>'
+// ── LIST VIEW ─────────────────────────────────────────────
+function renderList(){
+  var el=document.getElementById('content');
+  var sorted=stocks.slice().sort(function(a,b){ return (b.score||0)-(a.score||0); });
+  var h='<div style="margin-bottom:8px;font-size:12px;color:var(--muted);padding-top:4px;font-family:var(--sans)">'+sorted.length+' stocks · sorted by forward score</div>';
+  sorted.forEach(function(s,i){
+    var sit=s.situation||'watch', sm=SIT[sit]||{};
+    var rCls=(s.return_3m_pct||0)>=0?'rp':'rn';
+    var slp=s.close>0?((s.sl-s.close)/s.close*100).toFixed(1):0;
+    var t2p=s.close>0?((s.target2-s.close)/s.close*100).toFixed(1):0;
+    h+='<div class="card" data-sit="'+sit+'" data-sym="'+s.symbol+'" onclick="toggleCard(this)"'
+      +' style="animation:slideUp 0.3s ease '+(i*25)+'ms both;opacity:0">'
+      +'<div style="display:flex;align-items:center;gap:10px">'
+      +'<div style="font-family:var(--mono);font-size:12px;color:var(--muted);min-width:22px">'+(i+1)+'</div>'
+      +'<div style="flex:1">'
+      +'<div style="display:flex;align-items:center;gap:7px">'
+      +'<span class="sym" style="font-size:15px" onclick="openChart(event,\''+s.symbol+'\')">'+s.symbol+' <span class="sym-ico">📈</span></span>'
+      +'<span class="tag t-'+sit+'" style="font-size:9px">'+(sm.icon||'')+' '+sit+'</span>'
+      +'</div>'
+      +'<div style="font-size:11px;color:var(--muted);margin-top:3px;font-family:var(--sans)">₹'+fmt(s.close)+' · SL '+slp+'% · T2 +'+t2p+'%</div>'
+      +'</div>'
+      +'<div style="text-align:right">'
+      +'<div class="ret '+rCls+'" style="font-size:11px">'+((s.return_3m_pct||0)>=0?'+':'')+((s.return_3m_pct||0)).toFixed(1)+'%</div>'
+      +'<div style="font-family:var(--mono);font-size:14px;font-weight:700;margin-top:3px">'+Math.round(s.score||0)+'/10</div>'
+      +'</div></div>'
+      +'<div class="expand-wrap">'
+      +'<div class="card-tabs">'
+      +'<button class="ct-btn on" onclick="cardTab(event,\'dt-l-'+s.symbol+'\',\'nt-l-'+s.symbol+'\',this)">📺 Details</button>'
+      +'<button class="ct-btn"    onclick="cardTab(event,\'nt-l-'+s.symbol+'\',\'dt-l-'+s.symbol+'\',this)">📰 News</button>'
+      +'</div>'
+      +'<div class="ct-pane show" id="dt-l-'+s.symbol+'">'+buildExtra(s)+'</div>'
+      +'<div class="ct-pane"      id="nt-l-'+s.symbol+'"><div class="news-empty">📰 Loading news…</div></div>'
+      +'</div>'
+      +'<div class="hint">▾ Tap for details</div>'
       +'</div>';
+  });
+  el.innerHTML=h;
+}
+
+// ── WEEKLY DIGEST ─────────────────────────────────────────
+function renderDigest(){
+  var el=document.getElementById('content');
+  el.innerHTML='<div class="loader"><div class="lring"></div><div>Loading digest…</div></div>';
+  fetch(GITHUB_RAW+'scan_history.json?t='+Date.now())
+    .then(function(r){ if(r.ok) return r.json(); throw new Error('no history'); })
+    .then(function(d){ buildDigestView(d.history||[]); })
+    .catch(function(){ buildDigestView([]); });
+}
+
+function buildDigestView(hist){
+  var el=document.getElementById('content');
+  if(!hist.length){
+    el.innerHTML='<div class="empty fade"><div class="empty-ico">📅</div>'
+      +'<div class="empty-ttl">No digest yet</div>'
+      +'<div class="empty-dsc">History builds after a few trading days.</div></div>';
     return;
   }
-
   function fmtD(str){
-    try{
-      const d=new Date(str+'T00:00:00');
-      return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short'});
-    }catch(e){ return str; }
+    try{ var d=new Date(str+'T00:00:00'); return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short'}); }
+    catch(e){ return str; }
   }
-
-  // Build frequency map
+  var totalDays=hist.length;
   var freq={};
   hist.forEach(function(h){
     (h.symbols||[]).forEach(function(s){ freq[s]=(freq[s]||0)+1; });
   });
-  var totalDays=hist.length;
-
-  // Consistent stocks (5+ days)
-  var consistent=Object.entries(freq)
-    .filter(function(e){ return e[1]>=5; })
-    .sort(function(a,b){ return b[1]-a[1]; })
+  var consistent=Object.keys(freq)
+    .filter(function(s){ return freq[s]>=5; })
+    .sort(function(a,b){ return freq[b]-freq[a]; })
     .slice(0,5);
-
-  // Last week dates
   var today2=new Date();
   var dow=today2.getDay();
   var daysToMon=dow===0?6:dow-1;
-  var thisMonday=new Date(today2);
-  thisMonday.setDate(today2.getDate()-daysToMon);
-  var lastFri=new Date(thisMonday);
-  lastFri.setDate(thisMonday.getDate()-3);
-  var lastMon=new Date(lastFri);
-  lastMon.setDate(lastFri.getDate()-4);
+  var thisMon=new Date(today2); thisMon.setDate(today2.getDate()-daysToMon);
+  var lastFri=new Date(thisMon); lastFri.setDate(thisMon.getDate()-3);
+  var lastMon=new Date(lastFri); lastMon.setDate(lastFri.getDate()-4);
   function isoDate(d){ return d.toISOString().split('T')[0]; }
   var monStr=isoDate(lastMon), friStr=isoDate(lastFri);
-
   var weekHist=hist.filter(function(h){ return h.date>=monStr&&h.date<=friStr; });
-  var weekSyms=new Set(weekHist.flatMap(function(h){ return h.symbols||[]; }));
+  var weekSyms=[];
+  weekHist.forEach(function(h){ (h.symbols||[]).forEach(function(s){ if(weekSyms.indexOf(s)<0) weekSyms.push(s); }); });
   var weekPrime=[];
   weekHist.forEach(function(h){
     (h.stocks||[]).forEach(function(s){ if(s.situation==='prime') weekPrime.push(s); });
   });
-
-  var sitCounts={prime:0,hold:0,watch:0,book:0,avoid:0};
+  var sitC={prime:0,hold:0,watch:0,book:0,avoid:0};
   weekHist.forEach(function(h){
-    (h.stocks||[]).forEach(function(s){
-      if(s.situation in sitCounts) sitCounts[s.situation]++;
-    });
+    (h.stocks||[]).forEach(function(s){ if(s.situation in sitC) sitC[s.situation]++; });
   });
-
-  var best=null, worst=null;
+  var best=null,worst=null;
   weekHist.forEach(function(h){
     (h.stocks||[]).forEach(function(s){
       var r=s.return_3m_pct||0;
@@ -1105,81 +845,131 @@ async function renderDigest(){
       if(!worst||r<worst.r) worst={sym:s.symbol,r:r};
     });
   });
-
   var html='<div class="fade" style="padding:6px 0 24px">';
   html+='<div style="font-size:15px;font-weight:700;margin-bottom:4px;font-family:var(--sans)">📅 Weekly Digest</div>';
   html+='<div style="font-size:11px;color:var(--muted);margin-bottom:12px;font-family:var(--sans)">';
-  html+=weekHist.length?fmtD(monStr)+' — '+fmtD(friStr):'Last '+totalDays+' trading days';
+  html+=weekHist.length ? fmtD(monStr)+' — '+fmtD(friStr) : 'Last '+totalDays+' trading days';
   html+='</div>';
-
-  // Stats row
   html+='<div class="dstats">';
   html+='<div class="dstat"><div class="dstat-v">'+totalDays+'</div><div class="dstat-l">Days</div></div>';
   html+='<div class="dstat"><div class="dstat-v" style="color:var(--accent)">'+Object.keys(freq).length+'</div><div class="dstat-l">Stocks</div></div>';
-  var primeCount=weekPrime.length||Object.values(sitCounts).reduce(function(a,b){return a+b;},0);
-  html+='<div class="dstat"><div class="dstat-v" style="color:var(--prime)">'+sitCounts.prime+'</div><div class="dstat-l">Prime</div></div>';
-  html+='<div class="dstat"><div class="dstat-v" style="color:var(--hold)">'+sitCounts.hold+'</div><div class="dstat-l">Hold</div></div>';
+  html+='<div class="dstat"><div class="dstat-v" style="color:var(--prime)">'+sitC.prime+'</div><div class="dstat-l">Prime</div></div>';
+  html+='<div class="dstat"><div class="dstat-v" style="color:var(--hold)">'+sitC.hold+'</div><div class="dstat-l">Hold</div></div>';
   html+='</div>';
-
-  // Prime entries
   if(weekPrime.length>0){
     html+='<div class="dcard"><div class="dcard-title">🎯 Prime Entries This Week</div>';
-    var seen=new Set();
+    var seen={};
     weekPrime.forEach(function(s){
-      if(seen.has(s.symbol)) return; seen.add(s.symbol);
+      if(seen[s.symbol]) return; seen[s.symbol]=1;
       var r3=s.return_3m_pct||0;
-      html+='<div class="drow">'
-        +'<div><div class="dsym">'+s.symbol+'</div>'
-        +'<div class="dmeta">Score '+Math.round(s.score||0)+'/10</div></div>'
-        +'<div class="dret '+(r3>=0?'rp':'rn')+'">'+(r3>=0?'+':'')+r3.toFixed(1)+'%</div>'
-        +'</div>';
+      html+='<div class="drow"><div><div class="dsym">'+s.symbol+'</div><div class="dmeta">Score '+Math.round(s.score||0)+'/10</div></div>'
+        +'<div class="dret '+(r3>=0?'rp':'rn')+'">'+(r3>=0?'+':'')+r3.toFixed(1)+'%</div></div>';
     });
     html+='</div>';
   }
-
-  // Highlights
   if(best||worst){
     html+='<div class="dcard"><div class="dcard-title">🏆 Week Highlights</div>';
-    if(best) html+='<div class="drow">'
-      +'<div><div class="dsym">📈 '+best.sym+'</div><div class="dmeta">Best 3M performer</div></div>'
-      +'<div class="dret rp">+'+best.r.toFixed(1)+'%</div></div>';
-    if(worst&&worst.sym!==best.sym) html+='<div class="drow">'
-      +'<div><div class="dsym">📉 '+worst.sym+'</div><div class="dmeta">Weakest 3M</div></div>'
-      +'<div class="dret rn">'+worst.r.toFixed(1)+'%</div></div>';
+    if(best) html+='<div class="drow"><div><div class="dsym">📈 '+best.sym+'</div><div class="dmeta">Best 3M performer</div></div><div class="dret rp">+'+best.r.toFixed(1)+'%</div></div>';
+    if(worst&&worst.sym!==best.sym) html+='<div class="drow"><div><div class="dsym">📉 '+worst.sym+'</div><div class="dmeta">Weakest 3M</div></div><div class="dret rn">'+worst.r.toFixed(1)+'%</div></div>';
     html+='</div>';
   }
-
-  // Consistent stocks
   if(consistent.length>0){
     html+='<div class="dcard"><div class="dcard-title">🔥 Most Consistent (5d+)</div>';
-    consistent.forEach(function(e){
-      html+='<div class="drow">'
-        +'<div class="dsym">'+e[0]+'</div>'
-        +'<div style="font-family:var(--mono);font-size:12px;color:var(--hold);font-weight:700">'+e[1]+'d</div>'
-        +'</div>';
+    consistent.forEach(function(sym){
+      html+='<div class="drow"><div class="dsym">'+sym+'</div><div style="font-family:var(--mono);font-size:12px;color:var(--hold);font-weight:700">'+freq[sym]+'d</div></div>';
     });
     html+='</div>';
   }
-
-  // Situation breakdown
   var sitLbls={prime:'🎯 Prime',hold:'💰 Hold',watch:'👀 Watch',book:'⚠️ Book',avoid:'🚫 Avoid'};
-  var sitEntries=Object.entries(sitCounts).filter(function(e){ return e[1]>0; });
-  if(sitEntries.length>0&&weekHist.length>0){
+  var sitEntries=Object.keys(sitC).filter(function(k){ return sitC[k]>0&&weekHist.length>0; });
+  if(sitEntries.length>0){
     html+='<div class="dcard"><div class="dcard-title">📊 This Week by Situation</div>';
-    sitEntries.forEach(function(e){
-      html+='<div class="drow">'
-        +'<div>'+sitLbls[e[0]]+'</div>'
-        +'<div style="font-family:var(--mono);font-weight:700">'+e[1]+'</div>'
-        +'</div>';
+    sitEntries.forEach(function(k){
+      html+='<div class="drow"><div>'+sitLbls[k]+'</div><div style="font-family:var(--mono);font-weight:700">'+sitC[k]+'</div></div>';
     });
     html+='</div>';
   }
-
   html+='<div style="text-align:center;padding:8px 0;font-size:11px;color:var(--muted);font-family:var(--sans)">Based on last '+totalDays+' trading days</div>';
   html+='</div>';
   el.innerHTML=html;
 }
 
+// ── GUIDE ─────────────────────────────────────────────────
+function renderGuide(){
+  var el=document.getElementById('content');
+  var steps=[['1','6 AM','Scan runs automatically. Bot sends morning message.'],['2','Open Prime','Check Prime Entry stocks — ready to enter today.'],['3','TradingView','Confirm on TradingView Hull V16.1 — all 4 signals green.'],['4','Enter','Take the trade at market open.'],['5','T1 hit','Book 50%, move SL to entry price (free trade).'],['6','T2 hit','Book remaining 50%. Exit fully.']];
+  var sits=[
+    {sit:'prime',color:'var(--prime)',title:'Prime Entry',    desc:'Best forward setup. Fresh HMA cross ≤10d, room to run ≤5% above HMA55, accumulation volume. Tap card for TV checklist.'},
+    {sit:'hold', color:'var(--hold)', title:'Hold & Trail',   desc:'In top 25 for 5+ days. Already in a move. Trail SL up. Tap card for trail guidance.'},
+    {sit:'watch',color:'var(--watch)',title:'Watch Closely',  desc:'Good setup, one signal missing. Could turn Prime in 1-3 days. Tap card to see what to wait for.'},
+    {sit:'book', color:'var(--book)', title:'Book Profits',   desc:'Move maturing — cross 30d+ ago or price stretched. Tap card for profit booking guidance.'},
+    {sit:'avoid',color:'var(--avoid)',title:'Avoid Now',      desc:'Weak signal, distribution, or bearish trend. Tap card to see the exact reasons why.'}
+  ];
+  var scores=[
+    ['+2','HMA Freshness','Cross ≤10d=2pts · 11-20d=1pt · older=0'],
+    ['+2','Room to Run',  'Within 5% of HMA55=2pts · 5-10%=1pt · overextended=-1'],
+    ['+2','Volume Quality','4+ accum days + OBV rising=2pts · distribution=-1'],
+    ['+1','RSI Sweet Spot','RSI 40-65 = ideal entry zone'],
+    ['+1','MACD',          'MACD above signal line = 1pt'],
+    ['+1','Sector',        'Strong sector tailwind = +1, headwind = -1'],
+    ['+1','Risk/Reward',   'SL within 7% of entry = 1pt (RR ≥ 2x)']
+  ];
+  var html='<div class="fade" style="padding-top:6px">';
+  html+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:13px;padding:15px;margin-bottom:10px">';
+  html+='<div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:11px;font-family:var(--sans)">📋 Daily Workflow</div>';
+  steps.forEach(function(row){
+    html+='<div style="display:flex;gap:10px;margin-bottom:9px;font-family:var(--sans)">'
+      +'<div style="font-family:var(--mono);font-size:11px;color:var(--muted);min-width:18px;padding-top:2px">'+row[0]+'</div>'
+      +'<div><div style="font-size:13px;font-weight:700">'+row[1]+'</div>'
+      +'<div style="font-size:12px;color:var(--muted);margin-top:1px">'+row[2]+'</div></div></div>';
+  });
+  html+='</div>';
+  html+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:13px;padding:15px;margin-bottom:10px">';
+  html+='<div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:11px;font-family:var(--sans)">🎯 Situation Labels</div>';
+  sits.forEach(function(g){
+    html+='<div style="display:flex;gap:10px;margin-bottom:11px;padding:10px;background:var(--bg3);border-radius:9px;font-family:var(--sans)">'
+      +'<div style="font-size:20px;flex-shrink:0">'+SIT[g.sit].icon+'</div>'
+      +'<div><div style="font-size:13px;font-weight:700;color:'+g.color+';margin-bottom:3px">'+g.title+'</div>'
+      +'<div style="font-size:12px;color:var(--muted);line-height:1.5">'+g.desc+'</div></div></div>';
+  });
+  html+='</div>';
+  html+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:13px;padding:15px;margin-bottom:10px">';
+  html+='<div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:11px;font-family:var(--sans)">📊 Score (0–10)</div>';
+  scores.forEach(function(row){
+    html+='<div style="display:flex;gap:8px;margin-bottom:8px;font-family:var(--sans)">'
+      +'<div style="font-family:var(--mono);font-size:12px;color:var(--prime);min-width:28px">'+row[0]+'</div>'
+      +'<div><div style="font-size:12px;font-weight:700">'+row[1]+'</div>'
+      +'<div style="font-size:11px;color:var(--muted)">'+row[2]+'</div></div></div>';
+  });
+  html+='</div>';
+  html+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:13px;padding:15px;margin-bottom:10px">';
+  html+='<div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:11px;font-family:var(--sans)">📈 Charts</div>';
+  html+='<div style="font-size:12px;color:var(--muted);line-height:1.6;font-family:var(--sans)">Tap any stock <b style="color:var(--text)">symbol name</b> (with 📈) to open a live TradingView chart.<br><br>Switch timeframes: 1M · 3M · 6M · 1Y<br><br>Tap <b style="color:var(--accent)">Open TV ↗</b> to open full TradingView app with HMA Hull V16.1 indicators.</div>';
+  html+='</div>';
+  html+='<div style="text-align:center;padding:12px 0 6px;color:var(--muted);font-size:11px;font-family:var(--sans)">Scan updates daily at 6 AM IST · Confirm on TradingView Hull V16.1</div>';
+  html+='<div style="text-align:center;padding:8px 16px 24px;color:var(--muted);font-size:11px;font-family:var(--sans);border-top:1px solid var(--border);line-height:1.7;margin-top:4px">⚠️ For educational &amp; informational purposes only<br>Not SEBI registered · Not investment advice<br>Always do your own research before trading</div>';
+  html+='</div>';
+  el.innerHTML=html;
+}
+
+// ── UTILS ─────────────────────────────────────────────────
+function fmt(n){
+  var v=parseFloat(n)||0;
+  return v>=1000 ? v.toLocaleString('en-IN',{maximumFractionDigits:0}) : v.toFixed(v>=100?0:2);
+}
+
+function renderSample(){
+  renderAll({scan_date:new Date().toISOString().split('T')[0],stocks:[
+    {rank:1,symbol:'KAYNES', score:9,return_1m_pct:8.5, return_3m_pct:21.6,close:5840,sl:5600,target1:6080,target2:6320,situation:'prime',streak:3, cross_age:4, dist_pct:3.2, fresh_cross:true, delivery_pct:72.4,weekly_tier:1,weekly_label:'W✅',overextended:false,acc_days:4,dist_days:0,obv_dir:'rising', sector_bias:1},
+    {rank:2,symbol:'DIXON',  score:8,return_1m_pct:7.1, return_3m_pct:19.3,close:8420,sl:8060,target1:8780,target2:9140,situation:'prime',streak:1, cross_age:7, dist_pct:4.1, fresh_cross:true, delivery_pct:61.2,weekly_tier:1,weekly_label:'W✅',overextended:false,acc_days:3,dist_days:1,obv_dir:'rising', sector_bias:0},
+    {rank:3,symbol:'SYRMA',  score:7,return_1m_pct:4.2, return_3m_pct:11.4,close:796, sl:757, target1:835, target2:874, situation:'hold', streak:6, cross_age:12,dist_pct:5.8, fresh_cross:false,delivery_pct:55.1,weekly_tier:2,weekly_label:'W🟡',overextended:false,acc_days:3,dist_days:1,obv_dir:'flat',   sector_bias:1},
+    {rank:4,symbol:'ASTERDM',score:6,return_1m_pct:3.1, return_3m_pct:12.6,close:688, sl:655, target1:721, target2:754, situation:'watch',streak:2, cross_age:18,dist_pct:6.2, fresh_cross:false,delivery_pct:58.3,weekly_tier:2,weekly_label:'W🟡',overextended:false,acc_days:2,dist_days:1,obv_dir:'rising',sector_bias:1},
+    {rank:5,symbol:'EMCURE', score:5,return_1m_pct:2.1, return_3m_pct:13.3,close:1590,sl:1477,target1:1703,target2:1816,situation:'book', streak:8, cross_age:42,dist_pct:18.2,fresh_cross:false,delivery_pct:48.3,weekly_tier:1,weekly_label:'W✅',overextended:true, acc_days:1,dist_days:4,obv_dir:'falling',sector_bias:1},
+    {rank:6,symbol:'HONASA', score:3,return_1m_pct:-2.1,return_3m_pct:9.5, close:307, sl:280, target1:334, target2:361, situation:'avoid',streak:1, cross_age:-1,dist_pct:0,   fresh_cross:false,delivery_pct:38.5,weekly_tier:3,weekly_label:'W❌',overextended:false,acc_days:1,dist_days:3,obv_dir:'falling',sector_bias:0}
+  ]});
+}
+
+document.addEventListener('DOMContentLoaded', function(){ loadData(false); });
 </script>
 </body>
 </html>
