@@ -895,7 +895,10 @@ def startup_checks():
     # Scan data check
     r = load_scan_results()
     if r:
-        stocks = r['stocks']
+        stocks = r.get('stocks', [])
+        if not stocks:
+            print("[BOT] ⚠️ No stocks found in JSON — skipping display")
+            return False
         # Count situations
         sit_counts = {}
         for s in stocks:
