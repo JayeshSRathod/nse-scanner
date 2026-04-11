@@ -251,10 +251,10 @@ def run_pipeline() -> bool:
         send_failure_alert("DB Load", str(e), today)
         write_health(status="FAILED", scan_date=expected,
                      failed_step="STEP 2", reason=str(e))
-        push_health(expected)   # ✅ push failure health so bot sees it
+        push_health(expected)
         return False
 
-        # ── STEP 3: Scan ──────────────────────────────────────────
+    # ── STEP 3: Scan ──────────────────────────────────────────
     print("\n[STEP 3] Running momentum scan...")
     results_df = None
     try:
