@@ -214,10 +214,11 @@ def run_pipeline() -> bool:
     print("\n[CANARY] Testing JSON write path...")
     canary = Path("telegram_last_scan.json")
     try:
-        canary.write_text(json.dumps({
-            "scan_date": expected,
-            "canary":    True,
-        }), encoding="utf-8")
+        if not Path("telegram_last_scan.json").exists():
+            canary.write_text({
+                "scan_date": expected,
+                "stocks": []
+            })
         if json.loads(canary.read_text(encoding="utf-8"))["scan_date"] != expected:
             raise ValueError("Canary round-trip mismatch")
         print("[CANARY] ✅ JSON write/read OK")
@@ -259,6 +260,10 @@ def run_pipeline() -> bool:
     try:
         from nse_scanner import scan_stocks
         results_df = scan_stocks(scan_date=today)
+        # 🔽 ADD THIS BLOCK HERE
+        print("DEBUG SCAN:",
+              "is None =", results_df is None,
+              "| count =", 0 if results_df is None else len(results_df))
 
         if results_df is None or results_df.empty:
             print("[STEP 3] ⚠️  No stocks found — keeping previous data")
@@ -281,7 +286,28 @@ def run_pipeline() -> bool:
                      failed_step="STEP 3", reason=str(e))
         push_health(expected)   # ✅ push failure health so bot sees it
         return False
+json_path = Path("telegram_last_scan.json")
 
+if results_df is not None and not results_df.empty:
+    json_path.write_text(json.dumps({
+        "scan_date": expected,
+        "stocks": results_df.to_dict(orient="records")
+    }, indent=2), encoding="utf-8")
+
+    print("✅ JSON written with scan results")
+
+else:
+    print("⚠️ No scan results — restoring previous JSON")
+
+    # OPTIONAL: prevent overwrite damage
+    if json_path.exists():
+        try:
+            existing = json.loads(json_path.read_text())
+            if "stocks" not in existing:
+                print("⚠️ Existing JSON invalid — keeping as-is")
+        except:
+            print("⚠️ Existing JSON corrupted")
+          
     # ── STEP 4: Generate report + collect news ────────────────
     # (Was UNREACHABLE before due to premature return True in Step 3)
     print("\n[STEP 4] Generating report + collecting news...")
