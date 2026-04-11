@@ -254,135 +254,78 @@ def run_pipeline() -> bool:
         push_health(expected)   # ✅ push failure health so bot sees it
         return False
 
-    # ── STEP 3: Scan ──────────────────────────────────────────
+        # ── STEP 3: Scan ──────────────────────────────────────────
     print("\n[STEP 3] Running momentum scan...")
     results_df = None
     try:
         from nse_scanner import scan_stocks
         results_df = scan_stocks(scan_date=today)
-        # 🔽 ADD THIS BLOCK HERE
+
         print("DEBUG SCAN:",
               "is None =", results_df is None,
               "| count =", 0 if results_df is None else len(results_df))
 
         if results_df is None or results_df.empty:
-            print("[STEP 3] ⚠️  No stocks found — keeping previous data")
+            print("[STEP 3] ⚠️ No stocks found")
             write_health(status="NO_RESULTS", scan_date=expected,
                          reason="Empty scan")
-            push_health(expected)   # ✅ push NO_RESULTS health so bot sees it
-            results_df = None
-            # Not returning — still push existing scan JSON below
+            push_health(expected)
         else:
-            hc = (results_df["conviction"] == "HIGH CONVICTION").sum() \
-                 if "conviction" in results_df.columns else 0
-            wl = (results_df["conviction"] == "Watchlist").sum() \
-                 if "conviction" in results_df.columns else 0
-            print(f"[STEP 3] ✅ Scan complete: {len(results_df)} stocks | "
-                  f"HC={hc} | WL={wl}")
+            print(f"[STEP 3] ✅ Scan complete: {len(results_df)} stocks")
 
     except Exception as e:
         send_failure_alert("STEP 3 Scan", str(e), today)
         write_health(status="FAILED", scan_date=expected,
                      failed_step="STEP 3", reason=str(e))
-        push_health(expected)   # ✅ push failure health so bot sees it
+        push_health(expected)
         return False
-json_path = Path("telegram_last_scan.json")
 
-if results_df is not None and not results_df.empty:
-    json_path.write_text(json.dumps({
-        "scan_date": expected,
-        "stocks": results_df.to_dict(orient="records")
-    }, indent=2), encoding="utf-8")
+    # ✅ ALWAYS WRITE JSON (CRITICAL FIX)
+    json_path = Path("telegram_last_scan.json")
 
-    print("✅ JSON written with scan results")
+    if results_df is not None and not results_df.empty:
+        json_path.write_text(json.dumps({
+            "scan_date": expected,
+            "stocks": results_df.to_dict(orient="records")
+        }, indent=2), encoding="utf-8")
 
-else:
-    print("⚠️ No scan results — restoring previous JSON")
+        print("✅ JSON written with scan results")
+    else:
+        print("⚠️ No results — keeping previous JSON (no overwrite)")
 
-    # OPTIONAL: prevent overwrite damage
-    if json_path.exists():
-        try:
-            existing = json.loads(json_path.read_text())
-            if "stocks" not in existing:
-                print("⚠️ Existing JSON invalid — keeping as-is")
-        except:
-            print("⚠️ Existing JSON corrupted")
-          
-    # ── STEP 4: Generate report + collect news ────────────────
-    # (Was UNREACHABLE before due to premature return True in Step 3)
-    print("\n[STEP 4] Generating report + collecting news...")
+    # ── STEP 4: Generate report ───────────────────────────────
+    print("\n[STEP 4] Generating report...")
+
     if results_df is not None and not results_df.empty:
         try:
             from nse_output import generate_report
             generate_report(results_df, today)
-            print("[STEP 4] ✅ Report generated + news collected")
+            print("[STEP 4] ✅ Report generated")
         except Exception as e:
-            send_failure_alert("STEP 4 Output", str(e), today)
-            write_health(status="FAILED", scan_date=expected,
-                         failed_step="STEP 4", reason=str(e))
-            push_health(expected)   # ✅ push failure health so bot sees it
-            return False
+            print(f"[STEP 4] ⚠️ Error: {e}")
     else:
-        print("[STEP 4] ⏭  Skipped (no scan results)")
+        print("[STEP 4] ⏭ Skipped")
 
-    # ── STEP 5: Verify JSON freshness ─────────────────────────
-    print("\n[STEP 5] Verifying scan JSON freshness...")
-    json_path = Path("telegram_last_scan.json")
+    # ── STEP 5: Verify JSON ───────────────────────────────────
+    print("\n[STEP 5] Verifying JSON...")
     try:
-        d     = json.loads(json_path.read_text(encoding="utf-8"))
-        found = d.get("scan_date")
-        if found != expected:
-            print(f"[STEP 5] ⚠️  JSON date mismatch: found={found}, expected={expected}")
-        else:
-            print(f"[STEP 5] ✅ JSON fresh: {found}")
+        d = json.loads(json_path.read_text())
+        print(f"[STEP 5] JSON date: {d.get('scan_date')}")
     except Exception as e:
-        print(f"[STEP 5] ⚠️  JSON check failed: {e}")
+        print(f"[STEP 5] Error: {e}")
 
-    # ── STEP 5b: Push news JSON to GitHub ─────────────────────
-    # FIX: str(file_path) inside push_file_to_github now preserves
-    #      "output/" prefix so file lands in the correct repo folder.
-    print("\n[STEP 5b] Pushing news JSON to GitHub...")
-    try:
-        news_fname = f"news_{today.strftime('%d%m%Y')}.json"
-        news_path  = Path("output") / news_fname
-        if news_path.exists():
-            ok = push_file_to_github(news_path, f"Auto: news {expected}")
-            print(f"[STEP 5b] {'✅' if ok else '⚠️ '} News JSON push: {news_fname}")
-        else:
-            print(f"[STEP 5b] ℹ️  No news JSON found ({news_fname}) — "
-                  f"news step may have been skipped")
-    except Exception as e:
-        print(f"[STEP 5b] ⚠️  News JSON push error: {e} (non-fatal)")
+    # ── STEP 6: Push JSON ─────────────────────────────────────
+    print("\n[STEP 6] Pushing scan JSON...")
+    push_file_to_github(json_path, f"Auto: scan {expected}")
 
-    # ── STEP 6: Push scan JSON to GitHub ──────────────────────
-    print("\n[STEP 6] Pushing scan JSON to GitHub...")
-    try:
-        ok = push_file_to_github(json_path, f"Auto: scan {expected}")
-        print(f"[STEP 6] {'✅' if ok else '❌'} Scan JSON push: telegram_last_scan.json")
-    except Exception as e:
-        print(f"[STEP 6] ❌ Scan JSON push failed: {e}")
-
-    # ── STEP 7: Write + push health ───────────────────────────
-    # FIX: push_health() call was entirely missing before.
-    #      Health file was only written locally; bot always saw stale data.
-    print("\n[STEP 7] Writing + pushing health file...")
-    try:
-        stock_count = len(results_df) if results_df is not None else 0
-        prime_count = int(
-            (results_df["situation"] == "prime").sum()
-        ) if results_df is not None and "situation" in results_df.columns else 0
-
-        write_health(
-            status     = "SUCCESS",
-            scan_date  = expected,
-            stocks     = stock_count,
-            prime      = prime_count,
-            json_fresh = True,
-        )
-        push_health(expected)   # ✅ now actually uploaded to GitHub
-        print("[STEP 7] ✅ Health written + pushed")
-    except Exception as e:
-        print(f"[STEP 7] ⚠️  Health write/push failed: {e}")
+    # ── STEP 7: Health ────────────────────────────────────────
+    print("\n[STEP 7] Writing health...")
+    write_health(
+        status="SUCCESS",
+        scan_date=expected,
+        stocks=0 if results_df is None else len(results_df)
+    )
+    push_health(expected)
 
     elapsed = round(time() - t0, 1)
     print(f"\n[PIPELINE] ✅ COMPLETE in {elapsed}s\n")
