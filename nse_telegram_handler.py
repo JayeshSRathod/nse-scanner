@@ -343,6 +343,10 @@ def save_scan_results(results_df, scan_date):
             'dist_days':     int(row.get('dist_days', 0)),
             'obv_dir':       str(row.get('obv_dir', 'flat')),
             'sector_bias':   int(row.get('sector_bias', 0)),
+            # News Intelligence (v7)
+            'news_tone':     str(row.get('news_tone', 'NEUTRAL')),
+            'news_flags':    str(row.get('news_flags', '')),
+            'has_risk':      bool(row.get('has_risk', False)),
         })
 
     # Sort by forward score (situation priority first, then score)
@@ -612,6 +616,15 @@ def _stock_card(stock, rank=0, show_prob=True,
 
     # 3M return as reference
     msg += f"   3M {_fmt_return(r3)} {_i('(ref)')}\n"
+
+    # News intelligence line (v7)
+    nt = stock.get('news_tone', 'NEUTRAL')
+    nf = stock.get('news_flags', '')
+    hr = stock.get('has_risk', False)
+    if nt == 'POSITIVE':
+        msg += f"   🔥 {_i('News: Positive sentiment detected')}\n"
+    elif hr or nt == 'NEGATIVE':
+        msg += f"   🛑 {_b('RISK:')} {_i(nf or 'Negative news or regulatory alert')}\n"
 
     return msg
 

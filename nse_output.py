@@ -456,6 +456,9 @@ def _df_to_list(df) -> list:
             'obv_dir':       str(row.get('obv_dir','flat')),
             'sector_bias':   int(row.get('sector_bias',0)),
             'weekly_label':  str(row.get('weekly_label','')),
+            'news_tone':     str(row.get('news_tone', 'NEUTRAL')),
+            'news_flags':    str(row.get('news_flags', '')),
+            'has_risk':      bool(row.get('has_risk', False)),
         })
     return rows
 

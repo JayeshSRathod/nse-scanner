@@ -77,6 +77,7 @@ config.MAX_ANNVOL       = 1.5
 config.MAX_PE           = 80
 config.TOP_N_STOCKS     = 25
 config.MIN_MARKET_CAP   = 500
+config.MIN_TURNOVER     = 200
 config.WEIGHT_1M        = 0.20
 config.WEIGHT_2M        = 0.30
 config.WEIGHT_3M        = 0.50
@@ -299,6 +300,21 @@ def run_pipeline():
         write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"), failed_step="STEP 3", reason=str(e))
         return False
 
+    # ── STEP 3.5: News Collection & Enrichment ────────────────
+    try:
+        from nse_news_collector import get_news_for_stocks, enrich_scanner_results, save_news
+        # Collect news for top 15 stocks
+        shortlist = results_df.head(15)['symbol'].tolist()
+        print(f"\n[STEP 3.5] Collecting news for {len(shortlist)} stocks...")
+        news_data = get_news_for_stocks(shortlist, days=30)
+        save_news(news_data, today)
+        
+        # Merge news into results
+        results_df = enrich_scanner_results(results_df, news_data)
+        print(f"[STEP 3.5] ✅ Enrichment complete")
+    except Exception as e:
+        print(f"[STEP 3.5] ⚠️ News enrichment failed: {e}")
+
     hc = (results_df["conviction"] == "HIGH CONVICTION").sum() if "conviction" in results_df.columns else 0
     wl = (results_df["conviction"] == "Watchlist").sum() if "conviction" in results_df.columns else 0
 
@@ -319,9 +335,8 @@ def run_pipeline():
         send_failure_alert("JSON Freshness", f"Expected {expected}, found {d.get('scan_date')}", today)
         write_health(status="FAILED", scan_date=expected, failed_step="STEP 5", reason="STALE JSON")
         return False
-#REPLACE WITH:
  
-    # ── STEP 5b ── Push news JSON to GitHub ───────────────────────
+    # ── STEP 5.1 ── Push news JSON to GitHub ───────────────────────
     try:
         _news_fname = f"news_{today.strftime('%d%m%Y')}.json"
         _news_path  = Path("output") / _news_fname

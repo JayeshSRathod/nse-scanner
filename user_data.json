@@ -1,0 +1,23 @@
+{
+  "users": [
+    {
+      "id": "123456789",
+      "name": "TestUser",
+      "phone": null,
+      "join_date": "2026-03-28 14:15:07",
+      "last_active": "2026-03-28 14:19:21"
+    }
+  ],
+  "logs": [
+    {
+      "user_id": "123456789",
+      "action": "VIEW_ALL",
+      "timestamp": "2026-03-28 14:19:20"
+    },
+    {
+      "user_id": "123456789",
+      "action": "VIEW_ALL",
+      "timestamp": "2026-03-28 14:15:07"
+    }
+  ]
+}
