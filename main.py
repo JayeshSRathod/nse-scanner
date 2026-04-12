@@ -182,6 +182,9 @@ else:
     except Exception:
         fetch_file_from_github("scan_history.json")
 
+# ── Fetch news_latest.json for the News Tab ───────────────────
+fetch_file_from_github("output/news_latest.json")
+
 # ── Start bot ─────────────────────────────────────────────────
 print(f"\n[MAIN] Starting @nsescanner_live_bot (Phase 2)...")
 print(f"[MAIN] Views: Today / New / Exit / Strong\n")

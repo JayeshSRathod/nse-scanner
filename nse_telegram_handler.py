@@ -525,15 +525,30 @@ def fetch_news_for_symbol(symbol, max_items=3):
     Fetch news for a symbol. 
     Tries pre-collected JSON first (v7), fallbacks to live fetch.
     """
-    # Try pre-collected JSON from output folder
+    # Try pre-collected JSON from output folder (news_latest.json is preferred)
     try:
-        today_str = date.today().strftime('%d%m%Y')
-        news_file = os.path.join(_HERE, "output", f"news_{today_str}.json")
+        news_file = os.path.join(_HERE, "output", "news_latest.json")
+        if not os.path.exists(news_file):
+            today_str = date.today().strftime('%d%m%Y')
+            news_file = os.path.join(_HERE, "output", f"news_{today_str}.json")
+
         if os.path.exists(news_file):
             with open(news_file, 'r', encoding='utf-8') as f:
                 collected = json.load(f)
-                if symbol in collected and collected[symbol].get('articles'):
-                    return collected[symbol]['articles'][:max_items]
+                if symbol in collected:
+                    data = collected[symbol]
+                    combined = []
+                    
+                    # Source 1: NSE Announcements (High Priority)
+                    for ann in data.get('announcements', []):
+                        combined.append({'title': ann.get('subject', ''), 'date': ann.get('date', '')[:10]})
+                    
+                    # Source 3: Google News Headlines
+                    for hl in data.get('headlines', []):
+                        combined.append({'title': hl.get('title', ''), 'date': hl.get('date', '')})
+                    
+                    if combined:
+                        return combined[:max_items]
     except Exception:
         pass
 

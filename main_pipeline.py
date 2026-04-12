@@ -125,7 +125,8 @@ def push_file_to_github(file_path, commit_msg):
     content     = file_path.read_text(encoding="utf-8")
     content_b64 = base64.b64encode(content.encode()).decode()
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path.name}"
+    # Use the relative path string to preserve folder structure on GitHub (v7 fix)
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{str(file_path).replace('\\', '/')}"
     sha = None
     r = requests.get(url, headers=headers)
     if r.status_code == 200:
@@ -341,6 +342,11 @@ def run_pipeline():
         _news_fname = f"news_{today.strftime('%d%m%Y')}.json"
         _news_path  = Path("output") / _news_fname
         if _news_path.exists():
+            # Create latest news file for Bot and MiniApp consistency
+            latest_news = Path("output") / "news_latest.json"
+            latest_news.write_text(_news_path.read_text(encoding="utf-8"), encoding="utf-8")
+            push_file_to_github(latest_news, f"Auto: news latest {expected}")
+
             ok = push_file_to_github(_news_path, f"Auto: news {expected}")
             if ok:
                 print(f"[PIPELINE] ✅ News JSON pushed: {_news_fname}")
