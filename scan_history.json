@@ -8,6 +8,7 @@
         "TDPOWERSYS",
         "NITINSPIN",
         "ASTRAMICRO",
+        "ONGC",
         "SPLPETRO",
         "STYLEBAAZA",
         "STARHEALTH",
@@ -21,7 +22,6 @@
         "ISGEC",
         "SEAMECLTD",
         "SAIL",
-        "ONGC",
         "NATIONALUM",
         "LIQUID1",
         "MEDPLUS",
@@ -67,6 +67,18 @@
           "target2": 1211.93,
           "category": "rising",
           "situation": "prime"
+        },
+        {
+          "symbol": "ONGC",
+          "score": 7.0,
+          "return_3m_pct": 21.2,
+          "return_1m_pct": 6.6,
+          "close": 288.6,
+          "sl": 272.46,
+          "target1": 304.74,
+          "target2": 320.88,
+          "category": "rising",
+          "situation": "hold"
         },
         {
           "symbol": "SPLPETRO",
@@ -221,18 +233,6 @@
           "sl": 151.05,
           "target1": 175.65,
           "target2": 187.95,
-          "category": "rising",
-          "situation": "watch"
-        },
-        {
-          "symbol": "ONGC",
-          "score": 7.0,
-          "return_3m_pct": 21.2,
-          "return_1m_pct": 6.6,
-          "close": 288.6,
-          "sl": 272.46,
-          "target1": 304.74,
-          "target2": 320.88,
           "category": "rising",
           "situation": "watch"
         },
