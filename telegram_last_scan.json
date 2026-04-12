@@ -26,7 +26,10 @@
       "acc_days": 4,
       "dist_days": 1,
       "obv_dir": "rising",
-      "sector_bias": 1
+      "sector_bias": 1,
+      "news_tone": "NEUTRAL",
+      "news_flags": "ANN:DEAL \u2014 Disclosure under SEBI Takeover Regulations | ANN:ORDER_WIN \u2014 Trading Window",
+      "has_risk": true
     },
     {
       "rank": 2,
@@ -51,7 +54,10 @@
       "acc_days": 4,
       "dist_days": 0,
       "obv_dir": "rising",
-      "sector_bias": 0
+      "sector_bias": 0,
+      "news_tone": "NEUTRAL",
+      "news_flags": "ANN:ORDER_WIN \u2014 Trading Window",
+      "has_risk": false
     },
     {
       "rank": 3,
@@ -76,7 +82,10 @@
       "acc_days": 4,
       "dist_days": 1,
       "obv_dir": "rising",
-      "sector_bias": 0
+      "sector_bias": 0,
+      "news_tone": "NEUTRAL",
+      "news_flags": "ANN:DEAL \u2014 Disclosure under SEBI Takeover Regulations | ANN:ORDER_WIN \u2014 Trading Window",
+      "has_risk": true
     },
     {
       "rank": 4,
@@ -101,7 +110,10 @@
       "acc_days": 0,
       "dist_days": 2,
       "obv_dir": "rising",
-      "sector_bias": 0
+      "sector_bias": 0,
+      "news_tone": "NEUTRAL",
+      "news_flags": "",
+      "has_risk": false
     },
     {
       "rank": 5,
@@ -126,7 +138,10 @@
       "acc_days": 1,
       "dist_days": 0,
       "obv_dir": "rising",
-      "sector_bias": 0
+      "sector_bias": 0,
+      "news_tone": "NEUTRAL",
+      "news_flags": "ANN:ORDER_WIN \u2014 Trading Window | RISK:REGULATORY \u2014 Certificate under SEBI (Depositories and Participants) Regul",
+      "has_risk": true
     },
     {
       "rank": 6,
@@ -151,7 +166,10 @@
       "acc_days": 0,
       "dist_days": 1,
       "obv_dir": "rising",
-      "sector_bias": 0
+      "sector_bias": 0,
+      "news_tone": "NEUTRAL",
+      "news_flags": "ANN:ORDER_WIN \u2014 Action(s) taken or orders passed | RISK:REGULATORY \u2014 Certificate under SEBI (Depositories and Participants) Regul",
+      "has_risk": true
     },
     {
       "rank": 7,
@@ -176,7 +194,10 @@
       "acc_days": 0,
       "dist_days": 2,
       "obv_dir": "falling",
-      "sector_bias": 1
+      "sector_bias": 1,
+      "news_tone": "NEUTRAL",
+      "news_flags": "ANN:ORDER_WIN \u2014 Trading Window | RISK:REGULATORY \u2014 Certificate under SEBI (Depositories and Participants) Regul",
+      "has_risk": true
     },
     {
       "rank": 8,
@@ -201,7 +222,10 @@
       "acc_days": 1,
       "dist_days": 0,
       "obv_dir": "rising",
-      "sector_bias": 1
+      "sector_bias": 1,
+      "news_tone": "POSITIVE",
+      "news_flags": "ANN:DEAL \u2014 Rumour Verification - Regulation 30(11) | RISK:REGULATORY \u2014 Certificate under SEBI (Depositories and Participants) Regul",
+      "has_risk": true
     },
     {
       "rank": 9,
@@ -226,7 +250,10 @@
       "acc_days": 1,
       "dist_days": 0,
       "obv_dir": "rising",
-      "sector_bias": 0
+      "sector_bias": 0,
+      "news_tone": "NEUTRAL",
+      "news_flags": "ANN:DEAL \u2014 Disclosure under SEBI Takeover Regulations | ANN:ORDER_WIN \u2014 Trading Window",
+      "has_risk": true
     },
     {
       "rank": 10,
@@ -251,7 +278,10 @@
       "acc_days": 1,
       "dist_days": 1,
       "obv_dir": "rising",
-      "sector_bias": 0
+      "sector_bias": 0,
+      "news_tone": "NEUTRAL",
+      "news_flags": "ANN:ORDER_WIN \u2014 Trading Window",
+      "has_risk": false
     },
     {
       "rank": 11,
@@ -276,7 +306,10 @@
       "acc_days": 2,
       "dist_days": 0,
       "obv_dir": "rising",
-      "sector_bias": 0
+      "sector_bias": 0,
+      "news_tone": "NEUTRAL",
+      "news_flags": "ANN:ORDER_WIN \u2014 Trading Window | ANN:DEAL \u2014 Amalgamation/Merger",
+      "has_risk": false
     },
     {
       "rank": 12,
@@ -301,7 +334,10 @@
       "acc_days": 1,
       "dist_days": 0,
       "obv_dir": "rising",
-      "sector_bias": 0
+      "sector_bias": 0,
+      "news_tone": "NEUTRAL",
+      "news_flags": "ANN:RESULTS \u2014 Reply to Clarification- Financial results | ANN:ORDER_WIN \u2014 Bagging/Receiving of orders/contracts",
+      "has_risk": true
     },
     {
       "rank": 13,
@@ -326,7 +362,10 @@
       "acc_days": 0,
       "dist_days": 0,
       "obv_dir": "rising",
-      "sector_bias": 0
+      "sector_bias": 0,
+      "news_tone": "NEGATIVE",
+      "news_flags": "ANN:ORDER_WIN \u2014 Action(s) taken or orders passed | ANN:ORDER_WIN \u2014 Trading Window",
+      "has_risk": true
     },
     {
       "rank": 14,
@@ -351,7 +390,10 @@
       "acc_days": 2,
       "dist_days": 1,
       "obv_dir": "falling",
-      "sector_bias": 0
+      "sector_bias": 0,
+      "news_tone": "NEUTRAL",
+      "news_flags": "",
+      "has_risk": false
     },
     {
       "rank": 15,
@@ -376,7 +418,10 @@
       "acc_days": 2,
       "dist_days": 0,
       "obv_dir": "rising",
-      "sector_bias": 0
+      "sector_bias": 0,
+      "news_tone": "NEUTRAL",
+      "news_flags": "",
+      "has_risk": false
     },
     {
       "rank": 16,
@@ -401,7 +446,10 @@
       "acc_days": 2,
       "dist_days": 1,
       "obv_dir": "rising",
-      "sector_bias": 0
+      "sector_bias": 0,
+      "news_tone": "NEUTRAL",
+      "news_flags": "",
+      "has_risk": false
     },
     {
       "rank": 17,
@@ -426,7 +474,10 @@
       "acc_days": 2,
       "dist_days": 1,
       "obv_dir": "rising",
-      "sector_bias": 0
+      "sector_bias": 0,
+      "news_tone": "NEUTRAL",
+      "news_flags": "",
+      "has_risk": false
     },
     {
       "rank": 18,
@@ -451,7 +502,10 @@
       "acc_days": 0,
       "dist_days": 1,
       "obv_dir": "rising",
-      "sector_bias": 0
+      "sector_bias": 0,
+      "news_tone": "NEUTRAL",
+      "news_flags": "",
+      "has_risk": false
     },
     {
       "rank": 19,
@@ -476,7 +530,10 @@
       "acc_days": 4,
       "dist_days": 0,
       "obv_dir": "rising",
-      "sector_bias": 0
+      "sector_bias": 0,
+      "news_tone": "NEUTRAL",
+      "news_flags": "",
+      "has_risk": false
     },
     {
       "rank": 20,
@@ -501,7 +558,10 @@
       "acc_days": 1,
       "dist_days": 1,
       "obv_dir": "falling",
-      "sector_bias": 0
+      "sector_bias": 0,
+      "news_tone": "NEUTRAL",
+      "news_flags": "",
+      "has_risk": false
     },
     {
       "rank": 21,
@@ -526,7 +586,10 @@
       "acc_days": 0,
       "dist_days": 2,
       "obv_dir": "rising",
-      "sector_bias": 0
+      "sector_bias": 0,
+      "news_tone": "NEUTRAL",
+      "news_flags": "",
+      "has_risk": false
     },
     {
       "rank": 22,
@@ -551,7 +614,10 @@
       "acc_days": 4,
       "dist_days": 0,
       "obv_dir": "rising",
-      "sector_bias": 0
+      "sector_bias": 0,
+      "news_tone": "NEUTRAL",
+      "news_flags": "ANN:EXPANSION \u2014 Capacity addition | ANN:ORDER_WIN \u2014 Trading Window",
+      "has_risk": true
     },
     {
       "rank": 23,
@@ -576,7 +642,10 @@
       "acc_days": 1,
       "dist_days": 0,
       "obv_dir": "rising",
-      "sector_bias": 1
+      "sector_bias": 1,
+      "news_tone": "NEUTRAL",
+      "news_flags": "ANN:ORDER_WIN \u2014 Trading Window",
+      "has_risk": false
     },
     {
       "rank": 24,
@@ -601,7 +670,10 @@
       "acc_days": 3,
       "dist_days": 0,
       "obv_dir": "rising",
-      "sector_bias": 1
+      "sector_bias": 1,
+      "news_tone": "NEUTRAL",
+      "news_flags": "ANN:ORDER_WIN \u2014 Bagging/Receiving of orders/contracts | ANN:ORDER_WIN \u2014 Trading Window",
+      "has_risk": false
     },
     {
       "rank": 25,
@@ -626,7 +698,10 @@
       "acc_days": 4,
       "dist_days": 0,
       "obv_dir": "rising",
-      "sector_bias": 0
+      "sector_bias": 0,
+      "news_tone": "NEUTRAL",
+      "news_flags": "",
+      "has_risk": false
     }
   ]
 }
