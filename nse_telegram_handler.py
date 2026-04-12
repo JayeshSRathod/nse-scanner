@@ -521,11 +521,27 @@ def sort_stocks(stocks, mode='score'):
 # ═══════════════════════════════════════════════════════════════
 
 def fetch_news_for_symbol(symbol, max_items=3):
+    """
+    Fetch news for a symbol. 
+    Tries pre-collected JSON first (v7), fallbacks to live fetch.
+    """
+    # Try pre-collected JSON from output folder
+    try:
+        today_str = date.today().strftime('%d%m%Y')
+        news_file = os.path.join(_HERE, "output", f"news_{today_str}.json")
+        if os.path.exists(news_file):
+            with open(news_file, 'r', encoding='utf-8') as f:
+                collected = json.load(f)
+                if symbol in collected and collected[symbol].get('articles'):
+                    return collected[symbol]['articles'][:max_items]
+    except Exception:
+        pass
+
     try:
         import requests
         from xml.etree import ElementTree as ET
-        url = (f"https://news.google.com/rss/search"
-               f"?q={symbol}+NSE+stock+India&hl=en-IN&gl=IN&ceid=IN:en")
+        url = (f"https://news.google.com/rss/search?q={symbol}"
+               f"+stock+news+Moneycontrol+Economic+Times&hl=en-IN&gl=IN&ceid=IN:en")
         r = requests.get(url, timeout=6,
                          headers={'User-Agent': 'Mozilla/5.0'})
         if r.status_code != 200:

@@ -330,7 +330,7 @@ def fetch_google_news(symbol: str, days: int = 7) -> list:
     """
     results = []
 
-    query = f"{symbol} NSE India stock"
+    query = f"{symbol} stock news Moneycontrol Economic Times Business Standard"
     url   = f"https://news.google.com/rss/search?q={quote(query)}&hl=en-IN&gl=IN&ceid=IN:en"
 
     try:

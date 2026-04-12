@@ -351,21 +351,6 @@ def run_pipeline():
     except Exception as e:
         print(f"[PIPELINE] ⚠️  News JSON push error: {e} (non-fatal)")
  
-    # ── STEP 5b ── Push news JSON to GitHub ───────────────────────
-    try:
-        _news_fname = f"news_{today.strftime('%d%m%Y')}.json"
-        _news_path  = Path("output") / _news_fname
-        if _news_path.exists():
-            ok = push_file_to_github(_news_path, f"Auto: news {expected}")
-            if ok:
-                print(f"[PIPELINE] ✅ News JSON pushed: {_news_fname}")
-            else:
-                print(f"[PIPELINE] ⚠️  News JSON push failed (non-fatal)")
-        else:
-            print(f"[PIPELINE] ℹ️  No news JSON for today (news step may have been skipped)")
-    except Exception as e:
-        print(f"[PIPELINE] ⚠️  News JSON push error: {e} (non-fatal)")
- 
     # ── STEP 6 ────────────────────────────────────────────────────
     push_file_to_github(json_path, f"Auto: scan {expected}")
 
