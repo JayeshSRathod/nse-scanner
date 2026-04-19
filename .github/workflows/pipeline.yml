@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   # ✅ FIX
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   # ✅ fixes warning
 
 jobs:
   run-pipeline:
@@ -22,8 +22,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
       - name: Run NSE Pipeline
         env:
@@ -32,5 +31,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO: JayeshSRathod/nse-scanner
           GITHUB_BRANCH: main
-        run: |
-          python main_pipeline.py
+        run: python main_pipeline.py
