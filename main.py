@@ -10,9 +10,15 @@ import sys
 import json
 import types
 import base64
-import requests
 from datetime import date
 from pathlib import Path
+
+try:
+    import requests
+except ImportError:
+    print("[ERROR] Missing dependency: requests")
+    print("[HINT] Install dependencies: pip install -r requirements.txt")
+    sys.exit(1)
 
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 os.environ['PYTHONUTF8']       = '1'
@@ -25,6 +31,7 @@ except ImportError:
 
 TOKEN         = os.environ.get("TELEGRAM_TOKEN",   "").strip()
 CHAT_ID       = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID",    "").strip()
 GITHUB_TOKEN  = os.environ.get("GITHUB_TOKEN",     "").strip()
 GITHUB_REPO   = os.environ.get("GITHUB_REPO",
                 "JayeshSRathod/nse-scanner").strip()
@@ -37,9 +44,12 @@ if not TOKEN:
     print("[ERROR] TELEGRAM_TOKEN not set")
     sys.exit(1)
 if not CHAT_ID:
-    print("[ERROR] TELEGRAM_CHAT_ID not set")
-    sys.exit(1)
-
+    if ADMIN_CHAT_ID:
+        CHAT_ID = ADMIN_CHAT_ID
+        print("[MAIN] TELEGRAM_CHAT_ID missing, using ADMIN_CHAT_ID fallback")
+    else:
+        print("[MAIN] TELEGRAM_CHAT_ID not set (continuing in polling-only mode)")
+        
 # ── Build config ──────────────────────────────────────────────
 config                 = types.ModuleType("config")
 config.TELEGRAM_TOKEN  = TOKEN
