@@ -37,7 +37,14 @@ import sqlite3
 import requests
 from datetime import date, datetime, timedelta
 from pathlib import Path
-
+try:
+    import requests
+except ImportError:
+    print("[ERROR] Missing dependency: requests")
+    print("[HINT] Install dependencies: pip install -r requirements.txt")
+    sys.exit(1)
+from datetime import date, datetime, timedelta
+from pathlib import Path
 # ── Env setup ─────────────────────────────────────────────
 try:
     from dotenv import load_dotenv
@@ -105,15 +112,34 @@ def _load_history() -> list:
         return []
 
 
-def _load_users() -> dict:
+
     f = _HERE / "bot_users.json"
-    if not f.exists():
+    fallback = _HERE / "user_data.json"
+    if not f.exists() and not fallback.exists():
         return {}
     try:
-        return json.loads(f.read_text(encoding='utf-8'))
+        if f.exists():
+            return json.loads(f.read_text(encoding='utf-8'))
+        data = json.loads(fallback.read_text(encoding='utf-8'))
+        # legacy format: {"users":[{"id":...,"name":...}]}
+        users = {}
+        for u in data.get("users", []):
+            uid = str(u.get("id", "")).strip()
+            if not uid:
+                continue
+            users[uid] = {
+                "user_id": uid,
+                "username": "",
+                "full_name": u.get("name", "") or uid,
+                "first_seen": u.get("join_date", ""),
+                "last_seen": u.get("last_active", ""),
+                "total_visits": 0,
+                "daily_visits": {},
+                "is_blocked": False,
+            }
+        return users
     except Exception:
         return {}
-
 
 def _load_tracker() -> dict:
     f = _HERE / "signal_tracker.json"
