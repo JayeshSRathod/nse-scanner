@@ -126,7 +126,7 @@ def push_file_to_github(file_path, commit_msg):
     content_b64 = base64.b64encode(content.encode()).decode()
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
     # Use the relative path string to preserve folder structure on GitHub (v7 fix)
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{str(file_path).replace('\\', '/')}"
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path.as_posix()}"
     sha = None
     r = requests.get(url, headers=headers)
     if r.status_code == 200:
