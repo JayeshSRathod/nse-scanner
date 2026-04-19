@@ -13,10 +13,10 @@ on:
           - users
           - both
   schedule:
-    # 11:30 PM IST weekdays
-    - cron: "0 18 * * 1-5"
-    # 11:35 PM IST weekdays
-    - cron: "5 18 * * 1-5"
+    # 06:45 AM IST weekdays
+    - cron: "15 1 * * 1-5"
+    # 06:45 AM IST weekdays
+    - cron: "15 1 * * 1-5"
 
 permissions:
   contents: read
