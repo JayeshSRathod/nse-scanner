@@ -25,6 +25,11 @@ WHAT CHANGED FROM v5:
      - New /prime command documented
      - Situation descriptions added
 
+  v6.1: Portfolio commands added
+     - format_portfolio() — open positions + live P/L
+     - format_exits()     — closed trade history
+     - format_returns()   — win rate + performance stats
+
 All other functions (save/load, history, news,
 new/exit/strong/caution formats) unchanged.
 """
@@ -140,27 +145,10 @@ def _date_str(scan_date):
 
 
 # ═══════════════════════════════════════════════════════════════
-# SITUATION ENGINE — NEW
+# SITUATION ENGINE
 # ═══════════════════════════════════════════════════════════════
 
 def assign_situation(stock: dict, streak: int = 0) -> str:
-    """
-    Assign a situation label to a stock based on forward signals.
-
-    Priority order:
-      1. AVOID   — score ≤ 3 OR distribution volume OR bearish
-      2. BOOK    — cross age > 30d OR >15% stretched
-      3. HOLD    — streak ≥ 5 days AND score still OK
-      4. PRIME   — score ≥ 7 + fresh cross + not overextended
-      5. WATCH   — everything else that passes
-
-    Args:
-        stock:  stock dict from scan results
-        streak: consecutive days in scanner list
-
-    Returns:
-        situation string: prime/watch/hold/book/avoid
-    """
     score        = float(stock.get('score', 0))
     cross_age    = int(stock.get('cross_age', 999))
     dist_pct     = float(stock.get('dist_pct', 0))
@@ -171,15 +159,13 @@ def assign_situation(stock: dict, streak: int = 0) -> str:
     obv_dir      = str(stock.get('obv_dir', 'flat'))
     r3m          = float(stock.get('return_3m_pct', 0))
 
-    # ── 1. AVOID — weak, bearish or distribution ──────────────
     if score <= 3:
         return SITUATION_AVOID
     if dist_days >= 4 and obv_dir == 'falling':
         return SITUATION_AVOID
-    if cross_age == -1:   # bearish — HMA20 below HMA55
+    if cross_age == -1:
         return SITUATION_AVOID
 
-    # ── 2. BOOK PROFITS — move is mature or stretched ─────────
     if overextended and cross_age > 20:
         return SITUATION_BOOK
     if cross_age > 30 and dist_pct > 10:
@@ -187,28 +173,20 @@ def assign_situation(stock: dict, streak: int = 0) -> str:
     if r3m > 40 and score < 6:
         return SITUATION_BOOK
 
-    # ── 3. HOLD AND TRAIL — sustained momentum ─────────────────
     if streak >= 5 and score >= 5:
         return SITUATION_HOLD
 
-    # ── 4. PRIME ENTRY — best forward setup ───────────────────
     if (score >= 7 and
             not overextended and
             cross_age <= 20 and
             acc_days >= 3):
         return SITUATION_PRIME
 
-    # ── 5. WATCH CLOSELY — good but not perfect ───────────────
     return SITUATION_WATCH
 
 
 def get_situation_signal_line(stock: dict) -> str:
-    """
-    Returns a compact signal summary showing WHY the situation was assigned.
-    Example: "🟢 Cross 4d | 3.2% room | Accum vol | Sector ✅"
-    """
     parts = []
-
     cross_age    = int(stock.get('cross_age', 999))
     dist_pct     = float(stock.get('dist_pct', 0))
     fresh_cross  = bool(stock.get('fresh_cross', False))
@@ -218,7 +196,6 @@ def get_situation_signal_line(stock: dict) -> str:
     obv_dir      = str(stock.get('obv_dir', 'flat'))
     sector_bias  = int(stock.get('sector_bias', 0))
 
-    # HMA cross age
     if cross_age == -1:
         parts.append("Bearish HMA")
     elif fresh_cross:
@@ -230,7 +207,6 @@ def get_situation_signal_line(stock: dict) -> str:
     else:
         parts.append("No cross")
 
-    # Distance from mean
     if overextended:
         parts.append(f"⚠️ {dist_pct:.0f}% stretched")
     elif dist_pct <= 5.0:
@@ -238,7 +214,6 @@ def get_situation_signal_line(stock: dict) -> str:
     else:
         parts.append(f"{dist_pct:.1f}% above")
 
-    # Volume quality
     if acc_days >= 4 and obv_dir == 'rising':
         parts.append("🟢 Accum vol")
     elif dist_days >= 4 or obv_dir == 'falling':
@@ -246,7 +221,6 @@ def get_situation_signal_line(stock: dict) -> str:
     else:
         parts.append("Vol OK")
 
-    # Sector
     if sector_bias == 1:
         parts.append("Sector ✅")
     elif sector_bias == -1:
@@ -256,11 +230,10 @@ def get_situation_signal_line(stock: dict) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════
-# PROBABILITY HELPER — Updated with situation awareness
+# PROBABILITY HELPER
 # ═══════════════════════════════════════════════════════════════
 
 def _get_prob(stock: dict) -> dict:
-    """Get T1/T2 probability for a stock using situation-aware model."""
     sym = stock.get('symbol', '')
     sig = get_signal(sym) if _TRACKER_OK else None
 
@@ -301,7 +274,6 @@ def _get_prob(stock: dict) -> dict:
 # ═══════════════════════════════════════════════════════════════
 
 def save_scan_results(results_df, scan_date):
-    """Save scan results to JSON. Sorted by forward score."""
     if results_df.empty:
         print("No results to save")
         return
@@ -313,8 +285,7 @@ def save_scan_results(results_df, scan_date):
         t1    = round(float(row.get('target1', entry + (entry - sl))), 2)
         t2    = round(float(row.get('target2', entry + 2 * (entry - sl))), 2)
 
-        # Determine situation
-        streak = int(row.get('streak', 0))
+        streak   = int(row.get('streak', 0))
         row_dict = row.to_dict() if hasattr(row, 'to_dict') else dict(row)
         situation = row_dict.get('situation', '') or assign_situation(row_dict, streak)
 
@@ -334,7 +305,6 @@ def save_scan_results(results_df, scan_date):
             'category':      str(row.get('category', 'rising')),
             'streak':        int(row.get('streak', 0)),
             'situation':     situation,
-            # Forward score signals (for display)
             'cross_age':     int(row.get('cross_age', 999)),
             'dist_pct':      round(float(row.get('dist_pct', 0)), 1),
             'fresh_cross':   bool(row.get('fresh_cross', False)),
@@ -343,13 +313,11 @@ def save_scan_results(results_df, scan_date):
             'dist_days':     int(row.get('dist_days', 0)),
             'obv_dir':       str(row.get('obv_dir', 'flat')),
             'sector_bias':   int(row.get('sector_bias', 0)),
-            # News Intelligence (v7)
             'news_tone':     str(row.get('news_tone', 'NEUTRAL')),
             'news_flags':    str(row.get('news_flags', '')),
             'has_risk':      bool(row.get('has_risk', False)),
         })
 
-    # Sort by forward score (situation priority first, then score)
     sit_priority = {SITUATION_PRIME: 0, SITUATION_HOLD: 1,
                     SITUATION_WATCH: 2, SITUATION_BOOK: 3, SITUATION_AVOID: 4}
     stocks_list.sort(
@@ -452,7 +420,6 @@ def get_strong_stocks(history, min_days=5):
 
 
 def get_caution_stocks(stocks):
-    """Returns stocks that need extra caution."""
     caution = []
     for s in stocks:
         score    = float(s.get('score', 10))
@@ -479,14 +446,10 @@ def get_stock_streak(symbol, history):
 
 
 # ═══════════════════════════════════════════════════════════════
-# SORTING — Updated default to forward score
+# SORTING
 # ═══════════════════════════════════════════════════════════════
 
 def sort_stocks(stocks, mode='score'):
-    """
-    Sort stocks by mode.
-    Default changed from '3m' to 'score' (forward score).
-    """
     sit_priority = {
         SITUATION_PRIME: 0, SITUATION_HOLD: 1,
         SITUATION_WATCH: 2, SITUATION_BOOK: 3, SITUATION_AVOID: 4,
@@ -521,11 +484,6 @@ def sort_stocks(stocks, mode='score'):
 # ═══════════════════════════════════════════════════════════════
 
 def fetch_news_for_symbol(symbol, max_items=3):
-    """
-    Fetch news for a symbol. 
-    Tries pre-collected JSON first (v7), fallbacks to live fetch.
-    """
-    # Try pre-collected JSON from output folder (news_latest.json is preferred)
     try:
         news_file = os.path.join(_HERE, "output", "news_latest.json")
         if not os.path.exists(news_file):
@@ -538,15 +496,10 @@ def fetch_news_for_symbol(symbol, max_items=3):
                 if symbol in collected:
                     data = collected[symbol]
                     combined = []
-                    
-                    # Source 1: NSE Announcements (High Priority)
                     for ann in data.get('announcements', []):
                         combined.append({'title': ann.get('subject', ''), 'date': ann.get('date', '')[:10]})
-                    
-                    # Source 3: Google News Headlines
                     for hl in data.get('headlines', []):
                         combined.append({'title': hl.get('title', ''), 'date': hl.get('date', '')})
-                    
                     if combined:
                         return combined[:max_items]
     except Exception:
@@ -587,19 +540,11 @@ def format_news_block(news):
 
 
 # ═══════════════════════════════════════════════════════════════
-# STOCK CARD — Updated with situation + signal line
+# STOCK CARD
 # ═══════════════════════════════════════════════════════════════
 
 def _stock_card(stock, rank=0, show_prob=True,
                 show_frozen=False, show_signal=True):
-    """
-    Render one stock card with situation context.
-
-    New fields shown:
-      - Situation label + action
-      - Signal line (cross age, room, volume)
-      - 3M return labelled as (ref)
-    """
     e   = float(stock.get('close', 0))
     sl  = float(stock.get('sl', e * 0.93))
     t1  = float(stock.get('target1', e + (e - sl)))
@@ -611,14 +556,12 @@ def _stock_card(stock, rank=0, show_prob=True,
 
     sm       = SITUATION_META.get(sit, SITUATION_META.get('watch', {}))
     sit_icon = sm.get('icon', '•')
-    sit_lbl  = sm.get('label', sit.title())
 
     prefix   = f"{_b(str(rank) + '.')} " if rank else ""
     stag     = f"  🔥{st}d" if st >= 5 else ""
 
     msg = f"{prefix}{_code(stock['symbol'])}  {sc}/10{stag}  {sit_icon}\n"
 
-    # Frozen P&L for tracker
     if show_frozen and _TRACKER_OK:
         sig = get_signal(stock['symbol'])
         if sig and sig.get('entry_price', 0) > 0:
@@ -627,28 +570,23 @@ def _stock_card(stock, rank=0, show_prob=True,
             msg += f"   Entry(frozen {fd}) {_fmt_price(fe)} | Now {_fmt_price(e)}\n"
             msg += f"   P/L {_fmt_pl(fe, e)}\n"
 
-    # Trade levels
     msg += f"   Entry {_fmt_price(e)} | SL {_fmt_price(sl)}\n"
     msg += f"   T1 {_fmt_price(t1)} | T2 {_fmt_price(t2)}"
 
-    # T1/T2 probabilities
     if show_prob:
         p = _get_prob(stock)
         if p["t1"] > 0:
             msg += f"  ·  T1 {p['t1']}% T2 {p['t2']}%"
     msg += "\n"
 
-    # Signal breakdown line
     if show_signal and any(k in stock for k in
                            ['cross_age', 'dist_pct', 'acc_days']):
         sig_line = get_situation_signal_line(stock)
         if sig_line:
             msg += f"   {_i(sig_line)}\n"
 
-    # 3M return as reference
     msg += f"   3M {_fmt_return(r3)} {_i('(ref)')}\n"
 
-    # News intelligence line (v7)
     nt = stock.get('news_tone', 'NEUTRAL')
     nf = stock.get('news_flags', '')
     hr = stock.get('has_risk', False)
@@ -661,16 +599,10 @@ def _stock_card(stock, rank=0, show_prob=True,
 
 
 # ═══════════════════════════════════════════════════════════════
-# FORMAT: WELCOME — Updated with situation summary
+# FORMAT: WELCOME
 # ═══════════════════════════════════════════════════════════════
 
 def format_welcome(user_name=None):
-    """
-    /start and Hi/Hello response.
-    Shows Option C: Prime full cards + compact rest.
-    Delegates to nse_output.format_welcome_scan().
-    Returns message string only (keyboard handled by polling.py).
-    """
     name = user_name or ""
     try:
         from nse_output import format_welcome_scan
@@ -679,7 +611,6 @@ def format_welcome(user_name=None):
     except Exception:
         pass
 
-    # Fallback if nse_output not available
     greeting = f"👋 {_b('Hello' + (' ' + _h(name) if name else '') + '!')}\n\n"
     res = load_scan_results()
     if res and res.get('stocks'):
@@ -713,25 +644,18 @@ def format_welcome(user_name=None):
 
 
 # ═══════════════════════════════════════════════════════════════
-# FORMAT: TODAY SCAN — Grouped by situation
+# FORMAT: TODAY SCAN
 # ═══════════════════════════════════════════════════════════════
 
 def format_today_scan(stocks, scan_date=None):
-    """
-    Main daily scan grouped by situation.
-    PRIME ENTRY stocks shown first with full detail.
-    Others shown as compact list.
-    """
     ds   = _date_str(scan_date)
 
-    # Group by situation
     sit_groups = {}
     for s in stocks:
         streak = int(s.get('streak', 0))
         sit    = s.get('situation') or assign_situation(s, streak)
         sit_groups.setdefault(sit, []).append({**s, 'situation': sit})
 
-    # Summary line
     parts = []
     for sit in SITUATION_ORDER:
         if sit in sit_groups:
@@ -756,7 +680,6 @@ def format_today_scan(stocks, scan_date=None):
                 f"({len(group)})\n")
         msg += f"   {_i(sm.get('action', ''))}\n\n"
 
-        # PRIME and HOLD get full cards
         if sit in (SITUATION_PRIME, SITUATION_HOLD):
             for s in group:
                 msg += _stock_card(s, rank=rank, show_prob=True,
@@ -765,7 +688,6 @@ def format_today_scan(stocks, scan_date=None):
                 msg += "\n"
                 rank += 1
         else:
-            # WATCH / BOOK / AVOID — compact list
             for s in group:
                 sc    = int(round(float(s.get('score', 0))))
                 e     = float(s.get('close', 0))
@@ -778,7 +700,6 @@ def format_today_scan(stocks, scan_date=None):
                 rank += 1
             msg += "\n"
 
-    # Probability summary
     if _TRACKER_OK:
         ts = get_tracker_summary()
         if ts.get('avg_t1_prob', 0) > 0:
@@ -794,14 +715,10 @@ def format_today_scan(stocks, scan_date=None):
 
 
 # ═══════════════════════════════════════════════════════════════
-# FORMAT: PRIME — New dedicated view
+# FORMAT: PRIME
 # ═══════════════════════════════════════════════════════════════
 
 def format_prime_stocks(stocks, scan_date=None):
-    """
-    PRIME ENTRY view — shows only stocks ready to enter today.
-    Full detail cards with all signals and probabilities.
-    """
     ds = _date_str(scan_date)
 
     prime = []
@@ -831,8 +748,6 @@ def format_prime_stocks(stocks, scan_date=None):
     for i, s in enumerate(prime, 1):
         msg += _stock_card(s, rank=i, show_prob=True,
                            show_frozen=False, show_signal=True)
-
-        # Add TV confirmation checklist
         msg += f"   {_b('TV Check:')}\n"
         msg += f"   Regime TREND ✓ · ADX ≥20 ✓ · W.Trend Bull ✓\n\n"
 
@@ -846,7 +761,7 @@ def format_prime_stocks(stocks, scan_date=None):
 
 
 # ═══════════════════════════════════════════════════════════════
-# FORMAT: STOCK LIST (paginated) — Updated sort default
+# FORMAT: STOCK LIST (paginated)
 # ═══════════════════════════════════════════════════════════════
 
 def format_stock_list(stocks, start_idx=0, count=5,
@@ -974,7 +889,7 @@ def format_exit_stocks(exit_stocks, scan_date=None):
 
 
 # ═══════════════════════════════════════════════════════════════
-# FORMAT: CAUTION — Updated with situation-aware flags
+# FORMAT: CAUTION
 # ═══════════════════════════════════════════════════════════════
 
 def format_caution_stocks(stocks, scan_date=None):
@@ -992,16 +907,15 @@ def format_caution_stocks(stocks, scan_date=None):
     msg += SEP_THIN + "\n\n"
 
     for i, s in enumerate(caution, 1):
-        sc       = int(round(float(s.get('score', 0))))
-        dl       = float(s.get('delivery_pct', 0))
-        e        = float(s.get('close', 0))
-        r3       = float(s.get('return_3m_pct', 0))
-        sit      = s.get('situation', '')
-        dist_pct = float(s.get('dist_pct', 0))
+        sc        = int(round(float(s.get('score', 0))))
+        dl        = float(s.get('delivery_pct', 0))
+        e         = float(s.get('close', 0))
+        r3        = float(s.get('return_3m_pct', 0))
+        sit       = s.get('situation', '')
+        dist_pct  = float(s.get('dist_pct', 0))
         cross_age = int(s.get('cross_age', 0))
-        p        = _get_prob(s)
+        p         = _get_prob(s)
 
-        # Build reason list
         reasons = []
         if sit == SITUATION_AVOID:
             reasons.append("Avoid — weak signal or distribution")
@@ -1110,7 +1024,6 @@ def format_strong_stocks(strong_stocks, scan_date=None):
 def format_summary(stocks, scan_date=None, history=None):
     ds = _date_str(scan_date)
 
-    # Count by situation
     sit_counts = {}
     for s in stocks:
         sit = s.get('situation', SITUATION_WATCH)
@@ -1169,7 +1082,77 @@ def format_summary(stocks, scan_date=None, history=None):
 
 
 # ═══════════════════════════════════════════════════════════════
-# FORMAT: HELP — Updated with /prime and situation explanation
+# FORMAT: PORTFOLIO COMMANDS (v6.1 — new)
+# ═══════════════════════════════════════════════════════════════
+
+def format_portfolio():
+    """For /portfolio command — open positions with live P/L."""
+    try:
+        from nse_portfolio import format_portfolio_for_bot
+        return format_portfolio_for_bot()
+    except ImportError:
+        return _i("nse_portfolio.py not found. Deploy it first.")
+    except Exception as e:
+        return _i(f"Portfolio error: {e}")
+
+
+def format_exits():
+    """For /exits command — closed trade history."""
+    try:
+        from nse_portfolio import format_exits_for_bot
+        return format_exits_for_bot(last_n=15)
+    except ImportError:
+        return _i("nse_portfolio.py not found. Deploy it first.")
+    except Exception as e:
+        return _i(f"Exits error: {e}")
+
+
+def format_returns():
+    """For /returns command — portfolio summary stats."""
+    try:
+        from nse_portfolio import get_portfolio_summary, get_open_positions
+        s   = get_portfolio_summary()
+        pos = get_open_positions()
+
+        msg  = f"📈 {_b('Portfolio Returns')}\n"
+        msg += f"{SEP_THIN}\n"
+        msg += f"Open positions : {s['open_count']}\n"
+        msg += f"Closed trades  : {s['closed_count']}\n"
+        msg += f"Win rate       : {_b(str(s['win_rate']) + '%')}\n"
+        msg += f"Last run       : {s['last_run'][:10] if s['last_run'] else 'Never'}\n\n"
+
+        tiers = s.get('tiers', {})
+        if any(tiers.values()):
+            msg += f"{_b('Tiers')}\n"
+            msg += f"  🏆 Conviction : {tiers.get('Conviction', 0)}\n"
+            msg += f"  📈 Compounder : {tiers.get('Compounder', 0)}\n"
+            msg += f"  🌱 Building   : {tiers.get('Building', 0)}\n\n"
+
+        if pos:
+            total_pl = 0
+            winners  = 0
+            for p in pos.values():
+                entry   = float(p.get('entry_price', 0))
+                current = float(p.get('current_price', entry))
+                if entry > 0:
+                    pl = (current - entry) / entry * 100
+                    total_pl += pl
+                    if pl >= 0:
+                        winners += 1
+            avg_pl  = total_pl / len(pos)
+            pl_sign = '+' if avg_pl >= 0 else ''
+            msg += f"{_b('Open P/L Avg')}: {pl_sign}{avg_pl:.1f}%\n"
+            msg += f"Winners: {winners} / {len(pos)}\n"
+
+        return msg
+    except ImportError:
+        return _i("nse_portfolio.py not found. Deploy it first.")
+    except Exception as e:
+        return _i(f"Returns error: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════
+# FORMAT: HELP
 # ═══════════════════════════════════════════════════════════════
 
 def format_help():
@@ -1184,6 +1167,10 @@ def format_help():
         f"💰 /strong — 5+ day streak (hold & trail)\n"
         f"📅 /digest — Last week performance\n"
         f"📖 /guide — How to read the scanner\n\n"
+        f"{_b('Portfolio:')}\n"
+        f"💼 /portfolio — Open positions + live P/L\n"
+        f"📊 /returns — Win rate + performance stats\n"
+        f"📉 /exits — Closed trade history\n\n"
         f"{_b('Situations explained:')}\n"
         f"🎯 Prime — Fresh cross, room to run, accum vol\n"
         f"💰 Hold — In move 5+ days, trail your SL\n"

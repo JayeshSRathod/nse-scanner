@@ -1,39 +1,31 @@
 """
 nse_telegram_polling.py — Telegram Polling Bot (Phase 2.3 — Situation Engine)
 ==============================================================================
-WHAT CHANGED FROM Phase 2.2:
+v2.3.1: Portfolio commands added
+  - /portfolio — open positions + live P/L
+  - /exits     — closed trade history
+  - /returns   — win rate + performance stats
+  - 💼 Portfolio button in keyboard Row 2
+  - NLP: "portfolio", "holdings", "pnl", "returns" etc.
 
-  1. /prime COMMAND (NEW)
-     - Shows only PRIME ENTRY stocks
-     - Full detail cards with TV confirmation checklist
-     - Most important new command
+─────────────────────────────────────────────────────────────────
+CREDENTIALS — WHERE TO PUT THEM
+─────────────────────────────────────────────────────────────────
+This local bot reads credentials from config.py in the same folder.
 
-  2. /today UPDATED
-     - Now groups by situation (PRIME/HOLD/WATCH/BOOK/AVOID)
-     - Not by old categories (rising/uptrend/peak etc.)
+In your LOCAL config.py add/update these two lines:
 
-  3. /caution UPDATED
-     - Now shows AVOID + BOOK PROFITS situations
-     - Renamed display: "Caution & Avoid"
+    TELEGRAM_TOKEN  = "YOUR_NSE_SCANNER_BOT_TOKEN_HERE"
+    TELEGRAM_CHATID = "YOUR_CHAT_ID_HERE"
 
-  4. /strong UPDATED
-     - Now shows HOLD & TRAIL situation
-     - Shows frozen P/L with trail guidance
+The nse_scanner_bot token is DIFFERENT from nse_scanner_live token.
+Each bot has its own token from @BotFather.
+Both bots can send to the same TELEGRAM_CHATID (your personal chat).
 
-  5. KEYBOARD UPDATED
-     - Row 1: Prime | Today | New | Exit
-     - Row 2: Caution | Strong | Digest | Guide | Help
-     - /prime button added, /buckets removed
-
-  6. NLP UPDATED
-     - "prime", "enter", "best", "top pick" → /prime
-     - "hold", "trail" → /strong (hold & trail)
-
-  7. SORT DEFAULT
-     - Changed from '3m' to 'score' (forward score)
-
-All other logic (polling loop, admin, tracker, digest,
-user tracking, health scheduler) unchanged.
+If you use a .env file instead, add:
+    TELEGRAM_TOKEN=YOUR_NSE_SCANNER_BOT_TOKEN_HERE
+    TELEGRAM_CHAT_ID=YOUR_CHAT_ID_HERE
+─────────────────────────────────────────────────────────────────
 """
 
 import time, sys, json, os, threading, logging, sqlite3
@@ -59,6 +51,8 @@ try:
         format_today_scan, format_new_stocks, format_exit_stocks,
         format_caution_stocks, format_strong_stocks, format_summary,
         format_prime_stocks,
+        # Portfolio commands (v6.1)
+        format_portfolio, format_exits, format_returns,
         get_new_stocks, get_exit_stocks, get_strong_stocks,
         assign_situation,
         PARSE_MODE, RESULTS_FILE,
@@ -73,7 +67,7 @@ except ImportError as e:
     sys.exit(1)
 
 # ── Optional modules ──────────────────────────────────────────
-_ADMIN_OK  = False
+_ADMIN_OK   = False
 _TRACKER_OK = False
 _DIGEST_OK  = False
 
@@ -125,7 +119,7 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# ── nse_output helpers (Option C welcome + morning keyboard) ──
+# ── nse_output helpers ────────────────────────────────────────
 _OUTPUT_OK = False
 try:
     from nse_output import format_welcome_scan, build_morning_keyboard
@@ -144,7 +138,7 @@ GUIDE_PDF_URL = os.environ.get(
 
 
 # ═══════════════════════════════════════════════════════════════
-# FAKE USER (for admin tracking)
+# FAKE USER
 # ═══════════════════════════════════════════════════════════════
 
 class FakeUser:
@@ -157,64 +151,69 @@ class FakeUser:
 
 
 # ═══════════════════════════════════════════════════════════════
-# NLP — Text → Command resolver (updated with prime + situation)
+# NLP — Text → Command resolver
 # ═══════════════════════════════════════════════════════════════
 
-GREETINGS     = {"hi","hii","hiii","hello","hey","helo","hlo","start","begin","go",
-                 "good morning","good evening","good afternoon","gm","ge","ga",
-                 "namaste","namaskar","jai hind"}
-NEXT_WORDS    = {"next","n","aage","more","forward"}
-PREV_WORDS    = {"prev","previous","p","back","peeche"}
-NEWS_WORDS    = {"news","headline","headlines","khabar"}
-TOP_WORDS     = {"top","best","top10","winners","leader"}
-LIST_WORDS    = {"list","all","summary","sab"}
-HELP_WORDS    = {"help","?","commands","menu"}
-NEW_WORDS     = {"new","new entry","fresh","naya"}
-EXIT_WORDS    = {"exit","exited","left","bahar"}
-STRONG_WORDS  = {"strong","streak","consistent","hold","trail","hold trail"}
-CAUTION_WORDS = {"caution","risk","warning","careful","avoid"}
-TODAY_WORDS   = {"today","scan","aaj"}
-GUIDE_WORDS   = {"guide","pdf","how","learn","tutorial","padho","sikho"}
-ADMIN_WORDS   = {"admin","dashboard","panel"}
-DIGEST_WORDS  = {"digest","weekly","week","performance","hafta"}
-# NEW: Prime words
-PRIME_WORDS   = {"prime","enter today","enter","best pick","top pick",
-                 "ready","entry ready","buy today","prime entry"}
+GREETINGS        = {"hi","hii","hiii","hello","hey","helo","hlo","start","begin","go",
+                    "good morning","good evening","good afternoon","gm","ge","ga",
+                    "namaste","namaskar","jai hind"}
+NEXT_WORDS       = {"next","n","aage","more","forward"}
+PREV_WORDS       = {"prev","previous","p","back","peeche"}
+NEWS_WORDS       = {"news","headline","headlines","khabar"}
+TOP_WORDS        = {"top","best","top10","winners","leader"}
+LIST_WORDS       = {"list","all","summary","sab"}
+HELP_WORDS       = {"help","?","commands","menu"}
+NEW_WORDS        = {"new","new entry","fresh","naya"}
+EXIT_WORDS       = {"exit","exited","left","bahar"}
+STRONG_WORDS     = {"strong","streak","consistent","hold","trail","hold trail"}
+CAUTION_WORDS    = {"caution","risk","warning","careful","avoid"}
+TODAY_WORDS      = {"today","scan","aaj"}
+GUIDE_WORDS      = {"guide","pdf","how","learn","tutorial","padho","sikho"}
+ADMIN_WORDS      = {"admin","dashboard","panel"}
+DIGEST_WORDS     = {"digest","weekly","week","performance","hafta"}
+PRIME_WORDS      = {"prime","enter today","enter","best pick","top pick",
+                    "ready","entry ready","buy today","prime entry"}
+# Portfolio NLP words
+PORTFOLIO_WORDS  = {"portfolio","positions","holdings","my stocks","open positions"}
+EXITS_WORDS      = {"exits","closed","exited trades","closed trades","trade history"}
+RETURNS_WORDS    = {"returns","pnl","p&l","profit loss","performance","win rate"}
 
 
 def resolve_text_to_command(text):
     c = text.strip().lower()
     if c.startswith('/'):
         return c
-    # Direct callback passthrough
     if c in ('next','prev','list','help','news','sort_score','sort_3m',
              'sort_top10','noop','view_today','view_new','view_exit',
-             'view_caution','view_strong','view_prime','summary',
-             'back_from_card','back_to_main','main_menu','guide',
+             'view_caution','view_strong','view_prime','view_portfolio',
+             'summary','back_from_card','back_to_main','main_menu','guide',
              'broadcast_confirm') \
             or c.startswith('page_') \
             or c.startswith('stock_'):
         return c
-    if c in GREETINGS:      return '/start'
+    if c in GREETINGS:          return '/start'
     if c.isdigit() and 1 <= int(c) <= 99:
         return f'/page {c}'
     if c.startswith('page ') and c[5:].isdigit():
         return f'/page {c[5:]}'
-    if c in NEXT_WORDS:     return '/next'
-    if c in PREV_WORDS:     return '/prev'
-    if c in NEWS_WORDS:     return '/news'
-    if c in TOP_WORDS:      return 'sort_top10'
-    if c in LIST_WORDS:     return 'summary'
-    if c in HELP_WORDS:     return '/help'
-    if c in NEW_WORDS:      return 'view_new'
-    if c in EXIT_WORDS:     return 'view_exit'
-    if c in STRONG_WORDS:   return 'view_strong'
-    if c in CAUTION_WORDS:  return 'view_caution'
-    if c in TODAY_WORDS:    return 'view_today'
-    if c in PRIME_WORDS:    return 'view_prime'     # NEW
-    if c in GUIDE_WORDS:    return '/guide'
-    if c in ADMIN_WORDS:    return '/admin'
-    if c in DIGEST_WORDS:   return '/digest'
+    if c in NEXT_WORDS:         return '/next'
+    if c in PREV_WORDS:         return '/prev'
+    if c in NEWS_WORDS:         return '/news'
+    if c in TOP_WORDS:          return 'sort_top10'
+    if c in LIST_WORDS:         return 'summary'
+    if c in HELP_WORDS:         return '/help'
+    if c in NEW_WORDS:          return 'view_new'
+    if c in EXIT_WORDS:         return 'view_exit'
+    if c in STRONG_WORDS:       return 'view_strong'
+    if c in CAUTION_WORDS:      return 'view_caution'
+    if c in TODAY_WORDS:        return 'view_today'
+    if c in PRIME_WORDS:        return 'view_prime'
+    if c in PORTFOLIO_WORDS:    return '/portfolio'
+    if c in EXITS_WORDS:        return '/exits'
+    if c in RETURNS_WORDS:      return '/returns'
+    if c in GUIDE_WORDS:        return '/guide'
+    if c in ADMIN_WORDS:        return '/admin'
+    if c in DIGEST_WORDS:       return '/digest'
     return c
 
 
@@ -290,60 +289,39 @@ def get_updates(offset=None):
 
 
 # ═══════════════════════════════════════════════════════════════
-# KEYBOARDS — Updated with /prime, removed /buckets
+# KEYBOARDS
 # ═══════════════════════════════════════════════════════════════
 
 def kb_main(cp=0, tp=1, sort='score', view='today'):
-    """
-    Main navigation keyboard.
-    Row 1: Prime | Today | New | Exit
-    Row 2: Caution | Strong | Digest | Guide | Help
-    Sort row (on today view)
-    Pagination row (when multiple pages)
-    """
     def dot(v):  return '●' if view == v else '○'
     def sdot(s): return '●' if sort == s else '○'
 
     kb = [
         # Row 1 — Primary views
         [
-            {"text": f"🎯 Prime",
-             "callback_data": "view_prime"},
-            {"text": f"{dot('today')} Today",
-             "callback_data": "view_today"},
-            {"text": f"{dot('new')} New",
-             "callback_data": "view_new"},
-            {"text": f"{dot('exit')} Exit",
-             "callback_data": "view_exit"},
+            {"text": "🎯 Prime",          "callback_data": "view_prime"},
+            {"text": f"{dot('today')} Today",  "callback_data": "view_today"},
+            {"text": f"{dot('new')} New",      "callback_data": "view_new"},
+            {"text": f"{dot('exit')} Exit",    "callback_data": "view_exit"},
         ],
-        # Row 2 — Secondary views
+        # Row 2 — Secondary views (💼 Portfolio added)
         [
-            {"text": f"{dot('caution')} Caution",
-             "callback_data": "view_caution"},
-            {"text": f"{dot('strong')} Strong",
-             "callback_data": "view_strong"},
-            {"text": "Digest",
-             "callback_data": "/digest"},
-            {"text": "Guide",
-             "callback_data": "guide"},
-            {"text": "Help",
-             "callback_data": "help"},
+            {"text": f"{dot('caution')} Caution", "callback_data": "view_caution"},
+            {"text": f"{dot('strong')} Strong",   "callback_data": "view_strong"},
+            {"text": "💼 Portfolio",               "callback_data": "view_portfolio"},
+            {"text": "Digest",                     "callback_data": "/digest"},
+            {"text": "Help",                       "callback_data": "help"},
         ],
     ]
 
     # Sort row (only on today/list view)
     if view in ('today', 'list'):
         kb.append([
-            {"text": f"{sdot('score')} Score",
-             "callback_data": "sort_score"},
-            {"text": f"{sdot('3m')} 3M",
-             "callback_data": "sort_3m"},
-            {"text": f"{sdot('top10')} Top10",
-             "callback_data": "sort_top10"},
-            {"text": "News",
-             "callback_data": "news"},
-            {"text": "Summary",
-             "callback_data": "summary"},
+            {"text": f"{sdot('score')} Score",  "callback_data": "sort_score"},
+            {"text": f"{sdot('3m')} 3M",        "callback_data": "sort_3m"},
+            {"text": f"{sdot('top10')} Top10",  "callback_data": "sort_top10"},
+            {"text": "News",                    "callback_data": "news"},
+            {"text": "Summary",                 "callback_data": "summary"},
         ])
 
     # Pagination row
@@ -356,7 +334,6 @@ def kb_main(cp=0, tp=1, sort='score', view='today'):
             nav.append({"text": "Next ▶", "callback_data": "next"})
         kb.append(nav)
 
-        # Page number buttons
         s = max(0, min(cp - 2, tp - 5))
         e = min(tp, s + 5)
         kb.append([
@@ -369,7 +346,6 @@ def kb_main(cp=0, tp=1, sort='score', view='today'):
 
 
 def kb_prime():
-    """Keyboard shown with /prime view."""
     return {"inline_keyboard": [
         [
             {"text": "📊 Today", "callback_data": "view_today"},
@@ -378,6 +354,18 @@ def kb_prime():
         [
             {"text": "◀◀ Main", "callback_data": "view_today"},
             {"text": "❓ Help",  "callback_data": "help"},
+        ],
+    ]}
+
+
+def kb_portfolio():
+    return {"inline_keyboard": [
+        [
+            {"text": "📊 Returns",  "callback_data": "view_returns"},
+            {"text": "📉 Exits",    "callback_data": "view_exits"},
+        ],
+        [
+            {"text": "🏠 Main Menu", "callback_data": "back_to_main"},
         ],
     ]}
 
@@ -411,8 +399,8 @@ def kb_admin():
 def kb_card():
     return {"inline_keyboard": [
         [
-            {"text": "◀ Back",      "callback_data": "back_from_card"},
-            {"text": "🏠 Main Menu","callback_data": "back_to_main"},
+            {"text": "◀ Back",       "callback_data": "back_from_card"},
+            {"text": "🏠 Main Menu", "callback_data": "back_to_main"},
         ]
     ]}
 
@@ -427,17 +415,14 @@ def handle_command(chat_id, text, is_cb=False, raw_user=None):
         cmd = cmd.split('@')[0]
     print(f"[CMD] {chat_id} {cmd!r} cb={is_cb}")
 
-    # Track user activity
     if raw_user:
         track_user(FakeUser(raw_user))
         log_activity(raw_user.get("id", chat_id),
                      "cb" if is_cb else "cmd", cmd)
 
-    # Block check
     if raw_user and is_blocked(raw_user.get("id", 0)):
         return {"message": None, "keyboard": None} if is_cb else None
 
-    # Load scan data
     res = load_scan_results()
     if not res:
         m = ("No scan results found.\n"
@@ -477,14 +462,12 @@ def handle_command(chat_id, text, is_cb=False, raw_user=None):
 
     # ── ROUTES ────────────────────────────────────────────────
 
-    # Start / Welcome — Option C: Prime cards + compact rest
+    # ── START / WELCOME ───────────────────────────────────────
     if cmd == '/start':
         st['view'] = 'today'
         st['page'] = 0
         st['sort'] = 'score'
-        # Use Option C format with user first name
-        user_name = (raw_user.get('first_name', '')
-                     if raw_user else '')
+        user_name = (raw_user.get('first_name', '') if raw_user else '')
         try:
             from nse_output import format_welcome_scan, build_morning_keyboard
             msg, kb = format_welcome_scan(user_name)
@@ -493,18 +476,29 @@ def handle_command(chat_id, text, is_cb=False, raw_user=None):
             return reply(format_welcome(user_name or None),
                          kb_main(0, 1, 'score', 'today'))
 
-    # ── PRIME (NEW) ───────────────────────────────────────────
+    # ── PRIME ─────────────────────────────────────────────────
     elif cmd in ('/prime', 'view_prime'):
         st['view'] = 'prime'
         return reply(format_prime_stocks(stocks, sd), kb_prime())
 
+    # ── PORTFOLIO (NEW) ───────────────────────────────────────
+    elif cmd in ('/portfolio', 'view_portfolio'):
+        st['view'] = 'portfolio'
+        return reply(format_portfolio(), kb_portfolio())
+
+    elif cmd in ('/exits', 'view_exits'):
+        st['view'] = 'exits'
+        return reply(format_exits(), kb_portfolio())
+
+    elif cmd in ('/returns', 'view_returns'):
+        st['view'] = 'returns'
+        return reply(format_returns(), kb_portfolio())
+
     # ── TODAY ─────────────────────────────────────────────────
     elif cmd in ('/today', 'view_today', 'back_to_main', 'main_menu'):
-        # Always show Option C format — same as /start
         st['view'] = 'today'
         st['page'] = 0
-        user_name = (raw_user.get('first_name', '')
-                     if raw_user else '')
+        user_name = (raw_user.get('first_name', '') if raw_user else '')
         try:
             from nse_output import format_welcome_scan, build_morning_keyboard
             msg, kb = format_welcome_scan(user_name)
@@ -570,7 +564,7 @@ def handle_command(chat_id, text, is_cb=False, raw_user=None):
             )
         return view('exit', format_exit_stocks(get_exit_stocks(hist), sd))
 
-    # ── CAUTION (now shows AVOID + BOOK too) ──────────────────
+    # ── CAUTION ───────────────────────────────────────────────
     elif cmd in ('/caution', 'view_caution'):
         return view('caution', format_caution_stocks(stocks, sd))
 
@@ -623,11 +617,9 @@ def handle_command(chat_id, text, is_cb=False, raw_user=None):
         return reply(m, kb_card())
 
     elif cmd == 'back_from_card':
-        # Always return to main Option C scan view
         st['view'] = 'today'
         st['page'] = 0
-        user_name = (raw_user.get('first_name', '')
-                     if raw_user else '')
+        user_name = (raw_user.get('first_name', '') if raw_user else '')
         try:
             from nse_output import format_welcome_scan, build_morning_keyboard
             msg, kb = format_welcome_scan(user_name)
@@ -731,14 +723,13 @@ def handle_command(chat_id, text, is_cb=False, raw_user=None):
             ucount = get_user_count()
         except Exception:
             ucount = 0
-        # Load scan summary
         scan_summary = ""
         try:
             import json as _json
             from pathlib import Path as _Path
             _sf = _Path("telegram_last_scan.json")
             if _sf.exists():
-                _d = _json.loads(_sf.read_text())
+                _d      = _json.loads(_sf.read_text())
                 _stocks = _d.get('stocks', [])
                 _prime  = sum(1 for s in _stocks
                               if s.get('situation') == 'prime')
@@ -771,29 +762,21 @@ def handle_command(chat_id, text, is_cb=False, raw_user=None):
         try:
             from nse_bot_admin import (broadcast_to_all_users,
                                         format_broadcast_summary)
-            # Send progress message first
-            return_msg = reply(
-                "📢 Broadcasting… please wait.",
-                {"inline_keyboard": []}
-            )
-            # Run broadcast (skip admin's own chat)
-            result = broadcast_to_all_users(
-                skip_chat_id=int(chat_id)
-            )
+            result  = broadcast_to_all_users(skip_chat_id=int(chat_id))
             summary = format_broadcast_summary(result)
             return reply(summary, kb_admin())
         except Exception as e:
             log.error(f"Broadcast error: {e}")
-            return reply(f"❌ Broadcast failed: {_code(str(e))}",
-                         kb_admin())
+            return reply(f"❌ Broadcast failed: {_code(str(e))}", kb_admin())
 
     # ── Unknown ───────────────────────────────────────────────
     else:
         return reply(
             f"Didn't understand: {_code(cmd)}\n\n"
             f"Try: {_b('/prime')}, {_b('/today')}, {_b('/new')}, "
-            f"{_b('/exit')}, {_b('/strong')}, {_b('/caution')}, "
-            f"{_b('/digest')}, {_b('/guide')}, {_b('/help')}",
+            f"{_b('/exit')}, {_b('/strong')}, {_b('/caution')},\n"
+            f"{_b('/portfolio')}, {_b('/returns')}, {_b('/exits')}, "
+            f"{_b('/digest')}, {_b('/help')}",
             kb_main(st['page'], 1, st['sort'], st['view'])
         )
 
@@ -862,7 +845,6 @@ def health_scheduler():
 def startup_checks():
     ok = True
 
-    # Token check
     try:
         r = requests.get(
             f"https://api.telegram.org/bot{config.TELEGRAM_TOKEN}/getMe",
@@ -876,7 +858,6 @@ def startup_checks():
     except Exception:
         ok = False
 
-    # Webhook check (must be empty for polling)
     try:
         wh = requests.get(
             f"https://api.telegram.org/bot{config.TELEGRAM_TOKEN}"
@@ -892,11 +873,9 @@ def startup_checks():
     except Exception:
         pass
 
-    # Scan data check
     r = load_scan_results()
     if r:
-        stocks = r['stocks']
-        # Count situations
+        stocks = r.get('stocks', [])
         sit_counts = {}
         for s in stocks:
             sit = s.get('situation', 'watch')
@@ -908,11 +887,21 @@ def startup_checks():
         print("[FAIL] No scan data")
         ok = False
 
-    # History check
     h = load_history()
     print(f"[OK] History: {len(h)} day(s)")
 
-    # Module status
+    # Portfolio status
+    try:
+        from nse_portfolio import get_portfolio_summary
+        ps = get_portfolio_summary()
+        print(f"[OK] Portfolio: {ps['open_count']} open | "
+              f"{ps['closed_count']} closed | "
+              f"win rate {ps['win_rate']}%")
+    except ImportError:
+        print("[WARN] nse_portfolio.py not found — /portfolio disabled")
+    except Exception as e:
+        print(f"[WARN] Portfolio check failed: {e}")
+
     print(f"[OK] Admin: {_ADMIN_OK} | "
           f"Tracker: {_TRACKER_OK} | "
           f"Digest: {_DIGEST_OK}")
@@ -934,15 +923,15 @@ def startup_checks():
 
 def main():
     print("=" * 55)
-    print("  NSE Scanner Bot — Phase 2.3 (Situation Engine)")
-    print("  Views: Prime/Today/New/Exit/Caution/Strong/Digest/Guide")
+    print("  NSE Scanner Bot — Phase 2.3.1 (Portfolio added)")
+    print("  Commands: Prime/Today/New/Exit/Caution/Strong")
+    print("  Portfolio: /portfolio /returns /exits")
     print("=" * 55 + "\n")
 
     if not startup_checks():
         print("[BOT] Fix issues then restart")
         return
 
-    # Start health scheduler in background
     threading.Thread(target=health_scheduler, daemon=True).start()
     if _ADMIN_OK:
         print("[BOT] Health scheduler running (11:30 PM daily)")

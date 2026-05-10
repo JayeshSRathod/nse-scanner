@@ -2,6 +2,7 @@
 main_pipeline.py — NSE Pipeline Entry Point for Railway Cron
 =============================================================
 Now includes: historical backfill on first run (when DB is empty)
+v2: Added Step 5 — Portfolio Manager (nse_portfolio.py)
 """
 
 import os
@@ -55,12 +56,14 @@ GITHUB_REPO   = os.environ.get("GITHUB_REPO", "JayeshSRathod/nse-scanner").strip
 GITHUB_BRANCH = os.environ.get("GITHUB_BRANCH", "main").strip()
 
 missing = []
-if not TOKEN:        missing.append("TELEGRAM_TOKEN")
-if not CHAT_ID:      missing.append("TELEGRAM_CHAT_ID")
-if not GITHUB_TOKEN: missing.append("GITHUB_TOKEN")
+if not TOKEN:   missing.append("TELEGRAM_TOKEN")
+if not CHAT_ID: missing.append("TELEGRAM_CHAT_ID")
 if missing:
     print(f"[ERROR] Missing vars: {', '.join(missing)}")
     sys.exit(1)
+
+if not GITHUB_TOKEN:
+    print(f"[INFO] GITHUB_TOKEN not set — GitHub push disabled (local mode)")
 
 config                  = types.ModuleType("config")
 config.TELEGRAM_TOKEN   = TOKEN
@@ -125,7 +128,6 @@ def push_file_to_github(file_path, commit_msg):
     content     = file_path.read_text(encoding="utf-8")
     content_b64 = base64.b64encode(content.encode()).decode()
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-    # Use the relative path string to preserve folder structure on GitHub (v7 fix)
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path.as_posix()}"
     sha = None
     r = requests.get(url, headers=headers)
@@ -169,12 +171,9 @@ def backfill_historical_data(target_date, days_back=90):
 
     init_database()
 
-    # Calculate date range
     end_date   = target_date
     start_date = target_date - timedelta(days=int(days_back * 1.5))
     trading_days = get_trading_days(start_date, end_date)
-
-    # Take last N trading days
     trading_days = trading_days[-days_back:]
 
     print(f"  Date range: {trading_days[0].strftime('%d-%b-%Y')} to {trading_days[-1].strftime('%d-%b-%Y')}")
@@ -186,30 +185,23 @@ def backfill_historical_data(target_date, days_back=90):
 
     for i, d in enumerate(trading_days):
         try:
-            # Download
             download_direct(d)
-
-            # Load into DB
             result = load_day(d, do_cleanup=False)
-
             if result["status"] == "ok":
                 loaded += 1
             elif result["status"] in ("skip", "already_loaded"):
                 skipped += 1
             else:
                 failed += 1
-
         except Exception as e:
             failed += 1
             if i < 3:
                 print(f"  ❌ {d.strftime('%d-%b-%Y')}: {e}")
 
-        # Progress every 10 days
         if (i + 1) % 10 == 0:
             print(f"  Progress: {i+1}/{len(trading_days)} "
                   f"(loaded={loaded} skipped={skipped} failed={failed})")
 
-        # Small delay to be polite to NSE servers
         import time
         time.sleep(0.5)
 
@@ -218,7 +210,6 @@ def backfill_historical_data(target_date, days_back=90):
     print(f"    Skipped: {skipped}")
     print(f"    Failed : {failed}")
 
-    # Verify
     has_enough, total_days = db_has_enough_data()
     print(f"    DB now has {total_days} trading days of data")
     print(f"    Scanner ready: {'YES' if has_enough else 'NO'}")
@@ -238,7 +229,7 @@ def run_pipeline():
 
     print(f"\n[PIPELINE] Scan date: {today.strftime('%d-%b-%Y')}")
 
-    # ── CANARY TEST ──
+    # ── CANARY TEST ───────────────────────────────────────────
     print("\n[CANARY] Testing JSON write path...")
     canary = Path("telegram_last_scan.json")
     try:
@@ -267,7 +258,6 @@ def run_pipeline():
             print(f"[STEP 0] Backfill error: {e}")
             send_failure_alert("Backfill", str(e), today)
     else:
-        # Normal daily run — just download + load today
         print(f"[STEP 0] ✅ DB has enough data. Loading today only.")
 
         # Step 1: Download today
@@ -288,6 +278,7 @@ def run_pipeline():
             return False
 
     # ── STEP 3: Scan ──────────────────────────────────────────
+    print(f"\n{'='*55}\n  Step 3: Scanner\n{'='*55}")
     try:
         from nse_scanner import scan_stocks
         results_df = scan_stocks(scan_date=today)
@@ -302,15 +293,13 @@ def run_pipeline():
         return False
 
     # ── STEP 3.5: News Collection & Enrichment ────────────────
+    news_data = {}
     try:
         from nse_news_collector import get_news_for_stocks, enrich_scanner_results, save_news
-        # Collect news for top 15 stocks
         shortlist = results_df.head(15)['symbol'].tolist()
         print(f"\n[STEP 3.5] Collecting news for {len(shortlist)} stocks...")
         news_data = get_news_for_stocks(shortlist, days=30)
         save_news(news_data, today)
-        
-        # Merge news into results
         results_df = enrich_scanner_results(results_df, news_data)
         print(f"[STEP 3.5] ✅ Enrichment complete")
     except Exception as e:
@@ -319,7 +308,8 @@ def run_pipeline():
     hc = (results_df["conviction"] == "HIGH CONVICTION").sum() if "conviction" in results_df.columns else 0
     wl = (results_df["conviction"] == "Watchlist").sum() if "conviction" in results_df.columns else 0
 
-    # ── STEP 4: Output ────────────────────────────────────────
+    # ── STEP 4: Output (Excel + Telegram morning scan) ────────
+    print(f"\n{'='*55}\n  Step 4: Output\n{'='*55}")
     try:
         from nse_output import generate_report
         generate_report(results_df, today)
@@ -328,42 +318,80 @@ def run_pipeline():
         write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"), failed_step="STEP 4", reason=str(e))
         return False
 
-    # ── STEP 5: Freshness check ───────────────────────────────
+    # ── STEP 5: Portfolio Manager ─────────────────────────────
+    print(f"\n{'='*55}\n  Step 5: Portfolio Manager\n{'='*55}")
+    try:
+        from nse_portfolio import run_portfolio_step
+
+        json_path      = Path("telegram_last_scan.json")
+        scan_data      = json.loads(json_path.read_text(encoding="utf-8"))
+        scanner_stocks = scan_data.get("stocks", [])
+        scan_date_str  = scan_data.get("scan_date", today.strftime("%Y-%m-%d"))
+
+        portfolio_summary = run_portfolio_step(
+            scanner_stocks = scanner_stocks,
+            scan_date      = scan_date_str,
+            news_data      = news_data,   # passed from Step 3.5 (empty dict if news failed)
+        )
+
+        print(f"  Open     : {portfolio_summary['open']}")
+        print(f"  Added    : {portfolio_summary['added']}")
+        print(f"  Exited   : {portfolio_summary['exited']}")
+        print(f"  SL trail : {portfolio_summary['sl_updated']}")
+        print(f"  [OK] Portfolio message sent to Telegram")
+
+    except ImportError:
+        print("  [SKIP] nse_portfolio.py not found — add it to enable portfolio tracking")
+    except Exception as e:
+        # Non-fatal — pipeline continues even if portfolio step fails
+        print(f"  [WARNING] Portfolio step failed (non-fatal): {e}")
+        import traceback
+        traceback.print_exc()
+
+    # ── STEP 6: Freshness check ───────────────────────────────
+    print(f"\n{'='*55}\n  Step 6: Freshness Check\n{'='*55}")
     json_path = Path("telegram_last_scan.json")
     d = json.loads(json_path.read_text())
     expected = today.strftime("%Y-%m-%d")
     if d.get("scan_date") != expected:
         send_failure_alert("JSON Freshness", f"Expected {expected}, found {d.get('scan_date')}", today)
-        write_health(status="FAILED", scan_date=expected, failed_step="STEP 5", reason="STALE JSON")
+        write_health(status="FAILED", scan_date=expected, failed_step="STEP 6", reason="STALE JSON")
         return False
- 
-    # ── STEP 5.1 ── Push news JSON to GitHub ───────────────────────
+    print(f"  ✅ JSON date matches: {expected}")
+
+    # ── STEP 6.1: Push news JSON to GitHub ────────────────────
     try:
         _news_fname = f"news_{today.strftime('%d%m%Y')}.json"
         _news_path  = Path("output") / _news_fname
         if _news_path.exists():
-            # Create latest news file for Bot and MiniApp consistency
             latest_news = Path("output") / "news_latest.json"
             latest_news.write_text(_news_path.read_text(encoding="utf-8"), encoding="utf-8")
             push_file_to_github(latest_news, f"Auto: news latest {expected}")
-
             ok = push_file_to_github(_news_path, f"Auto: news {expected}")
             if ok:
-                print(f"[PIPELINE] ✅ News JSON pushed: {_news_fname}")
+                print(f"  ✅ News JSON pushed: {_news_fname}")
             else:
-                print(f"[PIPELINE] ⚠️  News JSON push failed (non-fatal)")
+                print(f"  ⚠️  News JSON push failed (non-fatal)")
         else:
-            print(f"[PIPELINE] ℹ️  No news JSON for today (news step may have been skipped)")
+            print(f"  ℹ️  No news JSON for today (news step may have been skipped)")
     except Exception as e:
-        print(f"[PIPELINE] ⚠️  News JSON push error: {e} (non-fatal)")
- 
-    # ── STEP 6 ────────────────────────────────────────────────────
-    push_file_to_github(json_path, f"Auto: scan {expected}")
+        print(f"  ⚠️  News JSON push error: {e} (non-fatal)")
+
+    # ── STEP 7: Push scan JSONs to GitHub ─────────────────────
+    print(f"\n{'='*55}\n  Step 7: GitHub Push\n{'='*55}")
+    if push_file_to_github(json_path, f"Auto: scan {expected}"):
+        print(f"  ✅ telegram_last_scan.json pushed")
 
     history_path = Path("scan_history.json")
     if history_path.exists():
         if push_file_to_github(history_path, f"Auto: history {expected}"):
-            print(f"  ✅ scan_history.json pushed to GitHub")
+            print(f"  ✅ scan_history.json pushed")
+
+    # Push portfolio.json to GitHub (so bot can read it)
+    portfolio_path = Path("portfolio.json")
+    if portfolio_path.exists():
+        if push_file_to_github(portfolio_path, f"Auto: portfolio {expected}"):
+            print(f"  ✅ portfolio.json pushed")
 
     write_health(
         status="SUCCESS", scan_date=expected,
@@ -372,7 +400,9 @@ def run_pipeline():
     )
 
     elapsed = round(time() - t0, 1)
-    print(f"\nPIPELINE COMPLETE in {elapsed}s")
+    print(f"\n{'='*55}")
+    print(f"  PIPELINE COMPLETE in {elapsed}s")
+    print(f"{'='*55}")
     return True
 
 
