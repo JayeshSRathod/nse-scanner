@@ -10,6 +10,7 @@ import sys
 import json
 import types
 import base64
+
 import sqlite3
 import requests
 from datetime import date, datetime, timedelta
@@ -123,7 +124,6 @@ def get_trading_days(start, end):
         d += timedelta(days=1)
     return days
 
-
 def push_file_to_github(file_path, commit_msg):
     content     = file_path.read_text(encoding="utf-8")
     content_b64 = base64.b64encode(content.encode()).decode()
@@ -133,10 +133,14 @@ def push_file_to_github(file_path, commit_msg):
     r = requests.get(url, headers=headers)
     if r.status_code == 200:
         sha = r.json().get("sha")
+    elif r.status_code != 404:
+        print(f"  ⚠️ GitHub GET failed for {file_path.name}: {r.status_code} {r.text[:200]}")
     payload = {"message": commit_msg, "content": content_b64, "branch": GITHUB_BRANCH}
     if sha:
         payload["sha"] = sha
     r = requests.put(url, headers=headers, json=payload)
+    if r.status_code not in (200, 201):
+        print(f"  ❌ GitHub PUSH FAILED for {file_path.name}: {r.status_code} {r.text[:300]}")
     return r.status_code in (200, 201)
 
 
@@ -388,10 +392,15 @@ def run_pipeline():
             print(f"  ✅ scan_history.json pushed")
 
     # Push portfolio.json to GitHub (so bot can read it)
+    # Push portfolio.json to GitHub (so bot can read it)
     portfolio_path = Path("portfolio.json")
     if portfolio_path.exists():
         if push_file_to_github(portfolio_path, f"Auto: portfolio {expected}"):
             print(f"  ✅ portfolio.json pushed")
+        else:
+            print(f"  ❌ portfolio.json push FAILED — state will not persist to next run")
+    else:
+        print(f"  ⚠️ portfolio.json does not exist locally — nothing to push")
 
     write_health(
         status="SUCCESS", scan_date=expected,
