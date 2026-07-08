@@ -1,5 +1,36 @@
 {
-  "positions": {},
+  "positions": {
+    "BEL": {
+      "symbol": "BEL",
+      "entry_price": 419.15,
+      "entry_date": "2026-07-08",
+      "entry_score": 8.0,
+      "entry_streak": 5,
+      "current_sl": 399.43,
+      "original_sl": 399.43,
+      "t1_price": 438.87,
+      "t2_price": 458.59,
+      "current_price": 419.15,
+      "tier": "Compounder",
+      "sl_stage": "original",
+      "t1_hit": false,
+      "t2_hit": false,
+      "t1_hit_date": null,
+      "t2_hit_date": null,
+      "highest_price": 419.15,
+      "days_in_list": 5,
+      "added_date": "2026-07-08",
+      "last_updated": "2026-07-08",
+      "milestones": [
+        {
+          "event": "added",
+          "date": "2026-07-08",
+          "price": 419.15,
+          "reason": "streak=5 score=8.0 dist=1.8%"
+        }
+      ]
+    }
+  },
   "closed": [],
-  "last_run": "2026-07-07 04:49:43"
+  "last_run": "2026-07-08 04:12:30"
 }
