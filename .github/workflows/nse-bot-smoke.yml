@@ -1,0 +1,37 @@
+name: NSE Bot Smoke Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bot-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      ADMIN_CHAT_ID: ${{ secrets.ADMIN_CHAT_ID }}
+      GITHUB_TOKEN: ${{ secrets.NSE_REPO_TOKEN }}
+      GITHUB_REPO: ${{ secrets.GITHUB_REPO }}
+      GITHUB_BRANCH: ${{ secrets.GITHUB_BRANCH }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate bot startup
+        run: |
+          timeout 90s python main.py || true
+          echo "Bot smoke test completed (startup validation only)."

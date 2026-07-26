@@ -1,0 +1,1343 @@
+{
+  "DIVISLAB": {
+    "symbol": "DIVISLAB",
+    "collected_at": "2026-07-14T04:02:46.594553",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "DIVISLAB",
+        "date": "13-Jul-2026 11:59:31",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/DIVISLAB_13072026115914_Newspaper_Publication_13072026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "DIVISLAB",
+        "date": "07-Jul-2026 16:28:37",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/DIVISLAB_07072026162826_Reg_74_DIVIS.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "DIVISLAB",
+        "date": "06-Jul-2026 11:14:55",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_bbodade_28042026161059_DIVISLAB.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "DIVISLAB",
+        "date": "30-Jun-2026 10:52:23",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/DIVISLAB_30062026105211_Intimation_TradingWindowClosure_Q1FY27.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:ORDER_WIN — Trading Window",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 4,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "PPLPHARMA": {
+    "symbol": "PPLPHARMA",
+    "collected_at": "2026-07-14T04:02:50.994181",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "PPLPHARMA",
+        "date": "09-Jul-2026 10:57:54",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/PIRAMALPHARMA_09072026105711_US_FDA_inspection_Sellersville_closure.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "PPLPHARMA",
+        "date": "04-Jul-2026 13:01:17",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/PIRAMALPHARMA_04072026130035_PPL_SE-Intimation_PostDispatch.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "PPLPHARMA",
+        "date": "03-Jul-2026 17:21:09",
+        "subject": "Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/PIRAMALPHARMA_03072026172014_SE_Initimation_BRSR_Submision_.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "PPLPHARMA",
+        "date": "03-Jul-2026 15:20:35",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/PIRAMALPHARMA_03072026151951_SE_Intimation_-_Reg_24_-_Annual_Report_25-26_.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "PPLPHARMA",
+        "date": "29-Jun-2026 19:45:27",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_sandeshc_11052026115720_39.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "PPLPHARMA",
+        "date": "29-Jun-2026 16:47:09",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/PIRAMALPHARMA_29062026164700_SEIntimation_Window_closure.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "PPLPHARMA",
+        "date": "23-Jun-2026 16:37:58",
+        "subject": "News Verification",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/PIRAMALPHARMA_23062026163736_SEIntimation_Rumour.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "PPLPHARMA",
+        "date": "23-Jun-2026 13:10:58",
+        "subject": "News Verification",
+        "type": "GENERAL",
+        "attachment": "-"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "PPLPHARMA",
+        "date": "19-Jun-2026 16:06:27",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/Priyankamehta_19062026160612_PPL_SE-Intimation_PreDispatch.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:ORDER_WIN — Trading Window"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 9,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "GPTHEALTH": {
+    "symbol": "GPTHEALTH",
+    "collected_at": "2026-07-14T04:02:55.238551",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "GPTHEALTH",
+        "date": "11-Jul-2026 11:47:53",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/GPTHEALTHCARE_11072026114744_Covering_Letter_74_5_.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "GPTHEALTH",
+        "date": "10-Jul-2026 11:59:52",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/GPTHEALTHCARE_10072026115936_GHLInformationRegardingAGMandBookClosurePost_dispatch.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "GPTHEALTH",
+        "date": "09-Jul-2026 17:59:29",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/GPTHEALTHCARE_09072026175919_GHLSubmissionofLetter36_1__b_09072026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "GPTHEALTH",
+        "date": "09-Jul-2026 16:33:14",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/GPTHEALTHCARE_09072026163202_GHLSubmissionof36thAGMNotice09072026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "GPTHEALTH",
+        "date": "03-Jul-2026 16:50:32",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/GPTHEALTHCARE_03072026164929_GHL-Information_Regarding_AGM_and_Book_Closure.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "GPTHEALTH",
+        "date": "29-Jun-2026 19:07:47",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_bbodade_12052026183146_GPTHEALTH.PDF"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "GPTHEALTH",
+        "date": "27-Jun-2026 12:55:57",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/GPTHEALTHCARE_27062026125546_GHLTradingWindowClosureJune_2026.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:ORDER_WIN — Trading Window",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 7,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "ASKAUTOLTD": {
+    "symbol": "ASKAUTOLTD",
+    "collected_at": "2026-07-14T04:03:00.118308",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ASKAUTOLTD",
+        "date": "11-Jul-2026 12:27:51",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/8448091598_11072026122715_STXINTIMATIONADDPOSTSDFINAL.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ASKAUTOLTD",
+        "date": "11-Jul-2026 12:19:59",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/8448091598_11072026121940_stxintimationletterSD.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ASKAUTOLTD",
+        "date": "10-Jul-2026 20:47:20",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/8448091598_10072026204708_stxintimationARsd.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ASKAUTOLTD",
+        "date": "09-Jul-2026 10:51:26",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/8448091598_09072026104735_stxintimation74SD.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ASKAUTOLTD",
+        "date": "07-Jul-2026 10:56:14",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/8448091598_07072026105451_stxintimation07072026sd.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ASKAUTOLTD",
+        "date": "01-Jul-2026 10:02:38",
+        "subject": "Retirement",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/8448091598_01072026100034_stxinti26sd.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ASKAUTOLTD",
+        "date": "24-Jun-2026 16:15:24",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/8448091598_24062026161332_TWCstxintimation24062026SD.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ASKAUTOLTD",
+        "date": "22-Jun-2026 15:51:55",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/8448091598_22062026155102_stxintimation_-_Inestormeet_22062026_SD.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ASKAUTOLTD",
+        "date": "19-Jun-2026 15:49:24",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_bbodade_11052026180303_ASKAUTOLTD22.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ASKAUTOLTD",
+        "date": "19-Jun-2026 15:48:06",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_bbodade_11052026175645_ASKAUTOLTD1.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:ORDER_WIN — Trading Window",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 10,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "DABUR": {
+    "symbol": "DABUR",
+    "collected_at": "2026-07-14T04:03:04.554060",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "DABUR",
+        "date": "08-Jul-2026 16:23:03",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/DABURU_08072026162245_Dabur_-_Q1_-_Conference_Call_Invite.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "DABUR",
+        "date": "08-Jul-2026 12:56:34",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/DABURU_08072026125554_Final.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "DABUR",
+        "date": "07-Jul-2026 13:01:20",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/DABURU_07072026124541_NPD.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "DABUR",
+        "date": "06-Jul-2026 18:38:41",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/DABURU_06072026183741_Annual_Report.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "DABUR",
+        "date": "03-Jul-2026 17:30:01",
+        "subject": "Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/DABURU_03072026172934_Final.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "DABUR",
+        "date": "03-Jul-2026 15:20:59",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/DABURU_03072026152049_Intimation.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "DABUR",
+        "date": "23-Jun-2026 16:27:11",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/DABURU_23062026162639_NPD.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "DABUR",
+        "date": "23-Jun-2026 15:48:09",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/DABURU_23062026154523_finalfiletw.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [
+      {
+        "source": "GOOGLE_NEWS",
+        "symbol": "DABUR",
+        "date": "09-Jul-2026",
+        "title": "Dabur India Share Price Today, Dabur India Stock Price Live NSE/BSE Updates - The Economic Times",
+        "news_source": "The Economic Times",
+        "url": "https://news.google.com/rss/articles/CBMihgFBVV95cUxQZkl2eFNDSHdSTGg0SHZreEoyUjEyNHQ1QjdWYkZ6d1pvaVJVeV9IYmp1b0U3OGlrTkhveTVnUVJKLUVsNFViazNKcjVydTF0NXZ0aHBJNm4tTllSRFhaRUNOcTh0a3lBNHZpMThfc3Z1cnpOQjZ3eUs5dUEtR19Td1lkdUJOUQ?oc=5",
+        "sentiment": "NEUTRAL"
+      },
+      {
+        "source": "GOOGLE_NEWS",
+        "symbol": "DABUR",
+        "date": "08-Jul-2026",
+        "title": "July 8 Stocks To Watch: Coforge, Adani, Cochin Shipyard, Trent - NiftyTrader",
+        "news_source": "NiftyTrader",
+        "url": "https://news.google.com/rss/articles/CBMifEFVX3lxTFBzcUhfNWRuUjVLdlZoUGpDeVVweE5wTWQ2a1BHX0RIeWFkV2wtUjlGN29USEdXdkFYQ3RNYWlIUHAwOUhhSGV6YUt0Zjg1VklwRDUxa3NkV0drMlZRZVlpWVBQblNBMnhzZFFiX0RZTjFnZC1xUks5NG15N3Y?oc=5",
+        "sentiment": "NEUTRAL"
+      }
+    ],
+    "flags": [
+      "ANN:ORDER_WIN — Trading Window",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 8,
+    "deal_count": 0,
+    "headline_count": 2
+  },
+  "ALKYLAMINE": {
+    "symbol": "ALKYLAMINE",
+    "collected_at": "2026-07-14T04:03:08.820078",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ALKYLAMINE",
+        "date": "07-Jul-2026 18:39:30",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ALKYLAMINE_07072026183841_VRFINAL.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ALKYLAMINE",
+        "date": "07-Jul-2026 14:38:15",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ALKYLAMINE_07072026143756_Reg74.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ALKYLAMINE",
+        "date": "03-Jul-2026 19:57:23",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ALKYLAMINE_03072026195643_AGM_proceedings_for_filing_to_Exchanges_2026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ALKYLAMINE",
+        "date": "16-Jun-2026 18:13:24",
+        "subject": "ESOP/ESOS/ESPS",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ALKYLAMINE_16062026181233_ESOPSEdisclosureJune2026sd.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 4,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "ANDHRSUGAR": {
+    "symbol": "ANDHRSUGAR",
+    "collected_at": "2026-07-14T04:03:13.896157",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ANDHRSUGAR",
+        "date": "07-Jul-2026 10:26:01",
+        "subject": "Spurt in Volume",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ANDHRSUGAR_07072026102529_20260707115949.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ANDHRSUGAR",
+        "date": "06-Jul-2026 18:07:27",
+        "subject": "Spurt in Volume",
+        "type": "GENERAL",
+        "attachment": "-"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ANDHRSUGAR",
+        "date": "04-Jul-2026 14:07:44",
+        "subject": "Structural Digital Database",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ANDHRSUGAR_04072026140533_20260704164922.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ANDHRSUGAR",
+        "date": "26-Jun-2026 10:14:00",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ANDHRSUGAR_26062026101344_TradingwindowofNSE.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:ORDER_WIN — Trading Window"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 4,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "LIQUIDETF": {
+    "symbol": "LIQUIDETF",
+    "collected_at": "2026-07-14T04:03:18.457564",
+    "days_back": 30,
+    "announcements": [],
+    "deals": [],
+    "headlines": [],
+    "flags": [],
+    "news_tone": "NEUTRAL",
+    "has_news": false,
+    "ann_count": 0,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "POCL": {
+    "symbol": "POCL",
+    "collected_at": "2026-07-14T04:03:23.908600",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "POCL",
+        "date": "13-Jul-2026 16:24:23",
+        "subject": "Record Date",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/POCL_13072026162351_Record_Date_-_Sub_Divisionsd.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "POCL",
+        "date": "09-Jul-2026 16:45:02",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/POCL_09072026164454_InvestorMeetPOCL09072026SD.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "POCL",
+        "date": "08-Jul-2026 18:55:00",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/POCL_08072026185451_ComplianceCertificateSD.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "POCL",
+        "date": "07-Jul-2026 18:21:18",
+        "subject": "Record Date",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/POCL_07072026181924_RecordDateSubDivisionSD.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "POCL",
+        "date": "06-Jul-2026 11:27:40",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_bbodade_28042026155123_POCL.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "POCL",
+        "date": "03-Jul-2026 19:22:28",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/POCL_03072026192216_VotingResultsPostalBallotSD.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "POCL",
+        "date": "03-Jul-2026 18:15:35",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/POCL_03072026181521_InvestorMeetPOCL03072026SD.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "POCL",
+        "date": "01-Jul-2026 16:53:40",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/POCL_01072026165329_InvestorMeetPOCL01072026SD.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "POCL",
+        "date": "30-Jun-2026 17:09:29",
+        "subject": "Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/POCL_30062026170908_PITDisclosuresd.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "POCL",
+        "date": "26-Jun-2026 13:36:29",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/POCL_26062026133612_HDFCintimationsd.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "POCL",
+        "date": "26-Jun-2026 13:06:21",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/POCL_26062026130556_Trading_window_closure_intimationsd.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "POCL",
+        "date": "17-Jun-2026 16:37:05",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/POCL_17062026163650_InvestorMeetPOCL17062026SD.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:ORDER_WIN — Trading Window",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 12,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "RAINBOW": {
+    "symbol": "RAINBOW",
+    "collected_at": "2026-07-14T04:03:28.388755",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "RAINBOW",
+        "date": "09-Jul-2026 19:10:17",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/RAINBOWUSER_09072026191003_Intimation.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "RAINBOW",
+        "date": "05-Jul-2026 15:08:11",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/RAINBOWUSER_05072026150757_Intimation_stockexchange.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "RAINBOW",
+        "date": "04-Jul-2026 16:29:49",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/RAINBOWUSER_04072026162937_Intimation_weblink.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "RAINBOW",
+        "date": "04-Jul-2026 16:22:15",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/RAINBOWUSER_04072026162204_Intimation_BRSR.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "RAINBOW",
+        "date": "04-Jul-2026 16:17:12",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/RAINBOWUSER_04072026161610_Intimation_notice.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "RAINBOW",
+        "date": "03-Jul-2026 13:08:15",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_sandeshc_01072026125613_41.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "RAINBOW",
+        "date": "30-Jun-2026 10:58:35",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/RAINBOWUSER_30062026105658_Intimation.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "RAINBOW",
+        "date": "25-Jun-2026 19:45:37",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/RAINBOWUSER_25062026194528_Stockexchange_TWC.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "RAINBOW",
+        "date": "25-Jun-2026 18:53:27",
+        "subject": "Disclosure of material issue",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/RAINBOWUSER_25062026185252_Intimation.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "RAINBOW",
+        "date": "25-Jun-2026 18:37:33",
+        "subject": "Options to purchase securities",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/RAINBOWUSER_25062026183707_Intimation.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:ORDER_WIN — Trading Window",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 10,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "UDS": {
+    "symbol": "UDS",
+    "collected_at": "2026-07-14T04:03:32.698648",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "UDS",
+        "date": "01-Jul-2026 18:09:27",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/COMPLIANCEOFFICERUDS_01072026180916_PIT_F_Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "UDS",
+        "date": "26-Jun-2026 15:55:31",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/COMPLIANCEOFFICERUDS_26062026155523_Trading_Window_Closure_Q1_Sd.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "UDS",
+        "date": "25-Jun-2026 21:08:30",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/COMPLIANCEOFFICERUDS_25062026210818_Scrutinizer_report_Sd.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "UDS",
+        "date": "25-Jun-2026 21:06:05",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/COMPLIANCEOFFICERUDS_25062026210539_Postal_Ballot_Proceedings_Sd.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:ORDER_WIN — Trading Window"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 4,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "TEXRAIL": {
+    "symbol": "TEXRAIL",
+    "collected_at": "2026-07-14T04:03:37.485496",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "07-Jul-2026 15:53:04",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/TEXRAIL_07072026155249_TEXRAILSE74507072026FINAL.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "07-Jul-2026 12:07:31",
+        "subject": "Bagging/Receiving of orders/contracts",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/TEXRAIL_07072026120707_CWCORDERSIGNED07072026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "02-Jul-2026 21:19:25",
+        "subject": "Bagging/Receiving of orders/contracts",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/TEXRAIL_02072026211845_TexRailSEIntimiation02072026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "02-Jul-2026 18:05:18",
+        "subject": "Credit Rating",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/TEXRAIL_02072026180420_credit_Rating.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "01-Jul-2026 22:46:12",
+        "subject": "Bagging/Receiving of orders/contracts",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/TEXRAIL_01072026224545_TexRailSEOrderSTPLJSWKKRSIR01072026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "29-Jun-2026 19:58:37",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_sandeshc_11052026124557_16.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "29-Jun-2026 19:49:22",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_sandeshc_11052026124238_19.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "29-Jun-2026 15:39:13",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_bbodade_11052026154155_TEXRAIL.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "27-Jun-2026 17:09:31",
+        "subject": "Bagging/Receiving of orders/contracts",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/TEXRAIL_27062026170527_TEXRAILSESIGNED.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "26-Jun-2026 20:05:07",
+        "subject": "Bagging/Receiving of orders/contracts",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/TEXRAIL_26062026200448_SEINTIMATIONNORTHERNRAILWAY26062026Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "24-Jun-2026 18:07:31",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/TEXRAIL_24062026180706_TRADINGWINDOWJUNE2026_Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "24-Jun-2026 18:02:25",
+        "subject": "Bagging/Receiving of orders/contracts",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/TEXRAIL_24062026180215_ORDERWESTERNRAILWAY24062026SIGNED.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "22-Jun-2026 15:00:31",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_sandeshc_24042026130706_20.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "20-Jun-2026 22:25:29",
+        "subject": "Bagging/Receiving of orders/contracts",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/TEXRAIL_20062026222514_TexRailSEIntimation20062026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "19-Jun-2026 22:04:43",
+        "subject": "Bagging/Receiving of orders/contracts",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/TEXRAIL_19062026220409_TexRailSEIntimation19062026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "19-Jun-2026 12:57:28",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_sandeshc_24042026130536_21.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "17-Jun-2026 15:33:21",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_sandeshc_24042026131436_14.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "17-Jun-2026 13:03:14",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_sandeshc_24042026131106_17.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "17-Jun-2026 13:01:13",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_sandeshc_24042026130144_24.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "17-Jun-2026 13:00:18",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_sandeshc_24042026125756_27.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "17-Jun-2026 12:30:48",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_sandeshc_24042026124846_33.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "17-Jun-2026 12:25:57",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_sandeshc_24042026123151_43.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "17-Jun-2026 12:16:27",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_bbodade_23042026162018_TEXRAIL555.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "17-Jun-2026 12:16:12",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_bbodade_23042026161703_TEXRAIL444.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "17-Jun-2026 12:15:59",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_bbodade_23042026161506_TEXRAIL3344.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "15-Jun-2026 19:08:48",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_bbodade_23042026184314_TEXRAIL.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "15-Jun-2026 19:05:37",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_bbodade_23042026180656_TEXRAIL.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "15-Jun-2026 18:25:13",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_bbodade_23042026161249_TEXRAIL22.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "15-Jun-2026 18:24:37",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_bbodade_23042026160841_TEXRAIL11.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "TEXRAIL",
+        "date": "15-Jun-2026 17:55:41",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_bbodade_23042026160606_TEXRAIL.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:ORDER_WIN — Bagging/Receiving of orders/contracts",
+      "ANN:ORDER_WIN — Bagging/Receiving of orders/contracts",
+      "ANN:ORDER_WIN — Bagging/Receiving of orders/contracts",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:ORDER_WIN — Bagging/Receiving of orders/contracts",
+      "ANN:ORDER_WIN — Bagging/Receiving of orders/contracts",
+      "ANN:ORDER_WIN — Trading Window",
+      "ANN:ORDER_WIN — Bagging/Receiving of orders/contracts",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:ORDER_WIN — Bagging/Receiving of orders/contracts",
+      "ANN:ORDER_WIN — Bagging/Receiving of orders/contracts",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 30,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "SUPRAJIT": {
+    "symbol": "SUPRAJIT",
+    "collected_at": "2026-07-14T04:03:41.730744",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SUPRAJIT",
+        "date": "10-Jul-2026 12:21:41",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SUPRAJIT_10072026122123_Certificate74_5_30June2026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SUPRAJIT",
+        "date": "08-Jul-2026 20:18:10",
+        "subject": "Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SUPRAJIT_08072026201759_InvestorPresentation8July2026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SUPRAJIT",
+        "date": "29-Jun-2026 16:22:32",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_sandeshc_11052026122730_26.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SUPRAJIT",
+        "date": "25-Jun-2026 18:02:05",
+        "subject": "ESOP/ESOS/ESPS",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SUPRAJIT_25062026175749_SEIntimationforallotmentofshares.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SUPRAJIT",
+        "date": "23-Jun-2026 15:17:30",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SUPRAJIT_23062026151604_IntimationClosureofTradingWindow.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SUPRAJIT",
+        "date": "19-Jun-2026 15:10:31",
+        "subject": "Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SUPRAJIT_19062026150951_IntimationofInvestorsconcall19June2026.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:ORDER_WIN — Trading Window",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 6,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "SUNPHARMA": {
+    "symbol": "SUNPHARMA",
+    "collected_at": "2026-07-14T04:03:46.093495",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SUNPHARMA",
+        "date": "07-Jul-2026 16:20:53",
+        "subject": "Investor Presentation",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SUNPHARMA456_07072026162031_IntimationSE20260707_Investor_Presenatation_June_2026_Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SUNPHARMA",
+        "date": "07-Jul-2026 15:46:31",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SUNSEC_07072026154321_Intimation_to_stock_exchanges_signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SUNPHARMA",
+        "date": "06-Jul-2026 19:38:44",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SUNSEC_06072026193816_SEintimationfor74.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SUNPHARMA",
+        "date": "06-Jul-2026 19:04:44",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SUNSEC_06072026190220_SEintimationforNoticeandAnnualReport25-26.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SUNPHARMA",
+        "date": "26-Jun-2026 18:49:05",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SUNSEC_26062026184810_Intimation_to_stock_exchanges_signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SUNPHARMA",
+        "date": "25-Jun-2026 19:57:31",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SUNSEC_25062026195412_SEintimationforCTW.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SUNPHARMA",
+        "date": "20-Jun-2026 17:23:42",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SUNSEC_20062026172244_SE_Intimation_Ivy_finalsigned.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SUNPHARMA",
+        "date": "16-Jun-2026 19:21:10",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SUNSEC_16062026192057_SEIntimation_IEPF.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SUNPHARMA",
+        "date": "14-Jun-2026 11:44:42",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SUNSEC_14062026114349_SE_Intimation_for_GD.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:ORDER_WIN — Trading Window",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 9,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "STARHEALTH": {
+    "symbol": "STARHEALTH",
+    "collected_at": "2026-07-14T04:03:50.914743",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "STARHEALTH",
+        "date": "03-Jul-2026 17:29:47",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/STARHEALTH_03072026172913_Certificate_Regulation_74_5__Q1FY26.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "STARHEALTH",
+        "date": "26-Jun-2026 18:44:38",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/STARHEALTH_26062026184255_SHAICL-_Trading_Window_Closure__Q1_FY_27.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "STARHEALTH",
+        "date": "26-Jun-2026 18:08:26",
+        "subject": "Resignation of Director/KMP/SMP",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/STARHEALTH_ROID_90536_KMP_Doc.zip"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "STARHEALTH",
+        "date": "26-Jun-2026 17:23:13",
+        "subject": "Outcome of Board Meeting",
+        "type": "MEETING",
+        "attachment": "https://nsearchives.nseindia.com/corporate/STARHEALTH_26062026172138_BMoutcom26062026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "STARHEALTH",
+        "date": "25-Jun-2026 13:09:16",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/STARHEALTH_25062026130449_Investor_meets_30062026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "STARHEALTH",
+        "date": "25-Jun-2026 13:02:08",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/STARHEALTH_25062026130021_Investor_meets_29062026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "STARHEALTH",
+        "date": "19-Jun-2026 16:00:27",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_bbodade_11052026183814_STARHEALTH.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "STARHEALTH",
+        "date": "19-Jun-2026 12:15:52",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/STARHEALTH_19062026121209_Investor_meets_24062026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "STARHEALTH",
+        "date": "18-Jun-2026 15:55:01",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/STARHEALTH_18062026155354_Intimation_under_Regulaion_31A_SH_Approval.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "STARHEALTH",
+        "date": "17-Jun-2026 18:15:46",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/STARHEALTH_17062026181106_SE_Letter_SR_17062026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "STARHEALTH",
+        "date": "17-Jun-2026 16:17:31",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/STARHEALTH_17062026161616_SE_Letter_VR_17062026.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:ORDER_WIN — Trading Window",
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 11,
+    "deal_count": 0,
+    "headline_count": 0
+  }
+}

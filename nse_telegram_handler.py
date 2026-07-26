@@ -25,6 +25,11 @@ WHAT CHANGED FROM v5:
      - New /prime command documented
      - Situation descriptions added
 
+  v6.1: Portfolio commands added
+     - format_portfolio() — open positions + live P/L
+     - format_exits()     — closed trade history
+     - format_returns()   — win rate + performance stats
+
 All other functions (save/load, history, news,
 new/exit/strong/caution formats) unchanged.
 """
@@ -32,6 +37,7 @@ new/exit/strong/caution formats) unchanged.
 import os
 import json
 import argparse
+import math
 from datetime import date, datetime
 
 _HERE        = os.path.dirname(os.path.abspath(__file__))
@@ -190,10 +196,11 @@ def _to_bool(value, default=False):
 
 
 # ═══════════════════════════════════════════════════════════════
-# SITUATION ENGINE — NEW
+# SITUATION ENGINE
 # ═══════════════════════════════════════════════════════════════
 
 def assign_situation(stock: dict, streak: int = 0) -> str:
+codex/find-and-fix-a-bug-in-codebase
     """
     Assign a situation label to a stock based on forward signals.
 
@@ -218,18 +225,25 @@ def assign_situation(stock: dict, streak: int = 0) -> str:
     fresh_cross  = _to_bool(stock.get('fresh_cross', False), False)
     acc_days     = _to_int(stock.get('acc_days', 0), 0)
     dist_days    = _to_int(stock.get('dist_days', 0), 0)
+
+    score        = float(stock.get('score', 0))
+    cross_age    = int(stock.get('cross_age', 999))
+    dist_pct     = float(stock.get('dist_pct', 0))
+    overextended = bool(stock.get('overextended', False))
+    fresh_cross  = bool(stock.get('fresh_cross', False))
+    acc_days     = int(stock.get('acc_days', 0))
+    dist_days    = int(stock.get('dist_days', 0))
+ main
     obv_dir      = str(stock.get('obv_dir', 'flat'))
     r3m          = _to_float(stock.get('return_3m_pct', 0), 0.0)
 
-    # ── 1. AVOID — weak, bearish or distribution ──────────────
     if score <= 3:
         return SITUATION_AVOID
     if dist_days >= 4 and obv_dir == 'falling':
         return SITUATION_AVOID
-    if cross_age == -1:   # bearish — HMA20 below HMA55
+    if cross_age == -1:
         return SITUATION_AVOID
 
-    # ── 2. BOOK PROFITS — move is mature or stretched ─────────
     if overextended and cross_age > 20:
         return SITUATION_BOOK
     if cross_age > 30 and dist_pct > 10:
@@ -237,27 +251,21 @@ def assign_situation(stock: dict, streak: int = 0) -> str:
     if r3m > 40 and score < 6:
         return SITUATION_BOOK
 
-    # ── 3. HOLD AND TRAIL — sustained momentum ─────────────────
     if streak >= 5 and score >= 5:
         return SITUATION_HOLD
 
-    # ── 4. PRIME ENTRY — best forward setup ───────────────────
     if (score >= 7 and
             not overextended and
             cross_age <= 20 and
             acc_days >= 3):
         return SITUATION_PRIME
 
-    # ── 5. WATCH CLOSELY — good but not perfect ───────────────
     return SITUATION_WATCH
 
 
 def get_situation_signal_line(stock: dict) -> str:
-    """
-    Returns a compact signal summary showing WHY the situation was assigned.
-    Example: "🟢 Cross 4d | 3.2% room | Accum vol | Sector ✅"
-    """
     parts = []
+codex/find-and-fix-a-bug-in-codebase
 
     cross_age    = _to_int(stock.get('cross_age', 999), 999)
     dist_pct     = _to_float(stock.get('dist_pct', 0), 0.0)
@@ -265,10 +273,16 @@ def get_situation_signal_line(stock: dict) -> str:
     overextended = _to_bool(stock.get('overextended', False), False)
     acc_days     = _to_int(stock.get('acc_days', 0), 0)
     dist_days    = _to_int(stock.get('dist_days', 0), 0)
+    cross_age    = int(stock.get('cross_age', 999))
+    dist_pct     = float(stock.get('dist_pct', 0))
+    fresh_cross  = bool(stock.get('fresh_cross', False))
+    overextended = bool(stock.get('overextended', False))
+    acc_days     = int(stock.get('acc_days', 0))
+    dist_days    = int(stock.get('dist_days', 0))
+ main
     obv_dir      = str(stock.get('obv_dir', 'flat'))
     sector_bias  = int(stock.get('sector_bias', 0))
 
-    # HMA cross age
     if cross_age == -1:
         parts.append("Bearish HMA")
     elif fresh_cross:
@@ -280,7 +294,6 @@ def get_situation_signal_line(stock: dict) -> str:
     else:
         parts.append("No cross")
 
-    # Distance from mean
     if overextended:
         parts.append(f"⚠️ {dist_pct:.0f}% stretched")
     elif dist_pct <= 5.0:
@@ -288,7 +301,6 @@ def get_situation_signal_line(stock: dict) -> str:
     else:
         parts.append(f"{dist_pct:.1f}% above")
 
-    # Volume quality
     if acc_days >= 4 and obv_dir == 'rising':
         parts.append("🟢 Accum vol")
     elif dist_days >= 4 or obv_dir == 'falling':
@@ -296,7 +308,6 @@ def get_situation_signal_line(stock: dict) -> str:
     else:
         parts.append("Vol OK")
 
-    # Sector
     if sector_bias == 1:
         parts.append("Sector ✅")
     elif sector_bias == -1:
@@ -306,11 +317,10 @@ def get_situation_signal_line(stock: dict) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════
-# PROBABILITY HELPER — Updated with situation awareness
+# PROBABILITY HELPER
 # ═══════════════════════════════════════════════════════════════
 
 def _get_prob(stock: dict) -> dict:
-    """Get T1/T2 probability for a stock using situation-aware model."""
     sym = stock.get('symbol', '')
     sig = get_signal(sym) if _TRACKER_OK else None
 
@@ -351,7 +361,6 @@ def _get_prob(stock: dict) -> dict:
 # ═══════════════════════════════════════════════════════════════
 
 def save_scan_results(results_df, scan_date):
-    """Save scan results to JSON. Sorted by forward score."""
     if results_df.empty:
         print("No results to save")
         return
@@ -363,10 +372,16 @@ def save_scan_results(results_df, scan_date):
         t1    = round(float(row.get('target1', entry + (entry - sl))), 2)
         t2    = round(float(row.get('target2', entry + 2 * (entry - sl))), 2)
 
-        # Determine situation
-        streak = int(row.get('streak', 0))
+        streak   = int(row.get('streak', 0))
         row_dict = row.to_dict() if hasattr(row, 'to_dict') else dict(row)
         situation = row_dict.get('situation', '') or assign_situation(row_dict, streak)
+        trigger = row.get('entry_trigger')
+        try:
+            trigger = round(float(trigger), 2)
+            if not math.isfinite(trigger):
+                trigger = None
+        except (TypeError, ValueError):
+            trigger = None
 
         stocks_list.append({
             'rank':          idx + 1,
@@ -384,7 +399,6 @@ def save_scan_results(results_df, scan_date):
             'category':      str(row.get('category', 'rising')),
             'streak':        int(row.get('streak', 0)),
             'situation':     situation,
-            # Forward score signals (for display)
             'cross_age':     int(row.get('cross_age', 999)),
             'dist_pct':      round(float(row.get('dist_pct', 0)), 1),
             'fresh_cross':   bool(row.get('fresh_cross', False)),
@@ -393,13 +407,22 @@ def save_scan_results(results_df, scan_date):
             'dist_days':     int(row.get('dist_days', 0)),
             'obv_dir':       str(row.get('obv_dir', 'flat')),
             'sector_bias':   int(row.get('sector_bias', 0)),
-            # News Intelligence (v7)
             'news_tone':     str(row.get('news_tone', 'NEUTRAL')),
             'news_flags':    str(row.get('news_flags', '')),
             'has_risk':      bool(row.get('has_risk', False)),
+            'horizon':       str(row.get('horizon', 'WATCH')),
+            'action':        str(row.get('action', 'WATCH')),
+            'entry_trigger': trigger,
+            'entry_valid_until': str(row.get('entry_valid_until', '')),
+            'action_reason': str(row.get('action_reason', '')),
+            'lifecycle_origin': str(row.get('lifecycle_origin', '')),
+            'first_seen_date': str(row.get('first_seen_date', '')),
+            'stage_since': str(row.get('stage_since', '')),
+            'days_tracked': int(row.get('days_tracked', 0)),
+            'tv_status': str(row.get('tv_status', 'NO_ENTRY')),
+            'hybrid_hull_checks': row.get('hybrid_hull_checks', []),
         })
 
-    # Sort by forward score (situation priority first, then score)
     sit_priority = {SITUATION_PRIME: 0, SITUATION_HOLD: 1,
                     SITUATION_WATCH: 2, SITUATION_BOOK: 3, SITUATION_AVOID: 4}
     stocks_list.sort(
@@ -502,7 +525,6 @@ def get_strong_stocks(history, min_days=5):
 
 
 def get_caution_stocks(stocks):
-    """Returns stocks that need extra caution."""
     caution = []
     for s in stocks:
         score    = float(s.get('score', 10))
@@ -529,14 +551,10 @@ def get_stock_streak(symbol, history):
 
 
 # ═══════════════════════════════════════════════════════════════
-# SORTING — Updated default to forward score
+# SORTING
 # ═══════════════════════════════════════════════════════════════
 
 def sort_stocks(stocks, mode='score'):
-    """
-    Sort stocks by mode.
-    Default changed from '3m' to 'score' (forward score).
-    """
     sit_priority = {
         SITUATION_PRIME: 0, SITUATION_HOLD: 1,
         SITUATION_WATCH: 2, SITUATION_BOOK: 3, SITUATION_AVOID: 4,
@@ -571,11 +589,6 @@ def sort_stocks(stocks, mode='score'):
 # ═══════════════════════════════════════════════════════════════
 
 def fetch_news_for_symbol(symbol, max_items=3):
-    """
-    Fetch news for a symbol. 
-    Tries pre-collected JSON first (v7), fallbacks to live fetch.
-    """
-    # Try pre-collected JSON from output folder (news_latest.json is preferred)
     try:
         news_file = os.path.join(_HERE, "output", "news_latest.json")
         if not os.path.exists(news_file):
@@ -588,15 +601,10 @@ def fetch_news_for_symbol(symbol, max_items=3):
                 if symbol in collected:
                     data = collected[symbol]
                     combined = []
-                    
-                    # Source 1: NSE Announcements (High Priority)
                     for ann in data.get('announcements', []):
                         combined.append({'title': ann.get('subject', ''), 'date': ann.get('date', '')[:10]})
-                    
-                    # Source 3: Google News Headlines
                     for hl in data.get('headlines', []):
                         combined.append({'title': hl.get('title', ''), 'date': hl.get('date', '')})
-                    
                     if combined:
                         return combined[:max_items]
     except Exception:
@@ -637,19 +645,11 @@ def format_news_block(news):
 
 
 # ═══════════════════════════════════════════════════════════════
-# STOCK CARD — Updated with situation + signal line
+# STOCK CARD
 # ═══════════════════════════════════════════════════════════════
 
 def _stock_card(stock, rank=0, show_prob=True,
                 show_frozen=False, show_signal=True):
-    """
-    Render one stock card with situation context.
-
-    New fields shown:
-      - Situation label + action
-      - Signal line (cross age, room, volume)
-      - 3M return labelled as (ref)
-    """
     e   = float(stock.get('close', 0))
     sl  = float(stock.get('sl', e * 0.93))
     t1  = float(stock.get('target1', e + (e - sl)))
@@ -658,17 +658,20 @@ def _stock_card(stock, rank=0, show_prob=True,
     sc  = int(round(float(stock.get('score', 0))))
     st  = int(stock.get('streak', 0))
     sit = stock.get('situation', SITUATION_WATCH)
+    horizon = stock.get('horizon', 'WATCH')
+    action = stock.get('action', 'WATCH').replace('_', ' ')
 
     sm       = SITUATION_META.get(sit, SITUATION_META.get('watch', {}))
     sit_icon = sm.get('icon', '•')
-    sit_lbl  = sm.get('label', sit.title())
 
     prefix   = f"{_b(str(rank) + '.')} " if rank else ""
     stag     = f"  🔥{st}d" if st >= 5 else ""
 
     msg = f"{prefix}{_code(stock['symbol'])}  {sc}/10{stag}  {sit_icon}\n"
+    msg += f"   {_b(str(horizon))} | {_b(str(action))}\n"
+    if stock.get('days_tracked', 0):
+        msg += f"   Tracked {stock.get('days_tracked')} scan day(s) since {stock.get('first_seen_date', '')}\n"
 
-    # Frozen P&L for tracker
     if show_frozen and _TRACKER_OK:
         sig = get_signal(stock['symbol'])
         if sig and sig.get('entry_price', 0) > 0:
@@ -677,28 +680,32 @@ def _stock_card(stock, rank=0, show_prob=True,
             msg += f"   Entry(frozen {fd}) {_fmt_price(fe)} | Now {_fmt_price(e)}\n"
             msg += f"   P/L {_fmt_pl(fe, e)}\n"
 
-    # Trade levels
     msg += f"   Entry {_fmt_price(e)} | SL {_fmt_price(sl)}\n"
     msg += f"   T1 {_fmt_price(t1)} | T2 {_fmt_price(t2)}"
 
-    # T1/T2 probabilities
+    trigger = stock.get('entry_trigger')
+    if trigger:
+        msg += f"\n   Buy only above {_fmt_price(trigger)} (valid {stock.get('entry_valid_until', '')})"
+    checks = stock.get('hybrid_hull_checks', [])
+    if checks:
+        msg += f"\n   {_b('Hybrid Hull:')} {_i(stock.get('tv_status', 'NO_ENTRY').replace('_', ' '))}"
+        for check in checks[:3]:
+            msg += f"\n   • {_i(check)}"
+
     if show_prob:
         p = _get_prob(stock)
         if p["t1"] > 0:
             msg += f"  ·  T1 {p['t1']}% T2 {p['t2']}%"
     msg += "\n"
 
-    # Signal breakdown line
     if show_signal and any(k in stock for k in
                            ['cross_age', 'dist_pct', 'acc_days']):
         sig_line = get_situation_signal_line(stock)
         if sig_line:
             msg += f"   {_i(sig_line)}\n"
 
-    # 3M return as reference
     msg += f"   3M {_fmt_return(r3)} {_i('(ref)')}\n"
 
-    # News intelligence line (v7)
     nt = stock.get('news_tone', 'NEUTRAL')
     nf = stock.get('news_flags', '')
     hr = stock.get('has_risk', False)
@@ -710,17 +717,97 @@ def _stock_card(stock, rank=0, show_prob=True,
     return msg
 
 
+# Plain-English wording used in the daily Telegram report.  The scanner's
+# internal labels stay in the saved JSON, but the reader should not need to
+# understand them before deciding whether to act.
+HORIZON_PLAIN = {
+    'NEW_1M_SETUP': 'New short-term opportunity (about 1 month)',
+    'CARRY_1_3M': 'Healthy trend being carried (1 to 3 months)',
+    'CARRY_3_6M': 'Established medium-term trend (3 to 6 months)',
+    'DIRECT_3M': 'Established 3-month trend',
+    'DIRECT_6M': 'Established 6-month trend',
+    'CORE_12M': 'Long-term market leader (6 to 12 months)',
+}
+
+ACTION_PLAIN = {
+    'BUY_TRIGGER': 'Buy only after the trigger price is crossed',
+    'WAIT_PULLBACK': 'Wait for a better entry price',
+    'HOLD_TRAIL': 'Hold if owned; raise the stop as price rises',
+    'PARTIAL_PROFIT': 'Book some profit; protect the balance',
+    'EXIT_ALERT': 'Exit or reduce the position',
+    'WATCH': 'Watch only; do not buy today',
+    'AVOID': 'Avoid today',
+}
+
+def _plain_horizon(stock):
+    return HORIZON_PLAIN.get(stock.get('horizon'), 'Trend under observation')
+
+
+def _plain_action(stock):
+    return ACTION_PLAIN.get(stock.get('action'), 'Watch only; do not buy today')
+
+
+def _plain_stock_card(stock, rank=0, mode='buy'):
+    """A readable action card for the daily report, not a technical dashboard."""
+    symbol = stock.get('symbol', 'UNKNOWN')
+    close = float(stock.get('close', 0))
+    sl = float(stock.get('sl', close * 0.93))
+    t1 = float(stock.get('target1', close + (close - sl)))
+    t2 = float(stock.get('target2', close + 2 * (close - sl)))
+    action = stock.get('action', 'WATCH')
+    prefix = f"{_b(str(rank) + '.')} " if rank else ''
+
+    if mode == 'buy':
+        trigger = float(stock.get('entry_trigger') or close)
+        valid = stock.get('entry_valid_until', '')
+        msg = f"{prefix}{_code(symbol)} — {_b('BUY ONLY ABOVE ' + _fmt_price(trigger))}\n"
+        msg += f"   Why it is here: {_plain_horizon(stock)}\n"
+        msg += f"   Entry window: next 2 trading sessions"
+        if valid:
+            msg += f" (until {_h(valid)})"
+        msg += "\n"
+        msg += f"   Safety stop: exit below {_b(_fmt_price(sl))}\n"
+        msg += f"   Profit plan: first {_fmt_price(t1)}  |  final {_fmt_price(t2)}\n"
+        msg += "   Before buying: confirm Daily + Weekly Hybrid Hull are green; no conflict.\n"
+    elif mode == 'manage':
+        verb = 'BOOK SOME PROFIT' if action == 'PARTIAL_PROFIT' else 'HOLD, BUT PROTECT PROFIT'
+        if action == 'EXIT_ALERT':
+            verb = 'EXIT OR REDUCE NOW'
+        msg = f"{prefix}{_code(symbol)} — {_b(verb)}\n"
+        msg += f"   Trend: {_plain_horizon(stock)}\n"
+        msg += f"   Protection level: {_b(_fmt_price(sl))}\n"
+        msg += f"   Next levels: {_fmt_price(t1)}  |  {_fmt_price(t2)}\n"
+        msg += "   Check Hybrid Hull before taking any fresh action.\n"
+    else:
+        msg = f"{prefix}{_code(symbol)} — {_b(_plain_action(stock))}\n"
+        msg += f"   Trend: {_plain_horizon(stock)} | Last close: {_fmt_price(close)}\n"
+        if action == 'WAIT_PULLBACK':
+            msg += f"   Do not chase price. Re-check near the safety level {_fmt_price(sl)}.\n"
+        else:
+            msg += "   Keep it on the watchlist; no new trade today.\n"
+
+    reason = stock.get('action_reason')
+    if reason:
+        msg += f"   {_i(str(reason))}\n"
+    return msg
+
+
+def _compact_action_line(stock):
+    """One-line status for a stock that needs no immediate trade."""
+    symbol = _code(stock.get('symbol', 'UNKNOWN'))
+    close = _fmt_price(stock.get('close', 0))
+    action = stock.get('action', 'WATCH')
+    if action in ('HOLD_TRAIL', 'PARTIAL_PROFIT', 'EXIT_ALERT'):
+        return (f"   {symbol}: {_plain_action(stock)} | protect below "
+                f"{_b(_fmt_price(stock.get('sl', 0)))}\n")
+    return f"   {symbol}: {_plain_action(stock)} | last close {close}\n"
+
+
 # ═══════════════════════════════════════════════════════════════
-# FORMAT: WELCOME — Updated with situation summary
+# FORMAT: WELCOME
 # ═══════════════════════════════════════════════════════════════
 
 def format_welcome(user_name=None):
-    """
-    /start and Hi/Hello response.
-    Shows Option C: Prime full cards + compact rest.
-    Delegates to nse_output.format_welcome_scan().
-    Returns message string only (keyboard handled by polling.py).
-    """
     name = user_name or ""
     try:
         from nse_output import format_welcome_scan
@@ -729,7 +816,6 @@ def format_welcome(user_name=None):
     except Exception:
         pass
 
-    # Fallback if nse_output not available
     greeting = f"👋 {_b('Hello' + (' ' + _h(name) if name else '') + '!')}\n\n"
     res = load_scan_results()
     if res and res.get('stocks'):
@@ -763,25 +849,64 @@ def format_welcome(user_name=None):
 
 
 # ═══════════════════════════════════════════════════════════════
-# FORMAT: TODAY SCAN — Grouped by situation
+# FORMAT: TODAY SCAN
 # ═══════════════════════════════════════════════════════════════
 
 def format_today_scan(stocks, scan_date=None):
-    """
-    Main daily scan grouped by situation.
-    PRIME ENTRY stocks shown first with full detail.
-    Others shown as compact list.
-    """
     ds   = _date_str(scan_date)
 
-    # Group by situation
+    groups = {key: [] for key in ('BUY_TRIGGER', 'WAIT_PULLBACK', 'HOLD_TRAIL',
+                                   'PARTIAL_PROFIT', 'EXIT_ALERT', 'WATCH', 'AVOID')}
+    for stock in stocks:
+        groups.setdefault(stock.get('action', 'WATCH'), []).append(stock)
+
+    buy = groups['BUY_TRIGGER']
+    wait = groups['WAIT_PULLBACK'] + groups['WATCH']
+    manage = groups['HOLD_TRAIL'] + groups['PARTIAL_PROFIT'] + groups['EXIT_ALERT']
+    avoid = groups['AVOID']
+
+    msg = f"📌 {_b('Today’s trading plan — ' + ds)}\n"
+    msg += f"{_i('Built from the previous market close. A scan is research, not a promise of profit.')}\n\n"
+    msg += (f"✅ Buy today: {_b(str(len(buy)))}  |  👀 Wait: {_b(str(len(wait)))}  |  "
+            f"🛡️ Manage: {_b(str(len(manage)))}  |  🚫 Avoid: {_b(str(len(avoid)))}\n")
+    msg += SEP_THIN + "\n\n"
+
+    if buy:
+        msg += f"✅ {_b('ACT TODAY — only after the trigger is crossed')}\n"
+        msg += f"{_i('Choose at most one or two. Do not buy before the stated price.')}\n\n"
+        for rank, stock in enumerate(buy[:5], 1):
+            msg += _plain_stock_card(stock, rank=rank, mode='buy') + "\n"
+        if len(buy) > 5:
+            msg += f"   {_i(str(len(buy) - 5) + ' more buy setups are available in the Buy Setups menu.')}\n\n"
+
+    if wait:
+        msg += f"👀 {_b('GOOD STOCKS — WAIT, DO NOT CHASE')}\n"
+        msg += f"{_i('These are on the radar but are not fresh buys today.')}\n"
+        for stock in wait:
+            msg += _compact_action_line(stock)
+        msg += "\n"
+
+    if manage:
+        msg += f"🛡️ {_b('IF YOU ALREADY OWN THESE')}\n"
+        for stock in manage:
+            msg += _compact_action_line(stock)
+        msg += "\n"
+
+    if avoid:
+        msg += f"🚫 {_b('AVOID TODAY')}\n"
+        msg += "   " + ", ".join(_code(s.get('symbol', '?')) for s in avoid) + "\n\n"
+
+    msg += SEP_THIN + "\n"
+    msg += f"{_b('Simple rule:')} Buy only after price crosses the trigger; always respect the safety stop.\n"
+    msg += f"{_i('Final check: TradingView Hybrid Hull must show Daily + Weekly alignment before entry.')}"
+    return msg
+
     sit_groups = {}
     for s in stocks:
         streak = int(s.get('streak', 0))
         sit    = s.get('situation') or assign_situation(s, streak)
         sit_groups.setdefault(sit, []).append({**s, 'situation': sit})
 
-    # Summary line
     parts = []
     for sit in SITUATION_ORDER:
         if sit in sit_groups:
@@ -806,7 +931,6 @@ def format_today_scan(stocks, scan_date=None):
                 f"({len(group)})\n")
         msg += f"   {_i(sm.get('action', ''))}\n\n"
 
-        # PRIME and HOLD get full cards
         if sit in (SITUATION_PRIME, SITUATION_HOLD):
             for s in group:
                 msg += _stock_card(s, rank=rank, show_prob=True,
@@ -815,7 +939,6 @@ def format_today_scan(stocks, scan_date=None):
                 msg += "\n"
                 rank += 1
         else:
-            # WATCH / BOOK / AVOID — compact list
             for s in group:
                 sc    = int(round(float(s.get('score', 0))))
                 e     = float(s.get('close', 0))
@@ -824,11 +947,12 @@ def format_today_scan(stocks, scan_date=None):
                 cross_str = (f"cross {cross}d" if 0 < cross < 999 else
                              "no cross" if cross == 999 else "bearish")
                 msg += (f"{_b(str(rank) + '.')} {_code(s['symbol'])}  {sc}/10"
-                        f"  {_fmt_price(e)}  {_i(cross_str)}\n")
+                        f"  {_fmt_price(e)}  {_i(cross_str)}\n"
+                        f"   {_b(str(s.get('horizon', 'WATCH')))} | "
+                        f"{_b(str(s.get('action', 'WATCH')).replace('_', ' '))}\n")
                 rank += 1
             msg += "\n"
 
-    # Probability summary
     if _TRACKER_OK:
         ts = get_tracker_summary()
         if ts.get('avg_t1_prob', 0) > 0:
@@ -844,15 +968,33 @@ def format_today_scan(stocks, scan_date=None):
 
 
 # ═══════════════════════════════════════════════════════════════
-# FORMAT: PRIME — New dedicated view
+# FORMAT: PRIME
 # ═══════════════════════════════════════════════════════════════
 
 def format_prime_stocks(stocks, scan_date=None):
-    """
-    PRIME ENTRY view — shows only stocks ready to enter today.
-    Full detail cards with all signals and probabilities.
-    """
     ds = _date_str(scan_date)
+
+    buy_setups = [stock for stock in stocks if stock.get('action') == 'BUY_TRIGGER']
+    if not buy_setups:
+        return (
+            f"✅ {_b('Buy setups — ' + ds)}\n\n"
+            f"{_i('No fresh buy setup today.')}\n\n"
+            "Do not force a trade. Check the waiting list or review existing holdings."
+        )
+
+    msg = f"✅ {_b('Buy setups — ' + ds)}\n"
+    msg += f"{_i('Buy only when the trigger is crossed and TradingView confirms the trend.')}\n"
+    msg += SEP_THIN + "\n\n"
+    for rank, stock in enumerate(buy_setups[:8], 1):
+        msg += _plain_stock_card(stock, rank=rank, mode='buy') + "\n"
+    msg += SEP_THIN + "\n"
+    if len(buy_setups) > 8:
+        msg += f"Showing the top 8 of {len(buy_setups)} setups. Focus on the best one or two; do not overtrade."
+    elif len(buy_setups) == 1:
+        msg += "1 setup today. Quality over quantity."
+    else:
+        msg += f"{len(buy_setups)} buy setups. Focus on the best one or two; do not overtrade."
+    return msg
 
     prime = []
     for s in stocks:
@@ -881,8 +1023,6 @@ def format_prime_stocks(stocks, scan_date=None):
     for i, s in enumerate(prime, 1):
         msg += _stock_card(s, rank=i, show_prob=True,
                            show_frozen=False, show_signal=True)
-
-        # Add TV confirmation checklist
         msg += f"   {_b('TV Check:')}\n"
         msg += f"   Regime TREND ✓ · ADX ≥20 ✓ · W.Trend Bull ✓\n\n"
 
@@ -896,7 +1036,7 @@ def format_prime_stocks(stocks, scan_date=None):
 
 
 # ═══════════════════════════════════════════════════════════════
-# FORMAT: STOCK LIST (paginated) — Updated sort default
+# FORMAT: STOCK LIST (paginated)
 # ═══════════════════════════════════════════════════════════════
 
 def format_stock_list(stocks, start_idx=0, count=5,
@@ -1024,7 +1164,7 @@ def format_exit_stocks(exit_stocks, scan_date=None):
 
 
 # ═══════════════════════════════════════════════════════════════
-# FORMAT: CAUTION — Updated with situation-aware flags
+# FORMAT: CAUTION
 # ═══════════════════════════════════════════════════════════════
 
 def format_caution_stocks(stocks, scan_date=None):
@@ -1042,16 +1182,15 @@ def format_caution_stocks(stocks, scan_date=None):
     msg += SEP_THIN + "\n\n"
 
     for i, s in enumerate(caution, 1):
-        sc       = int(round(float(s.get('score', 0))))
-        dl       = float(s.get('delivery_pct', 0))
-        e        = float(s.get('close', 0))
-        r3       = float(s.get('return_3m_pct', 0))
-        sit      = s.get('situation', '')
-        dist_pct = float(s.get('dist_pct', 0))
+        sc        = int(round(float(s.get('score', 0))))
+        dl        = float(s.get('delivery_pct', 0))
+        e         = float(s.get('close', 0))
+        r3        = float(s.get('return_3m_pct', 0))
+        sit       = s.get('situation', '')
+        dist_pct  = float(s.get('dist_pct', 0))
         cross_age = int(s.get('cross_age', 0))
-        p        = _get_prob(s)
+        p         = _get_prob(s)
 
-        # Build reason list
         reasons = []
         if sit == SITUATION_AVOID:
             reasons.append("Avoid — weak signal or distribution")
@@ -1160,7 +1299,6 @@ def format_strong_stocks(strong_stocks, scan_date=None):
 def format_summary(stocks, scan_date=None, history=None):
     ds = _date_str(scan_date)
 
-    # Count by situation
     sit_counts = {}
     for s in stocks:
         sit = s.get('situation', SITUATION_WATCH)
@@ -1219,7 +1357,77 @@ def format_summary(stocks, scan_date=None, history=None):
 
 
 # ═══════════════════════════════════════════════════════════════
-# FORMAT: HELP — Updated with /prime and situation explanation
+# FORMAT: PORTFOLIO COMMANDS (v6.1 — new)
+# ═══════════════════════════════════════════════════════════════
+
+def format_portfolio():
+    """For /portfolio command — open positions with live P/L."""
+    try:
+        from nse_portfolio import format_portfolio_for_bot
+        return format_portfolio_for_bot()
+    except ImportError:
+        return _i("nse_portfolio.py not found. Deploy it first.")
+    except Exception as e:
+        return _i(f"Portfolio error: {e}")
+
+
+def format_exits():
+    """For /exits command — closed trade history."""
+    try:
+        from nse_portfolio import format_exits_for_bot
+        return format_exits_for_bot(last_n=15)
+    except ImportError:
+        return _i("nse_portfolio.py not found. Deploy it first.")
+    except Exception as e:
+        return _i(f"Exits error: {e}")
+
+
+def format_returns():
+    """For /returns command — portfolio summary stats."""
+    try:
+        from nse_portfolio import get_portfolio_summary, get_open_positions
+        s   = get_portfolio_summary()
+        pos = get_open_positions()
+
+        msg  = f"📈 {_b('Portfolio Returns')}\n"
+        msg += f"{SEP_THIN}\n"
+        msg += f"Open positions : {s['open_count']}\n"
+        msg += f"Closed trades  : {s['closed_count']}\n"
+        msg += f"Win rate       : {_b(str(s['win_rate']) + '%')}\n"
+        msg += f"Last run       : {s['last_run'][:10] if s['last_run'] else 'Never'}\n\n"
+
+        tiers = s.get('tiers', {})
+        if any(tiers.values()):
+            msg += f"{_b('Tiers')}\n"
+            msg += f"  🏆 Conviction : {tiers.get('Conviction', 0)}\n"
+            msg += f"  📈 Compounder : {tiers.get('Compounder', 0)}\n"
+            msg += f"  🌱 Building   : {tiers.get('Building', 0)}\n\n"
+
+        if pos:
+            total_pl = 0
+            winners  = 0
+            for p in pos.values():
+                entry   = float(p.get('entry_price', 0))
+                current = float(p.get('current_price', entry))
+                if entry > 0:
+                    pl = (current - entry) / entry * 100
+                    total_pl += pl
+                    if pl >= 0:
+                        winners += 1
+            avg_pl  = total_pl / len(pos)
+            pl_sign = '+' if avg_pl >= 0 else ''
+            msg += f"{_b('Open P/L Avg')}: {pl_sign}{avg_pl:.1f}%\n"
+            msg += f"Winners: {winners} / {len(pos)}\n"
+
+        return msg
+    except ImportError:
+        return _i("nse_portfolio.py not found. Deploy it first.")
+    except Exception as e:
+        return _i(f"Returns error: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════
+# FORMAT: HELP
 # ═══════════════════════════════════════════════════════════════
 
 def format_help():
@@ -1234,6 +1442,10 @@ def format_help():
         f"💰 /strong — 5+ day streak (hold & trail)\n"
         f"📅 /digest — Last week performance\n"
         f"📖 /guide — How to read the scanner\n\n"
+        f"{_b('Portfolio:')}\n"
+        f"💼 /portfolio — Open positions + live P/L\n"
+        f"📊 /returns — Win rate + performance stats\n"
+        f"📉 /exits — Closed trade history\n\n"
         f"{_b('Situations explained:')}\n"
         f"🎯 Prime — Fresh cross, room to run, accum vol\n"
         f"💰 Hold — In move 5+ days, trail your SL\n"

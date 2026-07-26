@@ -1,0 +1,1216 @@
+{
+  "HAL": {
+    "symbol": "HAL",
+    "collected_at": "2026-07-22T04:13:25.091209",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "HAL",
+        "date": "17-Jul-2026 16:01:41",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/HAL_17072026160132_DividendUpdate_17072026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "HAL",
+        "date": "01-Jul-2026 14:16:47",
+        "subject": "Change in Management",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/HAL_01072026141639_ChangeInSeniorMngt_01072026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "HAL",
+        "date": "29-Jun-2026 12:54:19",
+        "subject": "Change in Auditors",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/HAL_29062026125127_outcome_boardmeeting_29062026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "HAL",
+        "date": "29-Jun-2026 12:44:12",
+        "subject": "Record Date",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/HAL_29062026124357_outcome_boardmeeting_29062026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "HAL",
+        "date": "29-Jun-2026 12:42:48",
+        "subject": "Dividend",
+        "type": "CORPORATE_ACTION",
+        "attachment": "https://nsearchives.nseindia.com/corporate/HAL_29062026124231_outcome_boardmeeting_29062026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "HAL",
+        "date": "26-Jun-2026 12:05:29",
+        "subject": "Change in Management",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/HAL_26062026120340_ChangeInMngt_26062026.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 6,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "BIOCON": {
+    "symbol": "BIOCON",
+    "collected_at": "2026-07-22T04:13:29.349476",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIOCON",
+        "date": "16-Jul-2026 17:30:50",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIOCON_16072026172930_Intimation_NewspaperAd.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIOCON",
+        "date": "16-Jul-2026 08:43:39",
+        "subject": "Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIOCON_16072026084200_SECompanyStatement.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIOCON",
+        "date": "15-Jul-2026 15:11:13",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIOCON_15072026151000_Biocon_AGM_Intimation.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIOCON",
+        "date": "13-Jul-2026 20:42:17",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIOCON_13072026204142_Coveringletter.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIOCON",
+        "date": "09-Jul-2026 08:45:13",
+        "subject": "Press Release",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIOCON_09072026084447_Pressrelease09072026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIOCON",
+        "date": "07-Jul-2026 19:21:16",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIOCON_07072026192051_Intimation_PriorAGM_-_final.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIOCON",
+        "date": "29-Jun-2026 23:22:04",
+        "subject": "Allotment of Securities",
+        "type": "FUNDRAISING",
+        "attachment": "https://nsearchives.nseindia.com/corporate/Bioconlimited_29062026232036_SEIntimation.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIOCON",
+        "date": "29-Jun-2026 22:51:40",
+        "subject": "Acquisition",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIOCON_29062026225131_SE_Intimation_-_Allotment__Preferential_Issue_.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIOCON",
+        "date": "27-Jun-2026 19:39:27",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIOCON_27062026193903_IntimationTradingWindow.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIOCON",
+        "date": "24-Jun-2026 08:33:42",
+        "subject": "Press Release",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIOCON_24062026083309_Pressrelease24062026-signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIOCON",
+        "date": "22-Jun-2026 19:37:50",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIOCON_22062026193647_SE_Intimation.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:FUNDRAISING — Allotment of Securities",
+      "ANN:DEAL — Acquisition",
+      "ANN:ORDER_WIN — Trading Window",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 11,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "JUBLPHARMA": {
+    "symbol": "JUBLPHARMA",
+    "collected_at": "2026-07-22T04:13:33.566944",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "JUBLPHARMA",
+        "date": "19-Jul-2026 18:21:29",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/JUBLPHARMA_19072026182109_LetterNewspaperPB19july2026signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "JUBLPHARMA",
+        "date": "18-Jul-2026 19:37:05",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/JUBLPHARMA_18072026193631_PostalBallotDispatch18072026FinalSigned.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "JUBLPHARMA",
+        "date": "16-Jul-2026 18:30:48",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/JUBLPHARMA_16072026183030_ESOP_Disclosure_signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "JUBLPHARMA",
+        "date": "16-Jul-2026 13:47:17",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/JUBLPHARMA_16072026134702_Disclosure16072026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "JUBLPHARMA",
+        "date": "02-Jul-2026 13:21:42",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/JUBLPHARMA_02072026132123_IntimationReg745signedQ1.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "JUBLPHARMA",
+        "date": "01-Jul-2026 18:25:35",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/JUBLPHARMA_01072026182527_Covering_letter_-_Newspapesigned.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "JUBLPHARMA",
+        "date": "30-Jun-2026 18:41:58",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/JUBLPHARMA_30062026184057_JBL_-_Stock_Exchange_Disclosure.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "JUBLPHARMA",
+        "date": "29-Jun-2026 15:59:59",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/JUBLPHARMA_29062026155944_ClosureofTradingWindowFinalsigned.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "JUBLPHARMA",
+        "date": "26-Jun-2026 00:23:03",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/JUBLPHARMA_26062026002249_Signed_SE_Disclosure_JGL_USFDA.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "JUBLPHARMA",
+        "date": "24-Jun-2026 16:48:41",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/JUBLPHARMA_24062026164826_JGL_Stock_Exchange_Disclosure-clean.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:ORDER_WIN — Trading Window",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 10,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "AWL": {
+    "symbol": "AWL",
+    "collected_at": "2026-07-22T04:13:38.205007",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AWL",
+        "date": "17-Jul-2026 13:13:51",
+        "subject": "Press Release",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AWL_17072026131338_SE_Alife_PR.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AWL",
+        "date": "16-Jul-2026 12:39:07",
+        "subject": "Change in Management",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AWL_16072026123827_Suchandan_Resignation.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AWL",
+        "date": "14-Jul-2026 18:22:12",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AWL_14072026182201_SE_ESG_Rating_14072026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AWL",
+        "date": "09-Jul-2026 18:15:33",
+        "subject": "Press Release",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AWL_09072026181523_SE_Press_Release.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AWL",
+        "date": "08-Jul-2026 17:29:42",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AWL_08072026172935_SE_Scru_Report.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AWL",
+        "date": "07-Jul-2026 16:45:09",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AWL_07072026164307_SE_AGM_Proceedings.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AWL",
+        "date": "07-Jul-2026 16:05:49",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AWL_07072026160540_SE_Reg_74.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AWL",
+        "date": "07-Jul-2026 16:05:00",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AWL_07072026160442_SE_AGM_Proceedings.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AWL",
+        "date": "03-Jul-2026 18:35:53",
+        "subject": "Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AWL_03072026183519_AWL_Updates_Q1FY27.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AWL",
+        "date": "01-Jul-2026 11:08:20",
+        "subject": "Press Release",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AWL_01072026110748_SE_Press_Release_Madhur_July_1_2026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AWL",
+        "date": "29-Jun-2026 15:55:24",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AWL_29062026155510_AWL_SE_Trading_Window_Closure.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "AWL",
+        "date": "26-Jun-2026 15:04:08",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AWL_26062026150356_SE_ESG_Ratings.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:ORDER_WIN — Trading Window",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 12,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "ACUTAAS": {
+    "symbol": "ACUTAAS",
+    "collected_at": "2026-07-22T04:13:42.410844",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ACUTAAS",
+        "date": "20-Jul-2026 11:47:02",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AMIORG_20072026114240_Intimationcall30062026Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ACUTAAS",
+        "date": "10-Jul-2026 16:18:00",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AMIORG_10072026161736_Reg74300626swsigned.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ACUTAAS",
+        "date": "02-Jul-2026 20:23:05",
+        "subject": "Change in Management",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AMIORG_02072026202253_NRCoutcome02072026SWSigned.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ACUTAAS",
+        "date": "26-Jun-2026 17:38:13",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AMIORG_26062026173741_ClosureofTWCswSIGNED.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ACUTAAS",
+        "date": "23-Jun-2026 11:23:32",
+        "subject": "Action(s) initiated or orders passed",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AMIORG_23062026112246_IntimationSWSigned.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ACUTAAS",
+        "date": "22-Jun-2026 21:26:02",
+        "subject": "Action(s) initiated or orders passed",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/AMIORG_22062026212501_IntimationSWSigned.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:ORDER_WIN — Trading Window",
+      "ANN:ORDER_WIN — Action(s) initiated or orders passed",
+      "ANN:ORDER_WIN — Action(s) initiated or orders passed",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 6,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "ALKEM": {
+    "symbol": "ALKEM",
+    "collected_at": "2026-07-22T04:13:46.627906",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ALKEM",
+        "date": "17-Jul-2026 18:07:09",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ALKEM_17072026180601_Reg30Occlutech-completion_Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ALKEM",
+        "date": "16-Jul-2026 16:28:23",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ALKEM_16072026162734_Newspaperintimation_Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ALKEM",
+        "date": "16-Jul-2026 14:53:32",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ALKEM_16072026145231_Right_isuse_allotment_Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ALKEM",
+        "date": "15-Jul-2026 15:38:37",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ALKEM_15072026153123_IntimationofCCM_Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ALKEM",
+        "date": "02-Jul-2026 14:53:46",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ALKEM_02072026145216_Exchangeintimation_Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ALKEM",
+        "date": "01-Jul-2026 16:48:05",
+        "subject": "Action(s) taken or orders passed",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ALKEM_01072026163932_Order_Intimation_Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ALKEM",
+        "date": "30-Jun-2026 14:48:07",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ALKEM_30062026144641_Stockexchangeintimation_Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ALKEM",
+        "date": "29-Jun-2026 11:56:48",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ALKEM_29062026115556_ScheduleofInvestorMeet_06_July_2026_Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ALKEM",
+        "date": "29-Jun-2026 11:52:36",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ALKEM_29062026115142_ScheduleofInvestorMeet_03_July_2026_Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ALKEM",
+        "date": "29-Jun-2026 09:39:11",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ALKEM_29062026093855_Occlutech-Update_March_2026_signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ALKEM",
+        "date": "24-Jun-2026 13:18:42",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ALKEM_24062026131827_Closure_of_Trading_Window_Signed.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:ORDER_WIN — Action(s) taken or orders passed",
+      "ANN:ORDER_WIN — Trading Window"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 11,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "ROLEXRINGS": {
+    "symbol": "ROLEXRINGS",
+    "collected_at": "2026-07-22T04:13:51.350280",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ROLEXRINGS",
+        "date": "09-Jul-2026 10:39:53",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ROLEXRINGS_09072026103947_Intimation.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ROLEXRINGS",
+        "date": "08-Jul-2026 12:12:23",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ROLEXRINGS_08072026121215_Intimation_of_Dispatch_Ad.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ROLEXRINGS",
+        "date": "07-Jul-2026 12:32:39",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ROLEXRINGS_07072026123233_Intimation_of_Meet_with_Investors.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ROLEXRINGS",
+        "date": "05-Jul-2026 15:46:06",
+        "subject": "Buyback",
+        "type": "CORPORATE_ACTION",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ROLEXRINGS_05072026154553_IntimationLOF.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ROLEXRINGS",
+        "date": "29-Jun-2026 18:01:30",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ROLEXRINGS_29062026180124_Intimation.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "ROLEXRINGS",
+        "date": "29-Jun-2026 15:55:09",
+        "subject": "Record Date",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ROLEXRINGS_29062026155500_Intimation.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:ORDER_WIN — Trading Window",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 6,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "SAILIFE": {
+    "symbol": "SAILIFE",
+    "collected_at": "2026-07-22T04:13:55.543270",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SAILIFE",
+        "date": "10-Jul-2026 19:01:47",
+        "subject": "ESOP/ESOS/ESPS",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SAILIFE_10072026190052_Intimation.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SAILIFE",
+        "date": "07-Jul-2026 16:24:32",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SAILIFE_07072026162210_Compliance_Certificate.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SAILIFE",
+        "date": "25-Jun-2026 20:59:52",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SAILIFE_25062026205926_TW_Closure.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SAILIFE",
+        "date": "22-Jun-2026 17:02:59",
+        "subject": "Allotment of Securities",
+        "type": "FUNDRAISING",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SAILIFE_22062026170222_LODR_Intimation_of_Allotment.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:ORDER_WIN — Trading Window",
+      "ANN:FUNDRAISING — Allotment of Securities",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 4,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "SHOPERSTOP": {
+    "symbol": "SHOPERSTOP",
+    "collected_at": "2026-07-22T04:13:59.784205",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SHOPERSTOP",
+        "date": "18-Jul-2026 10:13:28",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SHOPERSTOP_18072026101309_NewratingsESG_-_July_2026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SHOPERSTOP",
+        "date": "15-Jul-2026 15:34:42",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SHOPERSTOP_15072026153359_SE_Letter_Investor_Call_Invite_Intimation_Q1_FY27_signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SHOPERSTOP",
+        "date": "10-Jul-2026 19:05:32",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SHOPERSTOP_10072026190321_SEIntimationonsubmissionofapplication.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SHOPERSTOP",
+        "date": "10-Jul-2026 19:05:32",
+        "subject": "Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SHOPERSTOP_10072026190401_SEIntimationonsubmissionofapplication.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SHOPERSTOP",
+        "date": "09-Jul-2026 12:16:44",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SHOPERSTOP_09072026121301_Outcomereclassification09072026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SHOPERSTOP",
+        "date": "06-Jul-2026 10:52:39",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SHOPERSTOP_06072026104723_Reg_74_5__letter_30062026_Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SHOPERSTOP",
+        "date": "26-Jun-2026 13:00:20",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SHOPERSTOP_26062026130007_SE_PostDispatchadvt.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SHOPERSTOP",
+        "date": "25-Jun-2026 13:56:04",
+        "subject": "Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SHOPERSTOP_25062026135543_Reg36DisclosureSD.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SHOPERSTOP",
+        "date": "25-Jun-2026 13:24:52",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SHOPERSTOP_25062026132408_IntimationAGMAR2026SD.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SHOPERSTOP",
+        "date": "25-Jun-2026 13:21:26",
+        "subject": "Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SHOPERSTOP_25062026132100_IntimationBRSRSD.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SHOPERSTOP",
+        "date": "25-Jun-2026 12:48:23",
+        "subject": "Spurt in Volume",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SHOPERSTOP_25062026124726_ResponsetoNSE.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SHOPERSTOP",
+        "date": "24-Jun-2026 18:51:54",
+        "subject": "Spurt in Volume",
+        "type": "GENERAL",
+        "attachment": "-"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SHOPERSTOP",
+        "date": "23-Jun-2026 14:28:20",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SHOPERSTOP_23062026142738_SE_Letter-Newpaper_Adv_23062026_Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "SHOPERSTOP",
+        "date": "23-Jun-2026 12:01:30",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/SHOPERSTOP_23062026120105_TWC30062026.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:ORDER_WIN — Trading Window",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 14,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "NEOGEN": {
+    "symbol": "NEOGEN",
+    "collected_at": "2026-07-22T04:14:04.547999",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "NEOGEN",
+        "date": "20-Jul-2026 16:33:20",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/NEOGEN_20072026163207_IntimationofInvestorCall30062026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "NEOGEN",
+        "date": "18-Jul-2026 17:32:32",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/NEOGEN_18072026173213_CreditRating18072026_Final.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "NEOGEN",
+        "date": "18-Jul-2026 17:30:34",
+        "subject": "Credit Rating- New",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/NEOGEN_18072026173013_CreditRating18072026_Final.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "NEOGEN",
+        "date": "17-Jul-2026 16:14:34",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/NEOGEN_17072026161420_Dahej_Fire_UPDATE_Insurance_17072026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "NEOGEN",
+        "date": "17-Jul-2026 16:13:07",
+        "subject": "Strikes/Lockouts/Disturbances",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/NEOGEN_17072026161250_Dahej_Fire_UPDATE_Insurance_17072026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "NEOGEN",
+        "date": "26-Jun-2026 12:10:38",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/NEOGEN_26062026121024_TradingWindowClosure30062026.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:ORDER_WIN — Trading Window"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 6,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "CENTENKA": {
+    "symbol": "CENTENKA",
+    "collected_at": "2026-07-22T04:14:08.843103",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "CENTENKA",
+        "date": "21-Jul-2026 18:02:46",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/CENTURYENKA_21072026180236_Intimation_Reg_30_signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "CENTENKA",
+        "date": "21-Jul-2026 16:50:37",
+        "subject": "Change in Management",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/CENTURYENKA_21072026164908_Outcome_BM_21st_July_2026_signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "CENTENKA",
+        "date": "21-Jul-2026 16:36:17",
+        "subject": "Outcome of Board Meeting",
+        "type": "MEETING",
+        "attachment": "https://nsearchives.nseindia.com/corporate/CENTURYENKA_21072026163504_Outcome_BM_21st_July_2026_signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "CENTENKA",
+        "date": "09-Jul-2026 18:13:54",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/CENTURYENKA_09072026181340_Covering_letter_signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "CENTENKA",
+        "date": "04-Jul-2026 12:02:16",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/CENTURYENKA_04072026120204_Book__Closure_and_AGM_signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "CENTENKA",
+        "date": "04-Jul-2026 12:00:14",
+        "subject": "Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/CENTURYENKA_04072026120006_Book__Closure_and_AGM_signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "CENTENKA",
+        "date": "04-Jul-2026 11:58:35",
+        "subject": "Record Date",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/CENTURYENKA_04072026115751_Book__Closure_and_AGM_signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "CENTENKA",
+        "date": "30-Jun-2026 16:11:16",
+        "subject": "Disclosure under SEBI Takeover Regulations",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/team_bbodade_23062026180155_CENTENKA.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "CENTENKA",
+        "date": "25-Jun-2026 18:57:23",
+        "subject": "Credit Rating",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/CENTURYENKA_25062026185712_Intimation_CR_FY2026_27_signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "CENTENKA",
+        "date": "24-Jun-2026 16:06:36",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/CENTURYENKA_24062026160627_Intimation_Trading_Window_Closure_signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "CENTENKA",
+        "date": "22-Jun-2026 11:25:18",
+        "subject": "Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/CENTURYENKA_22062026111640_Intimation_Reg_30_PPA_V2_Signed.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:DEAL — Disclosure under SEBI Takeover Regulations",
+      "ANN:ORDER_WIN — Trading Window",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 11,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "BIRLACORPN": {
+    "symbol": "BIRLACORPN",
+    "collected_at": "2026-07-22T04:14:13.153094",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIRLACORPN",
+        "date": "10-Jul-2026 17:06:15",
+        "subject": "Credit Rating",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIRLACORP1_10072026170539_SE_Intimation_RCCPL_Credit_rating_10072026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIRLACORPN",
+        "date": "10-Jul-2026 11:46:39",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIRLACORP1_10072026114612_Newspaper_SE_Intimation.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIRLACORPN",
+        "date": "09-Jul-2026 18:10:40",
+        "subject": "Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIRLACORP1_09072026181027_BRSR_SE_Intimation.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIRLACORPN",
+        "date": "09-Jul-2026 15:25:58",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIRLACORP1_09072026152535_AGM_Notice_Annual_Report_SE_Intimation.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIRLACORPN",
+        "date": "09-Jul-2026 15:13:53",
+        "subject": "Record Date",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIRLACORP1_09072026151309_Record_Date_SE_Intimation.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIRLACORPN",
+        "date": "07-Jul-2026 11:58:16",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIRLACORP1_07072026115759_Reg74DPRegulation30062026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIRLACORPN",
+        "date": "03-Jul-2026 18:28:36",
+        "subject": "Credit Rating",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIRLACORP1_03072026182704_Intimation_o_credit_rating_03072026.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIRLACORPN",
+        "date": "27-Jun-2026 13:19:11",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIRLACORP1_27062026131856_DisclosureUnderReg30NewspaperPublication.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIRLACORPN",
+        "date": "26-Jun-2026 15:16:46",
+        "subject": "General Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIRLACORP1_26062026151620_IntimationofTDSCommunication260626.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIRLACORPN",
+        "date": "25-Jun-2026 16:34:24",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIRLACORP1_25062026163406_IntimationOfClosureofTradingWindow.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BIRLACORPN",
+        "date": "22-Jun-2026 18:18:54",
+        "subject": "Commencement of commercial production/operations",
+        "type": "EXPANSION",
+        "attachment": "https://nsearchives.nseindia.com/corporate/BIRLACORP1_22062026181820_Disclosure_Reg30_Commencement_of_Commercial_Prod.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:ORDER_WIN — Trading Window",
+      "ANN:EXPANSION — Commencement of commercial production/operations",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 11,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "BHARATFORG": {
+    "symbol": "BHARATFORG",
+    "collected_at": "2026-07-22T04:14:17.831851",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BHARATFORG",
+        "date": "18-Jul-2026 16:24:38",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ANILSHINDE_18072026162426_SEIntimationNewspapersd.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BHARATFORG",
+        "date": "17-Jul-2026 11:21:08",
+        "subject": "Shareholders meeting",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ANILSHINDE_17072026111447_SEIntimation_AGM_Notice_and_IAR-sd.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BHARATFORG",
+        "date": "06-Jul-2026 12:49:56",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ANILSHINDE_06072026124248_SEIntimationReg74_5_.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BHARATFORG",
+        "date": "02-Jul-2026 16:17:50",
+        "subject": "Copy of Newspaper Publication",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ANILSHINDE_02072026161508_SEIntimation.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BHARATFORG",
+        "date": "26-Jun-2026 18:13:49",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ANILSHINDE_26062026181241_SEIntimationInvestorCall.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BHARATFORG",
+        "date": "26-Jun-2026 11:36:47",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ANILSHINDE_26062026113354_SEIntimationTradingWindowClosure-sd.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BHARATFORG",
+        "date": "24-Jun-2026 18:02:50",
+        "subject": "Acquisition",
+        "type": "DEAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ANILSHINDE_24062026180135_SEIntimationInvestmentinRSAL.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "BHARATFORG",
+        "date": "23-Jun-2026 15:33:09",
+        "subject": "Analysts/Institutional Investor Meet/Con. Call Updates",
+        "type": "GENERAL",
+        "attachment": "https://nsearchives.nseindia.com/corporate/ANILSHINDE_23062026152202_SEIntimationInvestorCall.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:ORDER_WIN — Trading Window",
+      "ANN:DEAL — Acquisition",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 8,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "ARE&M": {
+    "symbol": "ARE&M",
+    "collected_at": "2026-07-22T04:14:22.136934",
+    "days_back": 30,
+    "announcements": [],
+    "deals": [],
+    "headlines": [],
+    "flags": [],
+    "news_tone": "NEUTRAL",
+    "has_news": false,
+    "ann_count": 0,
+    "deal_count": 0,
+    "headline_count": 0
+  },
+  "DAMCAPITAL": {
+    "symbol": "DAMCAPITAL",
+    "collected_at": "2026-07-22T04:14:26.408926",
+    "days_back": 30,
+    "announcements": [
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "DAMCAPITAL",
+        "date": "09-Jul-2026 15:36:59",
+        "subject": "Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+        "type": "REGULATORY",
+        "attachment": "https://nsearchives.nseindia.com/corporate/DAMCAPITAL_09072026153650_Intimation_of_Confirmation_Certificate_Signed.pdf"
+      },
+      {
+        "source": "NSE_ANNOUNCEMENT",
+        "symbol": "DAMCAPITAL",
+        "date": "24-Jun-2026 11:39:27",
+        "subject": "Trading Window",
+        "type": "ORDER_WIN",
+        "attachment": "https://nsearchives.nseindia.com/corporate/DAMCAPITAL_24062026113912_Intimate_of_Trading_Window_Closure_Signed.pdf"
+      }
+    ],
+    "deals": [],
+    "headlines": [],
+    "flags": [
+      "ANN:ORDER_WIN — Trading Window",
+      "RISK:REGULATORY — Certificate under SEBI (Depositories and Participants) Regul"
+    ],
+    "news_tone": "NEUTRAL",
+    "has_news": true,
+    "ann_count": 2,
+    "deal_count": 0,
+    "headline_count": 0
+  }
+}
