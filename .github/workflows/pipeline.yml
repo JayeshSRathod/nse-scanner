@@ -7,8 +7,6 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-permissions:
-  contents: write
 
 permissions:
   contents: write
@@ -42,8 +40,6 @@ jobs:
           GITHUB_REPO: JayeshSRathod/nse-scanner
           GITHUB_BRANCH: main
         run: python main_pipeline.py
-<<<<<<< Updated upstream
-=======
 
       - name: Persist market history and reports
         shell: bash
@@ -60,4 +56,3 @@ jobs:
             git commit -m "Auto: persist NSE market data and scan output"
             git push
           fi
->>>>>>> Stashed changes
