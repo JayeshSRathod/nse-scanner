@@ -10,16 +10,24 @@ env:
 permissions:
   contents: write
 
+permissions:
+  contents: write
+
+concurrency:
+  group: nse-pipeline-daily
+  cancel-in-progress: false
+
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
+    timeout-minutes: 180
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -34,3 +42,22 @@ jobs:
           GITHUB_REPO: JayeshSRathod/nse-scanner
           GITHUB_BRANCH: main
         run: python main_pipeline.py
+<<<<<<< Updated upstream
+=======
+
+      - name: Persist market history and reports
+        shell: bash
+        run: |
+          git config user.name "nse-scanner-bot"
+          git config user.email "nse-scanner-bot@users.noreply.github.com"
+          git add market_data telegram_last_scan.json scan_history.json scan_health.json
+          git add scan_lifecycle.json 2>/dev/null || true
+          git add -f output/news_latest.json output/news_*.json 2>/dev/null || true
+          git add portfolio.json 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No scanner state changes to commit."
+          else
+            git commit -m "Auto: persist NSE market data and scan output"
+            git push
+          fi
+>>>>>>> Stashed changes
