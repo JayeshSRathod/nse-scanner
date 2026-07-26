@@ -37,6 +37,7 @@ new/exit/strong/caution formats) unchanged.
 import os
 import json
 import argparse
+import math
 from datetime import date, datetime
 
 _HERE        = os.path.dirname(os.path.abspath(__file__))
@@ -288,6 +289,13 @@ def save_scan_results(results_df, scan_date):
         streak   = int(row.get('streak', 0))
         row_dict = row.to_dict() if hasattr(row, 'to_dict') else dict(row)
         situation = row_dict.get('situation', '') or assign_situation(row_dict, streak)
+        trigger = row.get('entry_trigger')
+        try:
+            trigger = round(float(trigger), 2)
+            if not math.isfinite(trigger):
+                trigger = None
+        except (TypeError, ValueError):
+            trigger = None
 
         stocks_list.append({
             'rank':          idx + 1,
@@ -316,6 +324,17 @@ def save_scan_results(results_df, scan_date):
             'news_tone':     str(row.get('news_tone', 'NEUTRAL')),
             'news_flags':    str(row.get('news_flags', '')),
             'has_risk':      bool(row.get('has_risk', False)),
+            'horizon':       str(row.get('horizon', 'WATCH')),
+            'action':        str(row.get('action', 'WATCH')),
+            'entry_trigger': trigger,
+            'entry_valid_until': str(row.get('entry_valid_until', '')),
+            'action_reason': str(row.get('action_reason', '')),
+            'lifecycle_origin': str(row.get('lifecycle_origin', '')),
+            'first_seen_date': str(row.get('first_seen_date', '')),
+            'stage_since': str(row.get('stage_since', '')),
+            'days_tracked': int(row.get('days_tracked', 0)),
+            'tv_status': str(row.get('tv_status', 'NO_ENTRY')),
+            'hybrid_hull_checks': row.get('hybrid_hull_checks', []),
         })
 
     sit_priority = {SITUATION_PRIME: 0, SITUATION_HOLD: 1,
@@ -553,6 +572,8 @@ def _stock_card(stock, rank=0, show_prob=True,
     sc  = int(round(float(stock.get('score', 0))))
     st  = int(stock.get('streak', 0))
     sit = stock.get('situation', SITUATION_WATCH)
+    horizon = stock.get('horizon', 'WATCH')
+    action = stock.get('action', 'WATCH').replace('_', ' ')
 
     sm       = SITUATION_META.get(sit, SITUATION_META.get('watch', {}))
     sit_icon = sm.get('icon', '•')
@@ -561,6 +582,9 @@ def _stock_card(stock, rank=0, show_prob=True,
     stag     = f"  🔥{st}d" if st >= 5 else ""
 
     msg = f"{prefix}{_code(stock['symbol'])}  {sc}/10{stag}  {sit_icon}\n"
+    msg += f"   {_b(str(horizon))} | {_b(str(action))}\n"
+    if stock.get('days_tracked', 0):
+        msg += f"   Tracked {stock.get('days_tracked')} scan day(s) since {stock.get('first_seen_date', '')}\n"
 
     if show_frozen and _TRACKER_OK:
         sig = get_signal(stock['symbol'])
@@ -572,6 +596,15 @@ def _stock_card(stock, rank=0, show_prob=True,
 
     msg += f"   Entry {_fmt_price(e)} | SL {_fmt_price(sl)}\n"
     msg += f"   T1 {_fmt_price(t1)} | T2 {_fmt_price(t2)}"
+
+    trigger = stock.get('entry_trigger')
+    if trigger:
+        msg += f"\n   Buy only above {_fmt_price(trigger)} (valid {stock.get('entry_valid_until', '')})"
+    checks = stock.get('hybrid_hull_checks', [])
+    if checks:
+        msg += f"\n   {_b('Hybrid Hull:')} {_i(stock.get('tv_status', 'NO_ENTRY').replace('_', ' '))}"
+        for check in checks[:3]:
+            msg += f"\n   • {_i(check)}"
 
     if show_prob:
         p = _get_prob(stock)
@@ -596,6 +629,92 @@ def _stock_card(stock, rank=0, show_prob=True,
         msg += f"   🛑 {_b('RISK:')} {_i(nf or 'Negative news or regulatory alert')}\n"
 
     return msg
+
+
+# Plain-English wording used in the daily Telegram report.  The scanner's
+# internal labels stay in the saved JSON, but the reader should not need to
+# understand them before deciding whether to act.
+HORIZON_PLAIN = {
+    'NEW_1M_SETUP': 'New short-term opportunity (about 1 month)',
+    'CARRY_1_3M': 'Healthy trend being carried (1 to 3 months)',
+    'CARRY_3_6M': 'Established medium-term trend (3 to 6 months)',
+    'DIRECT_3M': 'Established 3-month trend',
+    'DIRECT_6M': 'Established 6-month trend',
+    'CORE_12M': 'Long-term market leader (6 to 12 months)',
+}
+
+ACTION_PLAIN = {
+    'BUY_TRIGGER': 'Buy only after the trigger price is crossed',
+    'WAIT_PULLBACK': 'Wait for a better entry price',
+    'HOLD_TRAIL': 'Hold if owned; raise the stop as price rises',
+    'PARTIAL_PROFIT': 'Book some profit; protect the balance',
+    'EXIT_ALERT': 'Exit or reduce the position',
+    'WATCH': 'Watch only; do not buy today',
+    'AVOID': 'Avoid today',
+}
+
+def _plain_horizon(stock):
+    return HORIZON_PLAIN.get(stock.get('horizon'), 'Trend under observation')
+
+
+def _plain_action(stock):
+    return ACTION_PLAIN.get(stock.get('action'), 'Watch only; do not buy today')
+
+
+def _plain_stock_card(stock, rank=0, mode='buy'):
+    """A readable action card for the daily report, not a technical dashboard."""
+    symbol = stock.get('symbol', 'UNKNOWN')
+    close = float(stock.get('close', 0))
+    sl = float(stock.get('sl', close * 0.93))
+    t1 = float(stock.get('target1', close + (close - sl)))
+    t2 = float(stock.get('target2', close + 2 * (close - sl)))
+    action = stock.get('action', 'WATCH')
+    prefix = f"{_b(str(rank) + '.')} " if rank else ''
+
+    if mode == 'buy':
+        trigger = float(stock.get('entry_trigger') or close)
+        valid = stock.get('entry_valid_until', '')
+        msg = f"{prefix}{_code(symbol)} — {_b('BUY ONLY ABOVE ' + _fmt_price(trigger))}\n"
+        msg += f"   Why it is here: {_plain_horizon(stock)}\n"
+        msg += f"   Entry window: next 2 trading sessions"
+        if valid:
+            msg += f" (until {_h(valid)})"
+        msg += "\n"
+        msg += f"   Safety stop: exit below {_b(_fmt_price(sl))}\n"
+        msg += f"   Profit plan: first {_fmt_price(t1)}  |  final {_fmt_price(t2)}\n"
+        msg += "   Before buying: confirm Daily + Weekly Hybrid Hull are green; no conflict.\n"
+    elif mode == 'manage':
+        verb = 'BOOK SOME PROFIT' if action == 'PARTIAL_PROFIT' else 'HOLD, BUT PROTECT PROFIT'
+        if action == 'EXIT_ALERT':
+            verb = 'EXIT OR REDUCE NOW'
+        msg = f"{prefix}{_code(symbol)} — {_b(verb)}\n"
+        msg += f"   Trend: {_plain_horizon(stock)}\n"
+        msg += f"   Protection level: {_b(_fmt_price(sl))}\n"
+        msg += f"   Next levels: {_fmt_price(t1)}  |  {_fmt_price(t2)}\n"
+        msg += "   Check Hybrid Hull before taking any fresh action.\n"
+    else:
+        msg = f"{prefix}{_code(symbol)} — {_b(_plain_action(stock))}\n"
+        msg += f"   Trend: {_plain_horizon(stock)} | Last close: {_fmt_price(close)}\n"
+        if action == 'WAIT_PULLBACK':
+            msg += f"   Do not chase price. Re-check near the safety level {_fmt_price(sl)}.\n"
+        else:
+            msg += "   Keep it on the watchlist; no new trade today.\n"
+
+    reason = stock.get('action_reason')
+    if reason:
+        msg += f"   {_i(str(reason))}\n"
+    return msg
+
+
+def _compact_action_line(stock):
+    """One-line status for a stock that needs no immediate trade."""
+    symbol = _code(stock.get('symbol', 'UNKNOWN'))
+    close = _fmt_price(stock.get('close', 0))
+    action = stock.get('action', 'WATCH')
+    if action in ('HOLD_TRAIL', 'PARTIAL_PROFIT', 'EXIT_ALERT'):
+        return (f"   {symbol}: {_plain_action(stock)} | protect below "
+                f"{_b(_fmt_price(stock.get('sl', 0)))}\n")
+    return f"   {symbol}: {_plain_action(stock)} | last close {close}\n"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -650,6 +769,52 @@ def format_welcome(user_name=None):
 def format_today_scan(stocks, scan_date=None):
     ds   = _date_str(scan_date)
 
+    groups = {key: [] for key in ('BUY_TRIGGER', 'WAIT_PULLBACK', 'HOLD_TRAIL',
+                                   'PARTIAL_PROFIT', 'EXIT_ALERT', 'WATCH', 'AVOID')}
+    for stock in stocks:
+        groups.setdefault(stock.get('action', 'WATCH'), []).append(stock)
+
+    buy = groups['BUY_TRIGGER']
+    wait = groups['WAIT_PULLBACK'] + groups['WATCH']
+    manage = groups['HOLD_TRAIL'] + groups['PARTIAL_PROFIT'] + groups['EXIT_ALERT']
+    avoid = groups['AVOID']
+
+    msg = f"📌 {_b('Today’s trading plan — ' + ds)}\n"
+    msg += f"{_i('Built from the previous market close. A scan is research, not a promise of profit.')}\n\n"
+    msg += (f"✅ Buy today: {_b(str(len(buy)))}  |  👀 Wait: {_b(str(len(wait)))}  |  "
+            f"🛡️ Manage: {_b(str(len(manage)))}  |  🚫 Avoid: {_b(str(len(avoid)))}\n")
+    msg += SEP_THIN + "\n\n"
+
+    if buy:
+        msg += f"✅ {_b('ACT TODAY — only after the trigger is crossed')}\n"
+        msg += f"{_i('Choose at most one or two. Do not buy before the stated price.')}\n\n"
+        for rank, stock in enumerate(buy[:5], 1):
+            msg += _plain_stock_card(stock, rank=rank, mode='buy') + "\n"
+        if len(buy) > 5:
+            msg += f"   {_i(str(len(buy) - 5) + ' more buy setups are available in the Buy Setups menu.')}\n\n"
+
+    if wait:
+        msg += f"👀 {_b('GOOD STOCKS — WAIT, DO NOT CHASE')}\n"
+        msg += f"{_i('These are on the radar but are not fresh buys today.')}\n"
+        for stock in wait:
+            msg += _compact_action_line(stock)
+        msg += "\n"
+
+    if manage:
+        msg += f"🛡️ {_b('IF YOU ALREADY OWN THESE')}\n"
+        for stock in manage:
+            msg += _compact_action_line(stock)
+        msg += "\n"
+
+    if avoid:
+        msg += f"🚫 {_b('AVOID TODAY')}\n"
+        msg += "   " + ", ".join(_code(s.get('symbol', '?')) for s in avoid) + "\n\n"
+
+    msg += SEP_THIN + "\n"
+    msg += f"{_b('Simple rule:')} Buy only after price crosses the trigger; always respect the safety stop.\n"
+    msg += f"{_i('Final check: TradingView Hybrid Hull must show Daily + Weekly alignment before entry.')}"
+    return msg
+
     sit_groups = {}
     for s in stocks:
         streak = int(s.get('streak', 0))
@@ -696,7 +861,9 @@ def format_today_scan(stocks, scan_date=None):
                 cross_str = (f"cross {cross}d" if 0 < cross < 999 else
                              "no cross" if cross == 999 else "bearish")
                 msg += (f"{_b(str(rank) + '.')} {_code(s['symbol'])}  {sc}/10"
-                        f"  {_fmt_price(e)}  {_i(cross_str)}\n")
+                        f"  {_fmt_price(e)}  {_i(cross_str)}\n"
+                        f"   {_b(str(s.get('horizon', 'WATCH')))} | "
+                        f"{_b(str(s.get('action', 'WATCH')).replace('_', ' '))}\n")
                 rank += 1
             msg += "\n"
 
@@ -720,6 +887,28 @@ def format_today_scan(stocks, scan_date=None):
 
 def format_prime_stocks(stocks, scan_date=None):
     ds = _date_str(scan_date)
+
+    buy_setups = [stock for stock in stocks if stock.get('action') == 'BUY_TRIGGER']
+    if not buy_setups:
+        return (
+            f"✅ {_b('Buy setups — ' + ds)}\n\n"
+            f"{_i('No fresh buy setup today.')}\n\n"
+            "Do not force a trade. Check the waiting list or review existing holdings."
+        )
+
+    msg = f"✅ {_b('Buy setups — ' + ds)}\n"
+    msg += f"{_i('Buy only when the trigger is crossed and TradingView confirms the trend.')}\n"
+    msg += SEP_THIN + "\n\n"
+    for rank, stock in enumerate(buy_setups[:8], 1):
+        msg += _plain_stock_card(stock, rank=rank, mode='buy') + "\n"
+    msg += SEP_THIN + "\n"
+    if len(buy_setups) > 8:
+        msg += f"Showing the top 8 of {len(buy_setups)} setups. Focus on the best one or two; do not overtrade."
+    elif len(buy_setups) == 1:
+        msg += "1 setup today. Quality over quantity."
+    else:
+        msg += f"{len(buy_setups)} buy setups. Focus on the best one or two; do not overtrade."
+    return msg
 
     prime = []
     for s in stocks:

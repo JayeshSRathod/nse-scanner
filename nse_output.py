@@ -27,6 +27,7 @@ try:
         SITUATION_META, SITUATION_ORDER,
         SITUATION_PRIME, SITUATION_HOLD,
         SITUATION_WATCH, SITUATION_BOOK, SITUATION_AVOID,
+        _plain_stock_card, _compact_action_line,
     )
     _HANDLER_OK = True
     print(f"[OUTPUT] Pagination JSON: {RESULTS_FILE}")
@@ -117,7 +118,7 @@ def _send(text, keyboard=None, chat_id=None):
 def build_morning_keyboard():
     return {"inline_keyboard": [
         [
-            {"text": "🎯 Prime",   "callback_data": "view_prime"},
+            {"text": "✅ Buy setups", "callback_data": "view_prime"},
             {"text": "📊 Today",   "callback_data": "view_today"},
             {"text": "🆕 New",     "callback_data": "view_new"},
             {"text": "📉 Exit",    "callback_data": "view_exit"},
@@ -182,6 +183,63 @@ def format_option_c_messages(stocks_list, scan_date_str, greeting=""):
     Returns LIST of HTML strings (split by situation to fit 4096 limit).
     All stocks get full detail cards.
     """
+    # The morning broadcast is intentionally organised by the next decision,
+    # not by internal technical labels such as Prime/Hold/Watch.
+    try:
+        ds = datetime.strptime(scan_date_str, '%Y-%m-%d').strftime('%d-%b-%Y')
+    except Exception:
+        ds = scan_date_str
+
+    groups = {key: [] for key in ('BUY_TRIGGER', 'WAIT_PULLBACK', 'HOLD_TRAIL',
+                                   'PARTIAL_PROFIT', 'EXIT_ALERT', 'WATCH', 'AVOID')}
+    for stock in stocks_list:
+        groups.setdefault(stock.get('action', 'WATCH'), []).append(stock)
+    buy = groups['BUY_TRIGGER']
+    wait = groups['WAIT_PULLBACK'] + groups['WATCH']
+    manage = groups['HOLD_TRAIL'] + groups['PARTIAL_PROFIT'] + groups['EXIT_ALERT']
+    avoid = groups['AVOID']
+
+    header = greeting
+    header += f"📌 {_b('Today’s trading plan — ' + ds)}\n"
+    header += f"{_i('Based on the previous market close. Research only; no trade is guaranteed.')}\n\n"
+    header += (f"✅ Buy today: {_b(str(len(buy)))} | 👀 Wait: {_b(str(len(wait)))} | "
+               f"🛡️ Manage: {_b(str(len(manage)))} | 🚫 Avoid: {_b(str(len(avoid)))}\n")
+    header += f"{SEP2}\n"
+    messages = [header]
+
+    def add_group(title, intro, blocks):
+        if not blocks:
+            return
+        current = f"{SEP2}\n{_b(title)}\n{_i(intro)}\n{SEP2}\n\n"
+        for block in blocks:
+            if len(current) + len(block) > 3800:
+                messages.append(current)
+                current = f"{_b(title + ' (continued)')}\n{SEP2}\n\n"
+            current += block
+        messages.append(current)
+
+    buy_blocks = [_plain_stock_card(stock, rank=rank, mode='buy') + "\n"
+                  for rank, stock in enumerate(buy, 1)]
+    add_group('✅ ACT TODAY — only after the trigger is crossed',
+              'Choose at most one or two. Do not buy before the stated price.',
+              buy_blocks)
+
+    wait_blocks = [_compact_action_line(stock) for stock in wait]
+    add_group('👀 GOOD STOCKS — WAIT, DO NOT CHASE',
+              'These are on the radar but are not fresh buys today.', wait_blocks)
+
+    manage_blocks = [_compact_action_line(stock) for stock in manage]
+    add_group('🛡️ IF YOU ALREADY OWN THESE', '', manage_blocks)
+
+    if avoid:
+        add_group('🚫 AVOID TODAY', '',
+                  ['   ' + ', '.join(_code(s.get('symbol', '?')) for s in avoid) + '\n'])
+
+    messages[-1] += (f"\n{SEP}\n"
+                     "Simple rule: Buy only after price crosses the trigger; always respect the safety stop.\n\n"
+                     "Final entry check: TradingView Hybrid Hull Daily + Weekly must agree.")
+    return messages
+
     try:
         ds = datetime.strptime(scan_date_str, '%Y-%m-%d').strftime('%d-%b-%Y')
     except Exception:
@@ -364,17 +422,13 @@ def send_telegram(results_df, report_date):
         recipients.add(str(admin_id))
 
     # Step 4: Send to all recipients
-    kb = build_morning_keyboard()
     total_sent = 0
 
     for chat_id in recipients:
         try:
             for i, msg in enumerate(messages):
                 is_last = (i == len(messages) - 1)
-                if is_last:
-                    _send(msg, kb, chat_id=chat_id)
-                else:
-                    _send(msg, chat_id=chat_id)
+                _send(msg, chat_id=chat_id)
             total_sent += 1
             log.info(f"Morning scan sent to {chat_id}")
         except Exception as e:

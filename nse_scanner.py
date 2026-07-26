@@ -52,6 +52,8 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 import logging
 
+from nse_lifecycle_tracker import apply_lifecycle
+
 try:
     import config
 except ImportError:
@@ -94,7 +96,9 @@ except ImportError:
 DAYS_1M  = 22
 DAYS_2M  = 44
 DAYS_3M  = 66
-LOOKBACK = 180
+DAYS_6M  = 126
+DAYS_12M = 252
+LOOKBACK = 400
 
 os.makedirs(config.LOG_DIR, exist_ok=True)
 logging.basicConfig(
@@ -163,7 +167,7 @@ def load_data_for_date(scan_date):
 
 def calculate_returns(prices_df, scan_date):
     """
-    Calculate 1M/2M/3M returns + avg volume + avg turnover.
+    Calculate 1M/2M/3M/6M/12M returns + long-term trend references.
     Returns are for DISPLAY and uptrend gate only — not for ranking.
     """
     if prices_df.empty:
@@ -176,7 +180,7 @@ def calculate_returns(prices_df, scan_date):
     results = []
 
     for symbol, grp in recent.groupby('symbol'):
-        grp = grp.tail(DAYS_3M + 5)
+        grp = grp.tail(DAYS_12M + 5)
         if len(grp) < DAYS_1M:
             continue
         current_close = grp.iloc[-1]['close']
@@ -191,6 +195,8 @@ def calculate_returns(prices_df, scan_date):
         # Average daily turnover over last 22 days (in lacs)
         avg_turnover = (grp.tail(22)['turnover_lacs'].mean()
                         if 'turnover_lacs' in grp.columns else 0.0)
+        ma50 = grp.tail(50)['close'].mean() if len(grp) >= 50 else current_close
+        ma200 = grp.tail(200)['close'].mean() if len(grp) >= 200 else current_close
 
         results.append({
             'symbol':        str(symbol).strip(),
@@ -207,9 +213,154 @@ def calculate_returns(prices_df, scan_date):
             'return_1m':     ret(DAYS_1M),
             'return_2m':     ret(DAYS_2M),
             'return_3m':     ret(DAYS_3M),
+            'return_6m':     ret(DAYS_6M),
+            'return_12m':    ret(DAYS_12M),
+            'ma50':          ma50,
+            'ma200':         ma200,
+            'ma50_above_ma200': bool(ma50 > ma200),
         })
 
     return pd.DataFrame(results)
+
+
+def assign_horizon_actions(results_df, scan_date):
+    """Attach a stable horizon and a clear EOD action to each candidate.
+
+    These are deterministic starting rules for backtesting. The daily score
+    controls timing; 3M/6M/12M returns control the research horizon.
+    """
+    if results_df.empty:
+        return results_df
+
+    valid_until = (pd.Timestamp(scan_date) + pd.offsets.BDay(2)).date().isoformat()
+
+    def classify(row):
+        score = float(row.get('score', 0))
+        r3 = float(row.get('return_3m', 0))
+        r6 = float(row.get('return_6m', 0))
+        r12 = float(row.get('return_12m', 0))
+        close = float(row.get('close', 0))
+        ma200 = float(row.get('ma200', close))
+        ma_stack = bool(row.get('ma50_above_ma200', False))
+        overextended = bool(row.get('overextended', False))
+        situation = str(row.get('situation', 'watch'))
+
+        trend_3m = r3 > 0
+        trend_6m = r6 > 0 and close > ma200 and ma_stack
+        trend_12m = r12 > 0 and trend_6m
+        entry_ready = score >= 7 and situation == 'prime' and not overextended
+
+        if situation == 'avoid':
+            return pd.Series({
+                'horizon': 'WATCH',
+                'action': 'AVOID',
+                'entry_trigger': None,
+                'entry_valid_until': valid_until,
+                'action_reason': 'Technical setup is invalid or weak.',
+            })
+        if entry_ready and not trend_6m:
+            horizon = 'NEW_1M_SETUP'
+        elif trend_12m:
+            horizon = 'CORE_12M'
+        elif trend_6m:
+            horizon = 'DIRECT_6M'
+        elif trend_3m:
+            horizon = 'DIRECT_3M'
+        else:
+            horizon = 'NEW_1M_SETUP'
+
+        if entry_ready:
+            action = 'BUY_TRIGGER'
+            reason = 'Daily and weekly technical setup is entry-ready; confirm timing in Hybrid Hull.'
+        elif horizon in ('CORE_12M', 'DIRECT_6M') and overextended:
+            action = 'WAIT_PULLBACK'
+            reason = 'Long-term trend is strong, but price is extended from support.'
+        elif situation == 'hold':
+            action = 'HOLD_TRAIL'
+            reason = 'Trend remains aligned; trail the existing stop rather than chase.'
+        elif situation == 'book':
+            action = 'PARTIAL_PROFIT'
+            reason = 'Move is mature or stretched; protect gains and avoid fresh entry.'
+        else:
+            action = 'WATCH'
+            reason = 'Trend is forming; wait for a complete EOD entry setup.'
+
+        trigger = round(float(row.get('high', close)) * 1.001, 2) if action == 'BUY_TRIGGER' else None
+        return pd.Series({
+            'horizon': horizon,
+            'action': action,
+            'entry_trigger': trigger,
+            'entry_valid_until': valid_until,
+            'action_reason': reason,
+        })
+
+    action_df = results_df.apply(classify, axis=1)
+    for column in action_df.columns:
+        results_df[column] = action_df[column]
+    return results_df
+
+
+def attach_hybrid_hull_checklist(results_df):
+    """Attach the manual TradingView confirmation required for each action.
+
+    Hybrid Hull remains the final execution check; the scanner deliberately
+    does not treat its own EOD ranking as an automatic entry instruction.
+    """
+    if results_df.empty:
+        return results_df
+
+    def checklist(row):
+        action = str(row.get('action', 'WATCH'))
+        horizon = str(row.get('horizon', 'WATCH'))
+        if action == 'BUY_TRIGGER':
+            return pd.Series({
+                'tv_status': 'CONFIRM_BEFORE_ENTRY',
+                'hybrid_hull_checks': [
+                    'Daily: HIGH CONV LONG; no BLOCKED-CONFLICT.',
+                    'Weekly: bullish Hull structure.',
+                    f'Long-term: {horizon} must not oppose the long setup.',
+                    'Enter only above trigger within two sessions.',
+                ],
+            })
+        if action == 'WAIT_PULLBACK':
+            return pd.Series({
+                'tv_status': 'WAIT_FOR_SETUP',
+                'hybrid_hull_checks': [
+                    'Wait for price near daily Hull/support.',
+                    'Require fresh Daily HIGH CONV LONG.',
+                    'Weekly and long-term structure must remain bullish.',
+                ],
+            })
+        if action == 'HOLD_TRAIL':
+            return pd.Series({
+                'tv_status': 'MANAGE_POSITION',
+                'hybrid_hull_checks': [
+                    'Keep position while daily Hull trail is intact.',
+                    'Reduce or exit on a confirmed Daily structure exit.',
+                    'Weekly bearish turn overrides the hold signal.',
+                ],
+            })
+        if action in ('PARTIAL_PROFIT', 'EXIT_ALERT'):
+            return pd.Series({
+                'tv_status': 'PROTECT_CAPITAL',
+                'hybrid_hull_checks': [
+                    'Respect the current trail stop without widening it.',
+                    'Book partial profit at the planned risk milestone.',
+                    'Exit on confirmed Hybrid Hull structure break.',
+                ],
+            })
+        return pd.Series({
+            'tv_status': 'NO_ENTRY',
+            'hybrid_hull_checks': [
+                'No entry yet: wait for daily and weekly alignment.',
+                'Do not trade when Hybrid Hull shows WATCH or conflict.',
+            ],
+        })
+
+    checks_df = results_df.apply(checklist, axis=1)
+    for column in checks_df.columns:
+        results_df[column] = checks_df[column]
+    return results_df
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -576,6 +727,11 @@ def scan_stocks(scan_date=None, top_n=None):
         )
 
     result_df['situation'] = result_df.apply(_get_situation, axis=1)
+
+    # Horizon explains the research role; action explains what to do now.
+    result_df = assign_horizon_actions(result_df, scan_date)
+    result_df = apply_lifecycle(result_df, scan_date)
+    result_df = attach_hybrid_hull_checklist(result_df)
 
     # Situation summary
     sit_counts = result_df['situation'].value_counts()

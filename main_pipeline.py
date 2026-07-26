@@ -16,6 +16,7 @@ import requests
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from nse_market_store import export_all_price_snapshots, restore_prices
 
 def send_failure_alert(step, reason, scan_date):
     if not TOKEN or not CHAT_ID:
@@ -55,6 +56,8 @@ CHAT_ID       = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
 GITHUB_TOKEN  = os.environ.get("GITHUB_TOKEN", "").strip()
 GITHUB_REPO   = os.environ.get("GITHUB_REPO", "JayeshSRathod/nse-scanner").strip()
 GITHUB_BRANCH = os.environ.get("GITHUB_BRANCH", "main").strip()
+GITHUB_ACTIONS = os.environ.get("GITHUB_ACTIONS", "").lower() == "true"
+HISTORY_DAYS = int(os.environ.get("HISTORY_DAYS", "420"))
 
 missing = []
 if not TOKEN:   missing.append("TELEGRAM_TOKEN")
@@ -125,6 +128,11 @@ def get_trading_days(start, end):
     return days
 
 def push_file_to_github(file_path, commit_msg):
+    # The workflow performs one atomic git commit after the pipeline finishes.
+    # Avoid API writes here: they would make the checked-out branch stale before
+    # the workflow can commit market snapshots and report files together.
+    if GITHUB_ACTIONS:
+        return True
     content     = file_path.read_text(encoding="utf-8")
     content_b64 = base64.b64encode(content.encode()).decode()
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
@@ -144,7 +152,7 @@ def push_file_to_github(file_path, commit_msg):
     return r.status_code in (200, 201)
 
 
-def db_has_enough_data(min_days=22):
+def db_has_enough_data(min_days=HISTORY_DAYS):
     """Check if DB has enough trading days for scanner to work."""
     db_path = Path("nse_scanner.db")
     if not db_path.exists() or db_path.stat().st_size < 10000:
@@ -227,9 +235,8 @@ def run_pipeline():
     from time import time
     t0 = time()
 
-    today = date.today()
-    if not is_trading_day(today):
-        today = get_last_trading_day(today - timedelta(days=1))
+    # Morning EOD research always uses the previous completed trading session.
+    today = get_last_trading_day(date.today() - timedelta(days=1))
 
     print(f"\n[PIPELINE] Scan date: {today.strftime('%d-%b-%Y')}")
 
@@ -249,37 +256,65 @@ def run_pipeline():
     write_health(status="RUNNING", scan_date=today.strftime("%Y-%m-%d"))
 
     # ── STEP 0: Check if DB needs backfill ────────────────────
-    has_enough, current_days = db_has_enough_data(min_days=22)
+    from nse_loader import init_database
+    init_database()
+    restored = restore_prices("nse_scanner.db", min_days=1)
+    if restored:
+        print(f"[STEP 0] Restored {restored} daily snapshots from market_data")
+
+    has_enough, current_days = db_has_enough_data(min_days=HISTORY_DAYS)
     print(f"\n[STEP 0] DB check: {current_days} trading days loaded")
 
     if not has_enough:
-        print(f"[STEP 0] Need at least 22 days for scanner. Starting backfill...")
+        print(f"[STEP 0] Need at least {HISTORY_DAYS} days for multi-horizon scanning. Starting backfill...")
         try:
-            backfill_ok = backfill_historical_data(today, days_back=90)
+            backfill_ok = backfill_historical_data(today, days_back=HISTORY_DAYS)
             if not backfill_ok:
-                print("[STEP 0] ⚠️  Backfill incomplete but continuing...")
+                reason = f"Backfill did not reach the required {HISTORY_DAYS} trading days"
+                print(f"[STEP 0] ❌ {reason}")
+                send_failure_alert("Backfill", reason, today)
+                write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"),
+                             failed_step="STEP 0", reason=reason)
+                return False
         except Exception as e:
             print(f"[STEP 0] Backfill error: {e}")
             send_failure_alert("Backfill", str(e), today)
+            write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"),
+                         failed_step="STEP 0", reason=str(e))
+            return False
     else:
         print(f"[STEP 0] ✅ DB has enough data. Loading today only.")
 
         # Step 1: Download today
         try:
             from nse_historical_downloader import download_direct
-            download_direct(today)
-        except Exception:
-            pass
+            downloaded = download_direct(today)
+            if downloaded == 0:
+                raise RuntimeError("No NSE files downloaded for the completed trading day")
+        except Exception as e:
+            send_failure_alert("NSE Download", str(e), today)
+            write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"), failed_step="STEP 1", reason=str(e))
+            return False
 
         # Step 2: Load today
         try:
-            from nse_loader import init_database, load_day
-            init_database()
-            load_day(today, do_cleanup=False)
+            from nse_loader import load_day
+            load_result = load_day(today, do_cleanup=False)
+            if load_result["status"] not in ("ok", "already_loaded"):
+                raise RuntimeError(f"NSE load did not complete: {load_result}")
         except Exception as e:
             send_failure_alert("DB Load", str(e), today)
             write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"), failed_step="STEP 2", reason=str(e))
             return False
+
+    # Persist normalized history for the next disposable GitHub Actions runner.
+    try:
+        snapshots_written = export_all_price_snapshots("nse_scanner.db")
+        print(f"[STEP 2.5] Market snapshots ready ({snapshots_written} new files)")
+    except Exception as e:
+        send_failure_alert("Market Snapshot", str(e), today)
+        write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"), failed_step="STEP 2.5", reason=str(e))
+        return False
 
     # ── STEP 3: Scan ──────────────────────────────────────────
     print(f"\n{'='*55}\n  Step 3: Scanner\n{'='*55}")

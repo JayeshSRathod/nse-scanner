@@ -299,7 +299,7 @@ def kb_main(cp=0, tp=1, sort='score', view='today'):
     kb = [
         # Row 1 — Primary views
         [
-            {"text": "🎯 Prime",          "callback_data": "view_prime"},
+            {"text": "✅ Buy setups",     "callback_data": "view_prime"},
             {"text": f"{dot('today')} Today",  "callback_data": "view_today"},
             {"text": f"{dot('new')} New",      "callback_data": "view_new"},
             {"text": f"{dot('exit')} Exit",    "callback_data": "view_exit"},
