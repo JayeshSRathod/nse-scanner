@@ -145,11 +145,87 @@ def _date_str(scan_date):
         return scan_date or 'Today'
 
 
+def _to_int(value, default=0):
+    """Safe int conversion that handles None/NaN/string values."""
+    try:
+        if value is None:
+            return default
+        if isinstance(value, str):
+            v = value.strip().lower()
+            if v in ("", "nan", "none", "null"):
+                return default
+        return int(float(value))
+    except Exception:
+        return default
+
+
+def _to_float(value, default=0.0):
+    """Safe float conversion that handles None/NaN/string values."""
+    try:
+        if value is None:
+            return default
+        if isinstance(value, str):
+            v = value.strip().lower()
+            if v in ("", "nan", "none", "null"):
+                return default
+        out = float(value)
+        if out != out:  # NaN check
+            return default
+        return out
+    except Exception:
+        return default
+
+
+def _to_bool(value, default=False):
+    """Safe bool conversion for mixed JSON/CSV/pandas values."""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in ("true", "1", "yes", "y"):
+            return True
+        if v in ("false", "0", "no", "n", "", "nan", "none", "null"):
+            return False
+    if isinstance(value, (int, float)):
+        if value != value:  # NaN
+            return False
+        return value != 0
+    return bool(value)
+
+
 # ═══════════════════════════════════════════════════════════════
 # SITUATION ENGINE
 # ═══════════════════════════════════════════════════════════════
 
 def assign_situation(stock: dict, streak: int = 0) -> str:
+codex/find-and-fix-a-bug-in-codebase
+    """
+    Assign a situation label to a stock based on forward signals.
+
+    Priority order:
+      1. AVOID   — score ≤ 3 OR distribution volume OR bearish
+      2. BOOK    — cross age > 30d OR >15% stretched
+      3. HOLD    — streak ≥ 5 days AND score still OK
+      4. PRIME   — score ≥ 7 + fresh cross + not overextended
+      5. WATCH   — everything else that passes
+
+    Args:
+        stock:  stock dict from scan results
+        streak: consecutive days in scanner list
+
+    Returns:
+        situation string: prime/watch/hold/book/avoid
+    """
+    score        = _to_float(stock.get('score', 0), 0.0)
+    cross_age    = _to_int(stock.get('cross_age', 999), 999)
+    dist_pct     = _to_float(stock.get('dist_pct', 0), 0.0)
+    overextended = _to_bool(stock.get('overextended', False), False)
+    fresh_cross  = _to_bool(stock.get('fresh_cross', False), False)
+    acc_days     = _to_int(stock.get('acc_days', 0), 0)
+    dist_days    = _to_int(stock.get('dist_days', 0), 0)
+
     score        = float(stock.get('score', 0))
     cross_age    = int(stock.get('cross_age', 999))
     dist_pct     = float(stock.get('dist_pct', 0))
@@ -157,8 +233,9 @@ def assign_situation(stock: dict, streak: int = 0) -> str:
     fresh_cross  = bool(stock.get('fresh_cross', False))
     acc_days     = int(stock.get('acc_days', 0))
     dist_days    = int(stock.get('dist_days', 0))
+ main
     obv_dir      = str(stock.get('obv_dir', 'flat'))
-    r3m          = float(stock.get('return_3m_pct', 0))
+    r3m          = _to_float(stock.get('return_3m_pct', 0), 0.0)
 
     if score <= 3:
         return SITUATION_AVOID
@@ -188,12 +265,21 @@ def assign_situation(stock: dict, streak: int = 0) -> str:
 
 def get_situation_signal_line(stock: dict) -> str:
     parts = []
+codex/find-and-fix-a-bug-in-codebase
+
+    cross_age    = _to_int(stock.get('cross_age', 999), 999)
+    dist_pct     = _to_float(stock.get('dist_pct', 0), 0.0)
+    fresh_cross  = _to_bool(stock.get('fresh_cross', False), False)
+    overextended = _to_bool(stock.get('overextended', False), False)
+    acc_days     = _to_int(stock.get('acc_days', 0), 0)
+    dist_days    = _to_int(stock.get('dist_days', 0), 0)
     cross_age    = int(stock.get('cross_age', 999))
     dist_pct     = float(stock.get('dist_pct', 0))
     fresh_cross  = bool(stock.get('fresh_cross', False))
     overextended = bool(stock.get('overextended', False))
     acc_days     = int(stock.get('acc_days', 0))
     dist_days    = int(stock.get('dist_days', 0))
+ main
     obv_dir      = str(stock.get('obv_dir', 'flat'))
     sector_bias  = int(stock.get('sector_bias', 0))
 
