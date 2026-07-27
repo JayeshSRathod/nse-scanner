@@ -83,6 +83,91 @@ def get_week_prices(symbols, week_dates, conn):
     return results
 
 
+def _as_date(value):
+    try:
+        return datetime.strptime(str(value)[:10], "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+
+
+def get_confirmed_model_trades(week_history, week_dates, conn):
+    """Evaluate only EOD BUY_TRIGGER setups that actually traded through trigger.
+
+    A signal issued after a market close can be filled only on a later session,
+    up to its two-business-day validity date.  Because daily OHLC cannot tell
+    which intraday level occurred first, a same-day stop and target is treated
+    conservatively as a stop breach.
+    """
+    if not week_history or not week_dates:
+        return []
+
+    friday = max(week_dates)
+    seen, trades = set(), []
+    ordered = sorted(week_history, key=lambda item: item['date'])
+
+    for snapshot in ordered:
+        signal_date = _as_date(snapshot.get('date'))
+        if signal_date is None:
+            continue
+        for stock in snapshot.get('stocks', []):
+            symbol = str(stock.get('symbol', ''))
+            if not symbol or symbol in seen or stock.get('action') != 'BUY_TRIGGER':
+                continue
+            try:
+                trigger = float(stock.get('entry_trigger'))
+            except (TypeError, ValueError):
+                continue
+            if trigger <= 0:
+                continue
+
+            valid_until = _as_date(stock.get('entry_valid_until'))
+            if valid_until is None:
+                valid_until = signal_date + timedelta(days=4)
+            end_date = min(valid_until, friday)
+            if end_date <= signal_date:
+                continue
+
+            rows = conn.execute(
+                """SELECT date, high, low, close FROM daily_prices
+                   WHERE symbol=? AND date>? AND date<=? ORDER BY date""",
+                [symbol, signal_date.isoformat(), end_date.isoformat()]
+            ).fetchall()
+            fill = next((row for row in rows if float(row[1]) >= trigger), None)
+            if fill is None:
+                continue
+
+            fill_date = _as_date(fill[0])
+            later_rows = conn.execute(
+                """SELECT date, high, low, close FROM daily_prices
+                   WHERE symbol=? AND date>=? AND date<=? ORDER BY date""",
+                [symbol, fill_date.isoformat(), friday.isoformat()]
+            ).fetchall()
+            sl = float(stock.get('sl', trigger * 0.93))
+            t1 = float(stock.get('target1', trigger + (trigger - sl)))
+            t2 = float(stock.get('target2', trigger + 2 * (trigger - sl)))
+            outcome, exit_price, exit_date = 'OPEN', float(later_rows[-1][3]), friday
+            t1_hit = t2_hit = False
+            for row in later_rows:
+                row_date, high, low = _as_date(row[0]), float(row[1]), float(row[2])
+                if low <= sl:
+                    outcome, exit_price, exit_date = 'STOP', sl, row_date
+                    break
+                if high >= t2:
+                    t2_hit = t1_hit = True
+                elif high >= t1:
+                    t1_hit = True
+
+            return_pct = round((exit_price - trigger) / trigger * 100, 1)
+            trades.append({
+                'symbol': symbol, 'signal_date': signal_date, 'entry_date': fill_date,
+                'entry': trigger, 'exit_price': exit_price, 'exit_date': exit_date,
+                'return_pct': return_pct, 'outcome': outcome,
+                't1_hit': t1_hit, 't2_hit': t2_hit,
+            })
+            seen.add(symbol)
+    return trades
+
+
 def analyze_week(week_history, week_prices):
     if not week_history:
         return {"empty": True, "reason": "No scan history for this week"}
@@ -230,6 +315,57 @@ def format_weekly_digest(analysis, week_dates):
     return msg
 
 
+def format_triggered_weekly_digest(analysis, week_dates):
+    """Weekly report separating confirmed model trades from list research."""
+    if analysis.get("empty"):
+        return f"Weekly Digest\n\n{analysis.get('reason', 'No data')}"
+
+    start = min(week_dates).strftime('%d-%b')
+    end = max(week_dates).strftime('%d-%b-%Y')
+    trades = analysis.get('model_trades', [])
+    winners = [trade for trade in trades if trade['return_pct'] > 0]
+    non_winners = [trade for trade in trades if trade['return_pct'] <= 0]
+    hit_rate = round(100 * len(winners) / len(trades), 1) if trades else 0
+    avg_w = sum(t['return_pct'] for t in winners) / len(winners) if winners else 0
+    avg_l = sum(t['return_pct'] for t in non_winners) / len(non_winners) if non_winners else 0
+
+    msg = f"{_b('Weekly Digest — ' + start + ' to ' + end)}\n"
+    msg += _i('EOD model review. A trade counts only after its BUY trigger was crossed.') + "\n"
+    msg += SEP_BOLD + "\n\n"
+    msg += f"{_b('Confirmed model setups')}\n"
+    msg += f"Triggered: {len(trades)} | Hit rate: {_b(str(hit_rate) + '%')}\n"
+    msg += f"Positive: {len(winners)} ({_fmt_return(avg_w)} avg)\n"
+    msg += f"Flat / negative: {len(non_winners)} ({_fmt_return(avg_l)} avg)\n"
+    if not trades:
+        msg += _i('No BUY_TRIGGER setup crossed its entry price this week.') + "\n"
+    msg += SEP_THIN + "\n\n"
+
+    if trades:
+        msg += f"{_b('Model trade outcomes')}\n"
+        for trade in sorted(trades, key=lambda item: item['return_pct'], reverse=True)[:6]:
+            state = 'STOP' if trade['outcome'] == 'STOP' else 'OPEN'
+            targets = ' T2 hit' if trade['t2_hit'] else ' T1 hit' if trade['t1_hit'] else ''
+            msg += (f"{state} {_code(trade['symbol'])} {_fmt_price(trade['entry'])} -> "
+                    f"{_fmt_price(trade['exit_price'])} ({_fmt_return(trade['return_pct'])}){targets}\n")
+        msg += SEP_THIN + "\n\n"
+
+    top = analysis.get('top_performers', [])
+    if top:
+        msg += f"{_b('Research-list movement (not entries)')}\n"
+        for item in top[:5]:
+            msg += f"• {_code(item['symbol'])} {_fmt_return(item['week_return_pct'])}\n"
+        msg += SEP_THIN + "\n\n"
+
+    msg += f"{_b('Research-list churn')}\n"
+    msg += (f"Stayed all week: {analysis['stayed']} | New: {len(analysis['new_this_week'])} | "
+            f"Exited: {len(analysis['exited_this_week'])}\n")
+    msg += f"Churn rate: {analysis['churn_pct']}%\n"
+    if analysis['new_this_week']:
+        msg += f"New: {', '.join(analysis['new_this_week'][:8])}\n"
+    msg += "\n" + SEP_THIN + "\n" + _i('Next digest: next Saturday')
+    return msg
+
+
 def generate_weekly_digest(week_ending=None, dry_run=False):
     if week_ending is None:
         today = date.today()
@@ -248,14 +384,17 @@ def generate_weekly_digest(week_ending=None, dry_run=False):
     for d in week_hist: all_syms.update(d.get('symbols',[]))
 
     week_prices = {}
+    model_trades = []
     try:
         conn = sqlite3.connect(getattr(config,'DB_PATH','nse_scanner.db'))
         week_prices = get_week_prices(list(all_syms), week_dates, conn)
+        model_trades = get_confirmed_model_trades(week_hist, week_dates, conn)
         conn.close()
     except Exception as e: log.warning(f"DB: {e}")
 
     analysis = analyze_week(week_hist, week_prices)
-    message = format_weekly_digest(analysis, week_dates)
+    analysis['model_trades'] = model_trades
+    message = format_triggered_weekly_digest(analysis, week_dates)
 
     if dry_run:
         import re; print(re.sub(r'<[^>]+>','',message))

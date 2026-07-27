@@ -94,6 +94,137 @@ def _hma(series, period):
     wf    = series.ewm(span=period, adjust=False).mean()
     return (2 * wh - wf).ewm(span=sqrt_, adjust=False).mean()
 
+
+# Fixed settings mirror the manual defaults in "Hybrid Hull V17.3 - R2D@":
+# Hull 55, HMA 21/51, ATR(14), ATR multiplier 3.5 and KAMA(30).
+# These helpers intentionally use weighted moving averages, as Pine's ta.wma
+# does.  The older _hma() above remains in place for the legacy score so this
+# addition does not silently re-rank the whole scanner.
+HYBRID_HULL_LENGTH = 55
+HULL_FAST_LENGTH = 21
+HULL_SLOW_LENGTH = 51
+HULL_ATR_LENGTH = 14
+HULL_KAMA_LENGTH = 30
+HULL_ATR_MULTIPLIER = 3.5
+
+
+def _wma(series, period):
+    """Pine-compatible weighted moving average (latest bar has most weight)."""
+    period = max(1, int(period))
+    weights = np.arange(1, period + 1, dtype=float)
+    return series.astype(float).rolling(period, min_periods=period).apply(
+        lambda values: float(np.dot(values, weights) / weights.sum()), raw=True
+    )
+
+
+def _tv_hma(series, period):
+    """TradingView ta.hma equivalent used by the supplied Hybrid Hull script."""
+    half = max(1, int(period / 2))
+    root = max(1, int(np.sqrt(period)))
+    return _wma(2 * _wma(series, half) - _wma(series, period), root)
+
+
+def _hybrid_hull(series, period=HYBRID_HULL_LENGTH):
+    """Exact hybridHull expression from the supplied Pine script."""
+    base = _wma(series, period)
+    return 2 * _wma(base, max(1, int(period / 2))) - _wma(base, period)
+
+
+def _atr(highs, lows, closes, period=HULL_ATR_LENGTH):
+    previous_close = closes.shift(1)
+    true_range = pd.concat([
+        highs - lows,
+        (highs - previous_close).abs(),
+        (lows - previous_close).abs(),
+    ], axis=1).max(axis=1)
+    # TradingView ta.atr uses Wilder's smoothing.
+    return true_range.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
+
+
+def _kama(series, length=HULL_KAMA_LENGTH):
+    """Kaufman adaptive MA using the same 2 / length slow constant as Pine."""
+    values = series.astype(float)
+    change = (values - values.shift(length)).abs()
+    volatility = values.diff().abs().rolling(length).sum()
+    efficiency = (change / volatility.replace(0, np.nan)).fillna(0.0)
+    fast = 2.0 / 3.0
+    slow = 2.0 / (length + 1.0)
+    smoothing = (efficiency * (fast - slow) + slow) ** 2
+    out = pd.Series(np.nan, index=values.index, dtype=float)
+    if len(values):
+        out.iloc[0] = values.iloc[0]
+    for i in range(1, len(values)):
+        previous = out.iloc[i - 1]
+        out.iloc[i] = previous + smoothing.iloc[i] * (values.iloc[i] - previous)
+    return out
+
+
+def _fixed_hybrid_hull_signals(grp):
+    """Return the EOD-only, fixed-parameter Hybrid Hull signal set."""
+    data = grp.sort_values('date').copy()
+    closes = data['close'].astype(float).reset_index(drop=True)
+    highs = data.get('high', data['close']).astype(float).reset_index(drop=True)
+    lows = data.get('low', data['close']).astype(float).reset_index(drop=True)
+    hull = _hybrid_hull(closes)
+    hma21 = _tv_hma(closes, HULL_FAST_LENGTH)
+    hma51 = _tv_hma(closes, HULL_SLOW_LENGTH)
+    atr14 = _atr(highs, lows, closes)
+    kama30 = _kama(closes)
+
+    def last(series, fallback=0.0):
+        value = series.iloc[-1] if len(series) else fallback
+        return float(value) if pd.notna(value) else float(fallback)
+
+    close = last(closes)
+    hull_now, hull_prev = last(hull, close), last(hull.iloc[:-1], close)
+    atr_now = last(atr14, 0.0)
+    kama_now, kama_prev = last(kama30, close), last(kama30.iloc[:-1], close)
+    distance_atr = (close - hull_now) / atr_now if atr_now > 0 else 0.0
+    daily_up = close > hull_now and hull_now > hull_prev
+    hma_aligned = last(hma21, close) > last(hma51, close)
+    kama_rising = kama_now > kama_prev and close > hull_now
+
+    # The script's practical EOD read: low impulse + tight band is chop;
+    # a tight ATR regime while structure is aligned is a compression setup.
+    kama_slope = abs(kama_now - kama_prev) / atr_now if atr_now > 0 else 0.0
+    kama_band = ((kama30.rolling(20).max() - kama30.rolling(20).min()) /
+                 kama30.replace(0, np.nan)).iloc[-1]
+    rotation = abs(distance_atr) < 0.4 and abs(hull_now - hull_prev) < (atr_now * 0.15)
+    chop = bool(kama_slope < 0.072 and (pd.notna(kama_band) and kama_band < 0.025) or rotation)
+    atr_contracting = (atr14.iloc[-1] < atr14.rolling(20).mean().iloc[-1]
+                       if len(atr14) >= 20 else False)
+    compression = bool(atr_contracting and daily_up and hma_aligned and not chop)
+
+    weekly_data = data[['date', 'close']].copy()
+    weekly_data['date'] = pd.to_datetime(weekly_data['date'])
+    weekly = weekly_data.set_index('date')['close'].resample('W-FRI').last().dropna()
+    weekly21 = _tv_hma(weekly, HULL_FAST_LENGTH)
+    weekly51 = _tv_hma(weekly, HULL_SLOW_LENGTH)
+    w21, w21_prev = last(weekly21, close), last(weekly21.iloc[:-1], close)
+    w51 = last(weekly51, close)
+    weekly_bullish = bool(w21 > w51 and w21 >= w21_prev)
+    weekly_status = 'BULLISH' if weekly_bullish else ('PULLBACK' if w21 > w51 else 'NOT_ALIGNED')
+
+    return {
+        'hybrid_hull_55': round(hull_now, 2),
+        'hma21': round(last(hma21, close), 2),
+        'hma51': round(last(hma51, close), 2),
+        'atr14': round(atr_now, 2),
+        'hybrid_hull_stop': round(hull_now - HULL_ATR_MULTIPLIER * atr_now, 2),
+        'kama30': round(kama_now, 2),
+        'daily_hull_status': 'BULLISH' if daily_up else 'NOT_ALIGNED',
+        'daily_hma_aligned': bool(hma_aligned),
+        'kama_rising': bool(kama_rising),
+        'weekly_hull_status': weekly_status,
+        'weekly_hma21': round(w21, 2),
+        'weekly_hma51': round(w51, 2),
+        'hull_distance_atr': round(distance_atr, 2),
+        'hull_stretched': bool(distance_atr > 1.5),
+        'hull_critical_stretch': bool(distance_atr > 1.8),
+        'hull_chop': bool(chop),
+        'hull_compression': bool(compression),
+    }
+
 def _macd_bullish(closes):
     if len(closes) < 35: return False
     ema12 = closes.ewm(span=12, adjust=False).mean()
@@ -243,7 +374,8 @@ def get_weekly_tiers_bulk(symbols: list,
 
 def _score_single_stock(symbol, grp, w52_map, scan_date,
                          weekly_tier=WEEKLY_TIER_NEUTRAL):
-    grp = grp.sort_values('date').tail(120)
+    # Hybrid Hull(55) is nested WMA mathematics and needs a longer warm-up.
+    grp = grp.sort_values('date').tail(180)
     if len(grp) < 30: return None
 
     closes     = grp['close'].astype(float)
@@ -254,6 +386,8 @@ def _score_single_stock(symbol, grp, w52_map, scan_date,
 
     close_now = float(closes.iloc[-1])
     if close_now <= 0: return None
+
+    fixed_hull = _fixed_hybrid_hull_signals(grp)
 
     hma20    = _hma(closes, 20)
     hma55    = _hma(closes, 55)
@@ -297,7 +431,10 @@ def _score_single_stock(symbol, grp, w52_map, scan_date,
     pts_macd   = 1 if _macd_bullish(closes) else 0
     sb         = _sector_bias(symbol)
     pts_sector = sb
-    sl_price   = hma55_now * 0.97
+    # The Hybrid Hull script's fixed ATR(14) × 3.5 trail is the primary stop.
+    # Fall back to the legacy HMA stop only if the indicator is not warmed up.
+    hull_stop = float(fixed_hull.get('hybrid_hull_stop', 0))
+    sl_price = hull_stop if 0 < hull_stop < close_now else hma55_now * 0.97
     risk       = close_now - sl_price
     sl_pct     = abs(close_now - sl_price)/close_now*100 if close_now > 0 else 99
     pts_rr     = 1 if sl_pct <= 7.0 and risk > 0 else 0
@@ -334,6 +471,7 @@ def _score_single_stock(symbol, grp, w52_map, scan_date,
         'sector_bias': sb,
         'weekly_tier': weekly_tier,
         'weekly_label': get_weekly_tier_label(weekly_tier),
+        **fixed_hull,
         'stop':    round(sl_price, 2),
         'target':  round(close_now + risk, 2),
         'target2': round(close_now + 2*risk, 2),

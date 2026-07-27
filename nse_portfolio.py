@@ -69,7 +69,7 @@ log = logging.getLogger(__name__)
 
 # ── Entry criteria ────────────────────────────────────────────
 ENTRY_MIN_STREAK   = 5      # consecutive days in top 25
-ENTRY_MIN_SCORE    = 6      # technical score
+ENTRY_MIN_SCORE    = 7      # technical score
 ENTRY_MAX_DIST_PCT = 5.0    # % above HMA55 — not overextended
 
 # ── Risk thresholds ───────────────────────────────────────────
@@ -145,21 +145,21 @@ def calc_risk_score(position: dict, scanner_stock: dict, news: dict = None) -> d
     flags = []
 
     # ── D1: Trend Health (HMA) ────────────────────────────────
-    hma_trend_up = scanner_stock.get('hma_trend_up', True)
-    cross_age    = int(scanner_stock.get('cross_age', 999))
-    pts_hma      = int(scanner_stock.get('pts_hma', 0))
+    daily_hull  = str(scanner_stock.get('daily_hull_status', 'NOT_ALIGNED'))
+    weekly_hull = str(scanner_stock.get('weekly_hull_status', 'NOT_ALIGNED'))
+    kama_rising = bool(scanner_stock.get('kama_rising', False))
 
-    if hma_trend_up and pts_hma >= 1:
+    if daily_hull == 'BULLISH' and weekly_hull == 'BULLISH' and kama_rising:
         d1 = 0
-    elif hma_trend_up and pts_hma == 0:
+    elif daily_hull == 'BULLISH' and weekly_hull != 'NOT_ALIGNED':
         d1 = 5
-        flags.append("HMA20 flattening — momentum slowing")
-    elif cross_age == -1:
+        flags.append("Weekly Hybrid Hull confirmation is weakening")
+    elif daily_hull != 'BULLISH':
         d1 = 15
-        flags.append("HMA20 below HMA55 — trend broken")
+        flags.append("Daily Hybrid Hull trend is no longer aligned")
     else:
         d1 = 10
-        flags.append("HMA20 weakening")
+        flags.append("Hybrid Hull momentum is weakening")
     dims['trend_health'] = d1
 
     # ── D2: Momentum Quality (RSI + MACD) ────────────────────
@@ -185,32 +185,23 @@ def calc_risk_score(position: dict, scanner_stock: dict, news: dict = None) -> d
     dims['momentum_quality'] = d2
 
     # ── D3: Extension Risk (dist_pct / ATR) ──────────────────
-    dist_pct    = float(scanner_stock.get('dist_pct', 0))
-    overextended = bool(scanner_stock.get('overextended', False))
-
-    # Use close and SL as ATR proxy if ATR not available
     close = float(scanner_stock.get('close', 1))
     sl    = float(scanner_stock.get('sl', close * 0.93))
-    atr_proxy = abs(close - sl) / close * 100  # SL-derived ATR %
+    hull_distance_atr = abs(float(scanner_stock.get('hull_distance_atr', 0)))
 
-    if atr_proxy > 0:
-        dist_atr_ratio = dist_pct / atr_proxy
-    else:
-        dist_atr_ratio = dist_pct / 5.0  # fallback
-
-    if dist_atr_ratio < 1:
+    if hull_distance_atr < 1:
         d3 = 0
-    elif dist_atr_ratio < 2:
+    elif hull_distance_atr < 1.5:
         d3 = 3
-    elif dist_atr_ratio < 3:
+    elif hull_distance_atr < 1.8:
         d3 = 8
-        flags.append(f"Stretched {dist_pct:.1f}% above HMA55")
-    elif dist_atr_ratio < 5:
+        flags.append(f"Stretched {hull_distance_atr:.1f} ATR above Hybrid Hull")
+    elif hull_distance_atr < 2.5:
         d3 = 12
-        flags.append(f"Overextended {dist_pct:.1f}% above HMA55")
+        flags.append(f"Overextended {hull_distance_atr:.1f} ATR above Hybrid Hull")
     else:
         d3 = 15
-        flags.append(f"Extreme stretch {dist_pct:.1f}% — don't add")
+        flags.append(f"Extreme stretch {hull_distance_atr:.1f} ATR — don't add")
     dims['extension_risk'] = d3
 
     # ── D4: Volume Conviction ─────────────────────────────────
@@ -355,14 +346,14 @@ def calc_risk_score(position: dict, scanner_stock: dict, news: dict = None) -> d
 # AUTO ADD
 # ═══════════════════════════════════════════════════════════════
 
-def auto_add(portfolio: dict, scanner_stocks: list, scan_date: str) -> list:
+def auto_add(portfolio: dict, scanner_stocks: list, scan_date: str,
+             news_data: dict = None) -> list:
     """
     Check scanner stocks against entry criteria. Add qualifying stocks.
 
-    Entry criteria (ALL 3 required):
-      streak ≥ 5
-      score  ≥ 6
-      dist_pct < 5%
+    Entry criteria (ALL required): BUY_TRIGGER, fixed Hybrid Hull alignment,
+    KAMA30 rising, no stretch/chop, streak >= 5, score >= 7, and no
+    material negative news. This is a scanner model position, not a broker fill.
 
     Returns list of newly added symbols.
     """
@@ -374,12 +365,32 @@ def auto_add(portfolio: dict, scanner_stocks: list, scan_date: str) -> list:
         streak   = int(stock.get('streak', 0))
         score    = float(stock.get('score', 0))
         dist_pct = float(stock.get('dist_pct', 999))
+        action   = str(stock.get('action', 'WATCH'))
+        daily_hull = str(stock.get('daily_hull_status', 'NOT_ALIGNED'))
+        weekly_hull = str(stock.get('weekly_hull_status', 'NOT_ALIGNED'))
+        kama_rising = bool(stock.get('kama_rising', False))
+        hull_stretched = bool(stock.get('hull_stretched', False))
+        hull_chop = bool(stock.get('hull_chop', False))
+        news = (news_data or {}).get(sym, {})
+        flags = news.get('flags', []) if isinstance(news, dict) else []
+        negative_news = (str(news.get('news_tone', 'NEUTRAL')) == 'NEGATIVE'
+                         if isinstance(news, dict) else False)
+        material_news_risk = (negative_news or any(
+            'RISK:REGULATORY' in str(flag) or 'DEAL:PROMOTER_SELL' in str(flag)
+            for flag in flags
+        ))
 
         # Skip if already in portfolio
         if sym in positions:
             continue
 
-        # Check all 3 criteria
+        # A model entry must be an actual scanner entry, not merely a good stock.
+        if action != 'BUY_TRIGGER':
+            continue
+        if not (daily_hull == 'BULLISH' and weekly_hull == 'BULLISH' and kama_rising):
+            continue
+        if hull_stretched or hull_chop or material_news_risk:
+            continue
         if streak < ENTRY_MIN_STREAK:
             continue
         if score < ENTRY_MIN_SCORE:
@@ -417,7 +428,8 @@ def auto_add(portfolio: dict, scanner_stocks: list, scan_date: str) -> list:
             "last_updated":  scan_date,
             "milestones":    [
                 {"event": "added", "date": scan_date, "price": close,
-                 "reason": f"streak={streak} score={score} dist={dist_pct:.1f}%"}
+                 "reason": (f"BUY_TRIGGER | Hull aligned | streak={streak} "
+                            f"score={score} dist={dist_pct:.1f}%")}
             ],
         }
         added.append(sym)
@@ -823,7 +835,7 @@ def run_portfolio_step(scanner_stocks: list, scan_date: str = None,
     sl_updated = update_sl(portfolio, scanner_stocks, scan_date)
 
     # Step C: Auto-add qualifying new stocks
-    added = auto_add(portfolio, scanner_stocks, scan_date)
+    added = auto_add(portfolio, scanner_stocks, scan_date, news_data=news_data)
 
     # Step D: Calculate risk for all open positions
     risk_scores = {}
