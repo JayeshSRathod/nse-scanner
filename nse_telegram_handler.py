@@ -200,7 +200,7 @@ def _to_bool(value, default=False):
 # ═══════════════════════════════════════════════════════════════
 
 def assign_situation(stock: dict, streak: int = 0) -> str:
-codex/find-and-fix-a-bug-in-codebase
+
     """
     Assign a situation label to a stock based on forward signals.
 
@@ -233,7 +233,6 @@ codex/find-and-fix-a-bug-in-codebase
     fresh_cross  = bool(stock.get('fresh_cross', False))
     acc_days     = int(stock.get('acc_days', 0))
     dist_days    = int(stock.get('dist_days', 0))
- main
     obv_dir      = str(stock.get('obv_dir', 'flat'))
     r3m          = _to_float(stock.get('return_3m_pct', 0), 0.0)
 
@@ -265,7 +264,7 @@ codex/find-and-fix-a-bug-in-codebase
 
 def get_situation_signal_line(stock: dict) -> str:
     parts = []
-codex/find-and-fix-a-bug-in-codebase
+
 
     cross_age    = _to_int(stock.get('cross_age', 999), 999)
     dist_pct     = _to_float(stock.get('dist_pct', 0), 0.0)
@@ -279,7 +278,6 @@ codex/find-and-fix-a-bug-in-codebase
     overextended = bool(stock.get('overextended', False))
     acc_days     = int(stock.get('acc_days', 0))
     dist_days    = int(stock.get('dist_days', 0))
- main
     obv_dir      = str(stock.get('obv_dir', 'flat'))
     sector_bias  = int(stock.get('sector_bias', 0))
 
