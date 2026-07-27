@@ -57,7 +57,12 @@ GITHUB_TOKEN  = os.environ.get("GITHUB_TOKEN", "").strip()
 GITHUB_REPO   = os.environ.get("GITHUB_REPO", "JayeshSRathod/nse-scanner").strip()
 GITHUB_BRANCH = os.environ.get("GITHUB_BRANCH", "main").strip()
 GITHUB_ACTIONS = os.environ.get("GITHUB_ACTIONS", "").lower() == "true"
-HISTORY_DAYS = int(os.environ.get("HISTORY_DAYS", "420"))
+# 400 observations comfortably covers the 252-session (12-month) calculation
+# and the scanner's 400-session lookback. Archive gaps must not block a run.
+MIN_SCAN_HISTORY_DAYS = int(os.environ.get("MIN_SCAN_HISTORY_DAYS", "400"))
+# First bootstrap requests a little more history; successful daily snapshots
+# then make later GitHub Actions runs incremental.
+BOOTSTRAP_HISTORY_DAYS = int(os.environ.get("BOOTSTRAP_HISTORY_DAYS", "420"))
 
 missing = []
 if not TOKEN:   missing.append("TELEGRAM_TOKEN")
@@ -152,7 +157,7 @@ def push_file_to_github(file_path, commit_msg):
     return r.status_code in (200, 201)
 
 
-def db_has_enough_data(min_days=HISTORY_DAYS):
+def db_has_enough_data(min_days=MIN_SCAN_HISTORY_DAYS):
     """Check if DB has enough trading days for scanner to work."""
     db_path = Path("nse_scanner.db")
     if not db_path.exists() or db_path.stat().st_size < 10000:
@@ -262,15 +267,15 @@ def run_pipeline():
     if restored:
         print(f"[STEP 0] Restored {restored} daily snapshots from market_data")
 
-    has_enough, current_days = db_has_enough_data(min_days=HISTORY_DAYS)
+    has_enough, current_days = db_has_enough_data(min_days=MIN_SCAN_HISTORY_DAYS)
     print(f"\n[STEP 0] DB check: {current_days} trading days loaded")
 
     if not has_enough:
-        print(f"[STEP 0] Need at least {HISTORY_DAYS} days for multi-horizon scanning. Starting backfill...")
+        print(f"[STEP 0] Need at least {MIN_SCAN_HISTORY_DAYS} usable days for multi-horizon scanning. Starting bootstrap...")
         try:
-            backfill_ok = backfill_historical_data(today, days_back=HISTORY_DAYS)
+            backfill_ok = backfill_historical_data(today, days_back=BOOTSTRAP_HISTORY_DAYS)
             if not backfill_ok:
-                reason = f"Backfill did not reach the required {HISTORY_DAYS} trading days"
+                reason = f"Backfill did not reach the required {MIN_SCAN_HISTORY_DAYS} usable trading days"
                 print(f"[STEP 0] ❌ {reason}")
                 send_failure_alert("Backfill", reason, today)
                 write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"),
