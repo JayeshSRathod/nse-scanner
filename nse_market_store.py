@@ -17,7 +17,9 @@ import pandas as pd
 STORE_ROOT = Path("market_data")
 DAILY_DIR = STORE_ROOT / "daily"
 MANIFEST_PATH = STORE_ROOT / "manifest.json"
-KEEP_DAYS = 450
+# Retain a fixed rolling window: each successful run adds the newest completed
+# session and removes the oldest snapshot only after the window exceeds 420.
+KEEP_DAYS = 420
 
 PRICE_COLUMNS = [
     "symbol", "date", "prev_close", "open", "high", "low", "last_price",
