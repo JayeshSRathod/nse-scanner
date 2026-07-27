@@ -1,0 +1,23 @@
+{
+  "schema_version":1,
+  "updated_at":"2026-07-27T11:37:17Z",
+  "snapshot_count":420,
+  "oldest_date":"2024-12-02",
+  "newest_date":"2026-07-24",
+  "columns":[
+    "symbol",
+    "date",
+    "prev_close",
+    "open",
+    "high",
+    "low",
+    "last_price",
+    "close",
+    "avg_price",
+    "volume",
+    "turnover_lacs",
+    "trades",
+    "delivery_qty",
+    "delivery_pct"
+  ]
+}

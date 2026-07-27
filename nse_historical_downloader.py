@@ -39,6 +39,8 @@ import gzip
 import shutil
 import argparse
 import re
+import csv
+import json
 import requests
 from datetime import date, datetime, timedelta
 
@@ -47,6 +49,7 @@ SAVE_ROOT   = "nse_data"
 DROP_ZONE   = "drop_zone"      # Place bundle ZIPs here manually
 LOG_DIR     = "logs"
 DELAY_SECS  = 1.2              # Polite delay between requests
+BOOTSTRAP_MAX_CANDIDATES = 520  # Weekdays examined to find valid EOD sessions
 
 HEADERS = {
     "User-Agent"      : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -247,6 +250,125 @@ def download_direct(d: date) -> int:
         time.sleep(DELAY_SECS)
 
     return success
+
+
+def _bhavdata_path(d: date) -> str:
+    """Return the local path for the required historical EOD price file."""
+    fmt = date_vars(d)
+    return os.path.join(day_folder(d), f"sec_bhavdata_full_{fmt['DDMMYYYY']}.csv")
+
+
+def has_valid_bhavdata(d: date) -> bool:
+    """A historical session counts only when its Bhavdata has EQ price rows."""
+    path = _bhavdata_path(d)
+    if not os.path.exists(path) or os.path.getsize(path) <= 500:
+        return False
+    try:
+        with open(path, "r", encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle)
+            fields = {str(field).strip().upper() for field in (reader.fieldnames or [])}
+            if "SYMBOL" not in fields or "SERIES" not in fields:
+                return False
+            for row in reader:
+                # NSE CSV headers currently include leading spaces after commas
+                # (for example, " SERIES").  Normalize each row before looking
+                # up the fields so a valid historical file is not rejected.
+                normalized_row = {
+                    str(key).strip().upper(): value
+                    for key, value in row.items()
+                    if key is not None
+                }
+                if (str(normalized_row.get("SERIES", "")).strip().upper() == "EQ"
+                        and str(normalized_row.get("SYMBOL", "")).strip()):
+                    return True
+    except (OSError, UnicodeDecodeError, csv.Error):
+        return False
+    return False
+
+
+def download_historical_bhavdata(d: date) -> bool:
+    """Download and validate only the required historical EOD price file.
+
+    Optional reports such as PE and volatility are deliberately excluded from
+    bootstrap success criteria: they do not determine whether a price session
+    is usable for long-horizon scanner calculations.
+    """
+    # A repeated bootstrap should validate already-downloaded sessions locally,
+    # without making another NSE request.
+    if has_valid_bhavdata(d):
+        return True
+
+    fmt = date_vars(d)
+    url = apply_fmt(DIRECT_URLS["sec_bhavdata_full"], fmt)
+    if not download(url, _bhavdata_path(d)):
+        return False
+    return has_valid_bhavdata(d)
+
+
+def bootstrap_history(target_days: int, max_candidates: int = BOOTSTRAP_MAX_CANDIDATES):
+    """Download until ``target_days`` valid Bhavdata sessions are available.
+
+    NSE archive availability is the source of truth.  Weekdays with a holiday,
+    archive 404, or malformed file are recorded and skipped rather than being
+    counted as trading sessions.
+    """
+    if target_days <= 0:
+        raise ValueError("Bootstrap target must be positive")
+    if max_candidates < target_days:
+        raise ValueError("max_candidates must be at least the requested target")
+
+    latest_completed = date.today() - timedelta(days=1)
+    cursor = latest_completed
+    valid_dates, skipped_dates = [], []
+    candidates = 0
+
+    print(f"\n{'#' * 58}")
+    print(f"  NSE HISTORY BOOTSTRAP — {target_days} VALID PRICE DAYS")
+    print(f"  Checking up to {max_candidates} weekday candidates")
+    print(f"  Historical mode downloads Bhavdata only")
+    print(f"{'#' * 58}")
+
+    while len(valid_dates) < target_days and candidates < max_candidates:
+        if cursor.weekday() < 5:
+            candidates += 1
+            was_already_valid = has_valid_bhavdata(cursor)
+            ok = download_historical_bhavdata(cursor)
+            if ok:
+                valid_dates.append(cursor.isoformat())
+            else:
+                skipped_dates.append(cursor.isoformat())
+
+            if candidates % 10 == 0 or len(valid_dates) == target_days:
+                print(f"  Progress: valid={len(valid_dates)}/{target_days} | "
+                      f"checked={candidates} | skipped={len(skipped_dates)}")
+            # Be polite only after an actual NSE request; local validation is
+            # intentionally fast when resuming a bootstrap.
+            if not was_already_valid:
+                time.sleep(DELAY_SECS)
+        cursor -= timedelta(days=1)
+
+    manifest = {
+        "target_valid_days": target_days,
+        "valid_price_days": len(valid_dates),
+        "candidate_weekdays_checked": candidates,
+        "valid_dates": sorted(valid_dates),
+        "skipped_dates": sorted(skipped_dates),
+        "oldest_valid_date": min(valid_dates) if valid_dates else None,
+        "newest_valid_date": max(valid_dates) if valid_dates else None,
+    }
+    manifest_path = os.path.join(SAVE_ROOT, "bootstrap_manifest.json")
+    with open(manifest_path, "w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, indent=2)
+
+    print(f"\n  Valid price days : {len(valid_dates)}")
+    print(f"  Skipped dates    : {len(skipped_dates)}")
+    print(f"  Manifest         : {manifest_path}")
+    if len(valid_dates) < target_days:
+        print(f"  ERROR: Only {len(valid_dates)} valid days found within "
+              f"{max_candidates} weekday candidates")
+        return False
+    print("  Bootstrap complete: required price history is available")
+    return True
 
 
 # ─────────────────────────────────────────────────────────────
@@ -487,6 +609,7 @@ Examples:
   python nse_historical_downloader.py --date 05-03-2026
   python nse_historical_downloader.py --from 01-01-2026 --to 05-03-2026
   python nse_historical_downloader.py --last 90
+  python nse_historical_downloader.py --bootstrap 420
   python nse_historical_downloader.py --process-bundles
         """
     )
@@ -495,10 +618,15 @@ Examples:
     grp.add_argument("--date",   type=str, help="Single date DD-MM-YYYY or today/yesterday")
     grp.add_argument("--from",   type=str, dest="date_from", metavar="DD-MM-YYYY")
     grp.add_argument("--last",   type=int, metavar="N", help="Last N trading days")
+    grp.add_argument("--bootstrap", type=int, metavar="VALID_DAYS",
+                     help="Download until this many valid Bhavdata price sessions exist")
     grp.add_argument("--process-bundles", action="store_true",
                      help="Process all ZIPs in drop_zone/ folder")
 
     parser.add_argument("--to",  type=str, dest="date_to", metavar="DD-MM-YYYY")
+    parser.add_argument("--max-candidates", type=int,
+                        default=BOOTSTRAP_MAX_CANDIDATES,
+                        help="Maximum weekday dates examined by --bootstrap (default: 520)")
     args = parser.parse_args()
 
     ensure_dirs()
@@ -510,6 +638,11 @@ Examples:
         n = process_all_bundles()
         print(f"\n  {n} bundle(s) processed.")
         return
+
+    # ── Valid-price bootstrap ──
+    if args.bootstrap:
+        ok = bootstrap_history(args.bootstrap, args.max_candidates)
+        sys.exit(0 if ok else 1)
 
     # ── Single date ──
     if args.date:
