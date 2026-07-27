@@ -373,6 +373,11 @@ def load_w52(conn, df, trade_date):
     df["date"] = trade_date.isoformat()
     cols = [c for c in ["symbol", "date", "week52_high", "week52_low"]
             if c in df.columns]
+    # NSE's 52-week file can publish the same symbol more than once on a
+    # trading day.  The database correctly has a unique (symbol, date) key,
+    # so remove source duplicates before insertion rather than failing the
+    # complete daily load.
+    df = df.drop_duplicates(subset=["symbol", "date"], keep="last")
     before = conn.execute("SELECT COUNT(*) FROM week52").fetchone()[0]
     df[cols].to_sql("week52", conn, if_exists="append",
                     index=False, chunksize=500)
