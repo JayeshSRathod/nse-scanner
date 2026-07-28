@@ -707,6 +707,8 @@ def scan_stocks(scan_date=None, top_n=None):
     result_df['return_1m_pct'] = (result_df['return_1m'] * 100).round(1)
     result_df['return_2m_pct'] = (result_df['return_2m'] * 100).round(1)
     result_df['return_3m_pct'] = (result_df['return_3m'] * 100).round(1)
+    result_df['return_6m_pct'] = (result_df['return_6m'] * 100).round(1)
+    result_df['return_12m_pct'] = (result_df['return_12m'] * 100).round(1)
 
     # ── Step 7: Assign categories ─────────────────────────────
     print(f"\n  Assigning categories...")

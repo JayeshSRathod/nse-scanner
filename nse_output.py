@@ -201,7 +201,9 @@ def format_option_c_messages(stocks_list, scan_date_str, greeting=""):
     for stock in stocks_list:
         groups.setdefault(stock.get('action', 'WATCH'), []).append(stock)
     buy = groups['BUY_TRIGGER']
-    wait = groups['WAIT_PULLBACK'] + groups['WATCH']
+    wait_only = groups['WAIT_PULLBACK']
+    watch_only = groups['WATCH']
+    wait = wait_only + watch_only
     manage = groups['HOLD_TRAIL'] + groups['PARTIAL_PROFIT'] + groups['EXIT_ALERT']
     avoid = groups['AVOID']
 
@@ -209,6 +211,28 @@ def format_option_c_messages(stocks_list, scan_date_str, greeting=""):
         daily = '🟢 Daily Hull up' if s.get('daily_hull_status') == 'BULLISH' else '🟡 Daily Hull not ready'
         weekly = '🟢 Weekly trend up' if s.get('weekly_hull_status') == 'BULLISH' else '🟡 Weekly trend pending'
         return f"{daily} | {weekly}"
+
+    def horizon_label(s):
+        horizon = str(s.get('horizon', 'NEW_1M_SETUP'))
+        return {
+            'NEW_1M_SETUP': 'about 1 month',
+            'DIRECT_3M': '1–3 months',
+            'DIRECT_6M': '3–6 months',
+            'CORE_12M': '6–12 months',
+        }.get(horizon, 'under observation')
+
+    def return_trend(value):
+        value = float(value or 0)
+        return '🟢 Strong' if value >= 12 else '🟢 Positive' if value > 0 else '🟡 Building'
+
+    def market_posture():
+        if len(buy) >= 3:
+            return '🟢 Positive, with multiple confirmed setups'
+        if buy:
+            return '🟢 Positive, but selective'
+        if wait_only or watch_only:
+            return '🟡 Selective — wait for confirmed entries'
+        return '🔴 Defensive — no confirmed entry today'
 
     def why_wait(s):
         if s.get('hull_chop'):
@@ -228,14 +252,23 @@ def format_option_c_messages(stocks_list, scan_date_str, greeting=""):
         sl = float(s.get('sl', close * .93))
         t1 = float(s.get('target1', close))
         t2 = float(s.get('target2', close))
-        horizon = str(s.get('horizon', 'NEW_1M_SETUP')).replace('_', ' ')
+        reasons = [
+            'Price is above the Hybrid Hull and not overstretched.',
+            'Daily and weekly trend are aligned upward.',
+        ]
+        if int(s.get('acc_days', 0)) >= 3:
+            reasons.append('Volume and delivery support the move.')
+        else:
+            reasons.append('Risk-to-reward remains acceptable at the trigger.')
         return (
             f"{_b(str(rank) + '. ' + str(s.get('symbol', '?')))} — {_b('BUY ONLY ABOVE ' + _fmt_price(trigger))}\n"
-            f"   {_i(horizon.title() + ' | Score ' + str(round(float(s.get('score', 0)), 1)) + '/10')}\n"
+            f"   {_i('Setup strength: ' + str(round(float(s.get('score', 0)), 1)) + ' / 10')}\n"
             f"   {hull_badges(s)}\n"
+            f"   3M trend: {return_trend(s.get('return_3m_pct'))} | 6M trend: {return_trend(s.get('return_6m_pct'))}\n"
             f"   Safety stop: {_b(_fmt_price(sl))}\n"
             f"   Profit plan: first {_fmt_price(t1)} | final {_fmt_price(t2)}\n"
-            f"   Why actionable: {str(s.get('action_reason', 'All fixed Hybrid Hull checks are aligned.'))}\n"
+            f"   Expected holding: {horizon_label(s)}\n"
+            f"   Why actionable today:\n      • " + "\n      • ".join(reasons[:3]) + "\n"
             f"   Entry window: next 2 trading sessions\n\n"
         )
 
@@ -269,8 +302,10 @@ def format_option_c_messages(stocks_list, scan_date_str, greeting=""):
 
     header = greeting + f"📌 {_b('NSE TRADE PLAN — ' + ds)}\n"
     header += f"{_i('Based on the previous market close. Fixed Hybrid Hull: 55 / HMA21 / HMA51 / ATR14 × 3.5 / KAMA30.')}\n\n"
-    header += (f"🎯 Act now: {_b(str(len(buy)))} | 👀 Wait: {_b(str(len(wait)))} | "
-               f"🛡️ Manage: {_b(str(len(manage)))} | 🚫 Avoid: {_b(str(len(avoid)))}\n{SEP2}\n\n")
+    header += f"{_b('MARKET POSTURE')}  {market_posture()}\n{SEP2}\n"
+    header += (f"🎯 Act now: {_b(str(len(buy)))} | 👀 Wait: {_b(str(len(wait_only)))}\n"
+               f"🧭 Watch: {_b(str(len(watch_only)))} | 🛡️ Manage: {_b(str(len(manage)))} | "
+               f"🚫 Avoid: {_b(str(len(avoid)))}\n{SEP2}\n\n")
     messages = []
     first = header + _b('✅ ACT TODAY — only after the trigger is crossed') + "\n"
     first += _i('Choose at most one or two. Do not buy before the stated price.') + "\n" + SEP2 + "\n\n"
@@ -523,6 +558,8 @@ def _df_to_list(df):
             'target2':       round(float(row.get('target2', e + 2 * (e - sl))), 2),
             'return_1m_pct': round(float(row.get('return_1m_pct', 0)), 1),
             'return_3m_pct': round(float(row.get('return_3m_pct', 0)), 1),
+            'return_6m_pct': round(float(row.get('return_6m_pct', 0)), 1),
+            'return_12m_pct': round(float(row.get('return_12m_pct', 0)), 1),
             'streak':        int(row.get('streak', 0)),
             'cross_age':     int(row.get('cross_age', 999)),
             'fresh_cross':   bool(row.get('fresh_cross', False)),

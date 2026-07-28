@@ -388,6 +388,8 @@ def save_scan_results(results_df, scan_date):
             'return_1m_pct': round(float(row.get('return_1m_pct', 0)), 1),
             'return_2m_pct': round(float(row.get('return_2m_pct', 0)), 1),
             'return_3m_pct': round(float(row.get('return_3m_pct', 0)), 1),
+            'return_6m_pct': round(float(row.get('return_6m_pct', 0)), 1),
+            'return_12m_pct': round(float(row.get('return_12m_pct', 0)), 1),
             'close':         entry,
             'volume':        int(row.get('volume', 0)),
             'delivery_pct':  round(float(row.get('delivery_pct', 0)), 1),
