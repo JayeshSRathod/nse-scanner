@@ -388,6 +388,8 @@ def save_scan_results(results_df, scan_date):
             'return_1m_pct': round(float(row.get('return_1m_pct', 0)), 1),
             'return_2m_pct': round(float(row.get('return_2m_pct', 0)), 1),
             'return_3m_pct': round(float(row.get('return_3m_pct', 0)), 1),
+            'return_6m_pct': round(float(row.get('return_6m_pct', 0)), 1),
+            'return_12m_pct': round(float(row.get('return_12m_pct', 0)), 1),
             'close':         entry,
             'volume':        int(row.get('volume', 0)),
             'delivery_pct':  round(float(row.get('delivery_pct', 0)), 1),
@@ -419,6 +421,29 @@ def save_scan_results(results_df, scan_date):
             'days_tracked': int(row.get('days_tracked', 0)),
             'tv_status': str(row.get('tv_status', 'NO_ENTRY')),
             'hybrid_hull_checks': row.get('hybrid_hull_checks', []),
+            # Technical fields used later by the EOD model-portfolio risk check.
+            'rsi': round(float(row.get('rsi', 50)), 1),
+            'pts_hma': int(row.get('pts_hma', 0)),
+            'pts_macd': int(row.get('pts_macd', 0)),
+            'hma_trend_up': bool(row.get('hma_trend_up', False)),
+            'dist_days': int(row.get('dist_days', 0)),
+            'del_trend': str(row.get('del_trend', 'flat')),
+            'hybrid_hull_55': round(float(row.get('hybrid_hull_55', 0)), 2),
+            'hma21': round(float(row.get('hma21', 0)), 2),
+            'hma51': round(float(row.get('hma51', 0)), 2),
+            'atr14': round(float(row.get('atr14', 0)), 2),
+            'hybrid_hull_stop': round(float(row.get('hybrid_hull_stop', 0)), 2),
+            'kama30': round(float(row.get('kama30', 0)), 2),
+            'daily_hull_status': str(row.get('daily_hull_status', 'NOT_ALIGNED')),
+            'daily_hma_aligned': bool(row.get('daily_hma_aligned', False)),
+            'kama_rising': bool(row.get('kama_rising', False)),
+            'weekly_hull_status': str(row.get('weekly_hull_status', 'NOT_ALIGNED')),
+            'weekly_hma21': round(float(row.get('weekly_hma21', 0)), 2),
+            'weekly_hma51': round(float(row.get('weekly_hma51', 0)), 2),
+            'hull_distance_atr': round(float(row.get('hull_distance_atr', 0)), 2),
+            'hull_stretched': bool(row.get('hull_stretched', False)),
+            'hull_chop': bool(row.get('hull_chop', False)),
+            'hull_compression': bool(row.get('hull_compression', False)),
         })
 
     sit_priority = {SITUATION_PRIME: 0, SITUATION_HOLD: 1,
@@ -471,6 +496,11 @@ def save_history(stocks_list, scan_date):
             'target2':       s['target2'],
             'category':      s.get('category', 'rising'),
             'situation':     s.get('situation', 'watch'),
+            # Kept for the Saturday digest: only a triggered BUY_TRIGGER is
+            # counted as a model trade, never a generic watch-list stock.
+            'action':        s.get('action', 'WATCH'),
+            'entry_trigger': s.get('entry_trigger'),
+            'entry_valid_until': s.get('entry_valid_until', ''),
         } for s in stocks_list]
     })
     history.sort(key=lambda x: x['date'], reverse=True)

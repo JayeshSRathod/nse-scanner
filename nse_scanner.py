@@ -243,12 +243,21 @@ def assign_horizon_actions(results_df, scan_date):
         ma200 = float(row.get('ma200', close))
         ma_stack = bool(row.get('ma50_above_ma200', False))
         overextended = bool(row.get('overextended', False))
+        daily_hull = str(row.get('daily_hull_status', 'NOT_ALIGNED')) == 'BULLISH'
+        daily_hma = bool(row.get('daily_hma_aligned', False))
+        weekly_hull = str(row.get('weekly_hull_status', 'NOT_ALIGNED')) == 'BULLISH'
+        kama_rising = bool(row.get('kama_rising', False))
+        hull_stretched = bool(row.get('hull_stretched', False))
+        hull_chop = bool(row.get('hull_chop', False))
+        compression = bool(row.get('hull_compression', False))
         situation = str(row.get('situation', 'watch'))
 
         trend_3m = r3 > 0
         trend_6m = r6 > 0 and close > ma200 and ma_stack
         trend_12m = r12 > 0 and trend_6m
-        entry_ready = score >= 7 and situation == 'prime' and not overextended
+        entry_ready = (score >= 7 and situation == 'prime' and not overextended
+                       and daily_hull and daily_hma and weekly_hull
+                       and kama_rising and not hull_stretched and not hull_chop)
 
         if situation == 'avoid':
             return pd.Series({
@@ -271,19 +280,27 @@ def assign_horizon_actions(results_df, scan_date):
 
         if entry_ready:
             action = 'BUY_TRIGGER'
-            reason = 'Daily and weekly technical setup is entry-ready; confirm timing in Hybrid Hull.'
-        elif horizon in ('CORE_12M', 'DIRECT_6M') and overextended:
+            reason = ('Daily Hybrid Hull 55, HMA21/51, KAMA30 and weekly HMA trend '
+                      'are aligned; price is not stretched.')
+        elif hull_stretched or (horizon in ('CORE_12M', 'DIRECT_6M') and overextended):
             action = 'WAIT_PULLBACK'
-            reason = 'Long-term trend is strong, but price is extended from support.'
+            reason = 'Trend is healthy, but price is stretched above Hybrid Hull support; wait for a calmer entry.'
         elif situation == 'hold':
             action = 'HOLD_TRAIL'
-            reason = 'Trend remains aligned; trail the existing stop rather than chase.'
+            reason = 'Trend remains aligned; trail the existing stop rather than chase a new entry.'
         elif situation == 'book':
             action = 'PARTIAL_PROFIT'
             reason = 'Move is mature or stretched; protect gains and avoid fresh entry.'
         else:
             action = 'WATCH'
-            reason = 'Trend is forming; wait for a complete EOD entry setup.'
+            if hull_chop:
+                reason = 'Price is rotating near Hybrid Hull; wait for a clean EOD breakout from the chop zone.'
+            elif compression:
+                reason = 'Compression is building; wait for a close above the trigger with volume confirmation.'
+            elif not weekly_hull:
+                reason = 'Daily move is improving, but the weekly HMA21/51 trend is not yet confirmed.'
+            else:
+                reason = 'Trend is forming; wait for full Daily Hybrid Hull and KAMA alignment.'
 
         trigger = round(float(row.get('high', close)) * 1.001, 2) if action == 'BUY_TRIGGER' else None
         return pd.Series({
@@ -301,11 +318,7 @@ def assign_horizon_actions(results_df, scan_date):
 
 
 def attach_hybrid_hull_checklist(results_df):
-    """Attach the manual TradingView confirmation required for each action.
-
-    Hybrid Hull remains the final execution check; the scanner deliberately
-    does not treat its own EOD ranking as an automatic entry instruction.
-    """
+    """Explain the scanner's fixed Hybrid Hull(55) EOD read for each action."""
     if results_df.empty:
         return results_df
 
@@ -314,11 +327,11 @@ def attach_hybrid_hull_checklist(results_df):
         horizon = str(row.get('horizon', 'WATCH'))
         if action == 'BUY_TRIGGER':
             return pd.Series({
-                'tv_status': 'CONFIRM_BEFORE_ENTRY',
+                'tv_status': 'SCANNER_ALIGNED',
                 'hybrid_hull_checks': [
-                    'Daily: HIGH CONV LONG; no BLOCKED-CONFLICT.',
-                    'Weekly: bullish Hull structure.',
-                    f'Long-term: {horizon} must not oppose the long setup.',
+                    'Daily Hybrid Hull 55 is rising and price is above it.',
+                    'Daily HMA21 is above HMA51; KAMA30 is rising.',
+                    'Weekly HMA21/HMA51 trend is bullish.',
                     'Enter only above trigger within two sessions.',
                 ],
             })
@@ -326,18 +339,18 @@ def attach_hybrid_hull_checklist(results_df):
             return pd.Series({
                 'tv_status': 'WAIT_FOR_SETUP',
                 'hybrid_hull_checks': [
-                    'Wait for price near daily Hull/support.',
-                    'Require fresh Daily HIGH CONV LONG.',
-                    'Weekly and long-term structure must remain bullish.',
+                    'Wait for price to return closer to Hybrid Hull support.',
+                    'Daily Hull 55, HMA21/51 and KAMA30 must realign.',
+                    'Weekly HMA trend must remain supportive.',
                 ],
             })
         if action == 'HOLD_TRAIL':
             return pd.Series({
                 'tv_status': 'MANAGE_POSITION',
                 'hybrid_hull_checks': [
-                    'Keep position while daily Hull trail is intact.',
-                    'Reduce or exit on a confirmed Daily structure exit.',
-                    'Weekly bearish turn overrides the hold signal.',
+                    'Keep position while price stays above the daily Hybrid Hull trail.',
+                    'Reduce or exit after a confirmed daily structure break.',
+                    'A weekly HMA trend failure overrides the hold signal.',
                 ],
             })
         if action in ('PARTIAL_PROFIT', 'EXIT_ALERT'):
@@ -346,14 +359,14 @@ def attach_hybrid_hull_checklist(results_df):
                 'hybrid_hull_checks': [
                     'Respect the current trail stop without widening it.',
                     'Book partial profit at the planned risk milestone.',
-                    'Exit on confirmed Hybrid Hull structure break.',
+                    'Exit on a confirmed Hybrid Hull structure break.',
                 ],
             })
         return pd.Series({
             'tv_status': 'NO_ENTRY',
             'hybrid_hull_checks': [
-                'No entry yet: wait for daily and weekly alignment.',
-                'Do not trade when Hybrid Hull shows WATCH or conflict.',
+                'No entry yet: wait for daily and weekly HMA alignment.',
+                'Do not trade while Hybrid Hull identifies chop or a trend conflict.',
             ],
         })
 
@@ -632,6 +645,12 @@ def scan_stocks(scan_date=None, top_n=None):
             'hma_trend_up', 'near_52w', 'sector_bias',
             # NEW: weekly tier columns
             'weekly_tier', 'weekly_label',
+            # Fixed Hybrid Hull V17.3 settings (EOD confirmation layer)
+            'hybrid_hull_55', 'hma21', 'hma51', 'atr14', 'hybrid_hull_stop', 'kama30',
+            'daily_hull_status', 'daily_hma_aligned', 'kama_rising',
+            'weekly_hull_status', 'weekly_hma21', 'weekly_hma51',
+            'hull_distance_atr', 'hull_stretched', 'hull_critical_stretch',
+            'hull_chop', 'hull_compression',
         ] if c in tech_df.columns]
 
         scored_df = scored_df.merge(
@@ -688,6 +707,8 @@ def scan_stocks(scan_date=None, top_n=None):
     result_df['return_1m_pct'] = (result_df['return_1m'] * 100).round(1)
     result_df['return_2m_pct'] = (result_df['return_2m'] * 100).round(1)
     result_df['return_3m_pct'] = (result_df['return_3m'] * 100).round(1)
+    result_df['return_6m_pct'] = (result_df['return_6m'] * 100).round(1)
+    result_df['return_12m_pct'] = (result_df['return_12m'] * 100).round(1)
 
     # ── Step 7: Assign categories ─────────────────────────────
     print(f"\n  Assigning categories...")
