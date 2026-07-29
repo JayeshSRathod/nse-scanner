@@ -12,9 +12,9 @@ from .daily_portfolio import process_daily_portfolio
 from .database import V2Database
 from .freshness import FreshnessStatus, assess_freshness
 from .lifecycle import new_position
-from .portfolio_message import format_position_update
+from .portfolio_message import render_portfolio_message
 from .portfolio_store import PortfolioStore
-from .preview import format_candidate_preview
+from .preview import render_candidate_preview
 from .snapshots import build_market_snapshot
 from .telegram_delivery import DeliveryResult, send_messages
 
@@ -34,8 +34,7 @@ class DailyRunResult:
     delivery: DeliveryResult
 
     def to_dict(self) -> dict:
-        payload = asdict(self)
-        return payload
+        return asdict(self)
 
 
 def _equal_weight_benchmark(prices: pd.DataFrame) -> pd.DataFrame:
@@ -54,9 +53,7 @@ def _warning_header(freshness: FreshnessStatus, benchmark_source: str) -> str:
     warnings = list(freshness.reasons)
     if benchmark_source != "OFFICIAL_INDEX_HISTORY":
         warnings.append("official_index_history_unavailable_equal_weight_fallback")
-    if not warnings:
-        return ""
-    return "DATA WARNING: " + "; ".join(warnings) + "\n\n"
+    return "" if not warnings else "DATA WARNING: " + "; ".join(warnings) + "\n\n"
 
 
 def run_daily(
@@ -77,25 +74,26 @@ def run_daily(
     benchmark_source = "OFFICIAL_INDEX_HISTORY"
     benchmark = pd.DataFrame()
     if not indices.empty:
-        preferred = indices[indices["index_name"].str.upper().isin(["NIFTY 500", "NIFTY 50"])]
+        normalized = indices["index_name"].astype(str).str.upper()
+        preferred = indices[normalized.isin(["NIFTY 500", "NIFTY 50"])]
         if not preferred.empty:
-            chosen = "NIFTY 500" if (preferred["index_name"].str.upper() == "NIFTY 500").any() else "NIFTY 50"
-            benchmark = preferred[preferred["index_name"].str.upper() == chosen].copy()
+            preferred_names = preferred["index_name"].astype(str).str.upper()
+            chosen = "NIFTY 500" if (preferred_names == "NIFTY 500").any() else "NIFTY 50"
+            benchmark = preferred[preferred_names == chosen].copy()
     if benchmark.empty:
         benchmark = _equal_weight_benchmark(prices)
         benchmark_source = "EQUAL_WEIGHT_UNIVERSE_FALLBACK"
 
     snapshot = build_market_snapshot(prices, benchmark)
     regime = snapshot["regime"]
-    candidates: list[Candidate] = []
-    for symbol, frame in prices.groupby("symbol"):
-        candidates.append(
-            evaluate_candidate(
-                str(symbol), frame, regime,
-                stale_data=freshness.prices_stale,
-                minimum_score=minimum_score,
-            )
+    candidates = [
+        evaluate_candidate(
+            str(symbol), frame, regime,
+            stale_data=freshness.prices_stale,
+            minimum_score=minimum_score,
         )
+        for symbol, frame in prices.groupby("symbol")
+    ]
     ranked = rank_candidates(candidates, top_n=top_n)
     selected = [candidate for rows in ranked.values() for candidate in rows]
 
@@ -122,8 +120,8 @@ def run_daily(
     }
     processed = process_daily_portfolio(store, latest_bars, run_date.isoformat())
     warning = _warning_header(freshness, benchmark_source)
-    candidate_message = warning + format_candidate_preview(ranked, run_date.isoformat())
-    portfolio_message = warning + format_position_update(processed, run_date.isoformat())
+    candidate_message = warning + render_candidate_preview(ranked, regime, run_date.isoformat())
+    portfolio_message = warning + render_portfolio_message(processed, run_date.isoformat())
     delivery = send_messages([candidate_message, portfolio_message], enabled=send_telegram)
     return DailyRunResult(
         trade_date=run_date.isoformat(), regime=regime,
