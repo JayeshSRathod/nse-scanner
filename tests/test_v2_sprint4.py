@@ -1,0 +1,55 @@
+from pathlib import Path
+
+import pytest
+
+from v2.lifecycle import TradeState, new_position, transition
+from v2.portfolio_store import PortfolioStore
+
+
+def test_position_lifecycle_and_partial_exit():
+    p = new_position("ABC", "POSITIONAL_3_6M", "2026-01-01", 100, 95, 110, 120, 10)
+    assert p.state == TradeState.WATCH
+    p = transition(p, "QUALIFY", "2026-01-02")
+    p = transition(p, "ENTER", "2026-01-03", price=100)
+    p = transition(p, "T1_HIT", "2026-01-10", price=110, partial_fraction=0.5)
+    assert p.state == TradeState.PARTIAL
+    assert p.remaining_quantity == 5
+    assert p.realised_quantity == 5
+    assert p.stop == 100
+    p = transition(p, "TRAIL", "2026-01-15", trailing_stop=106)
+    assert p.state == TradeState.TRAILING
+    assert p.stop == 106
+    p = transition(p, "STOP_HIT", "2026-01-20", price=106)
+    assert p.state == TradeState.CLOSED
+    assert p.remaining_quantity == 0
+
+
+def test_invalid_transition_rejected():
+    p = new_position("ABC", "SWING_1_3M", "2026-01-01", 100, 95, 110, 120)
+    with pytest.raises(ValueError):
+        transition(p, "T1_HIT", "2026-01-02")
+
+
+def test_trailing_stop_never_moves_backward():
+    p = new_position("ABC", "SWING_1_3M", "2026-01-01", 100, 95, 110, 120)
+    p = transition(transition(p, "QUALIFY", "2026-01-02"), "ENTER", "2026-01-03")
+    p = transition(p, "TRAIL", "2026-01-04", trailing_stop=98)
+    with pytest.raises(ValueError):
+        transition(p, "TRAIL", "2026-01-05", trailing_stop=97)
+
+
+def test_portfolio_store_persists_events_and_watchlist(tmp_path: Path):
+    db = tmp_path / "portfolio.db"
+    store = PortfolioStore(db)
+    store.initialize()
+    p = new_position("XYZ", "POSITIONAL_6_12M", "2026-02-01", 200, 185, 225, 250, 4)
+    store.save_position(p, "CREATE")
+    previous = p.state
+    p = transition(p, "QUALIFY", "2026-02-02")
+    store.save_position(p, "QUALIFY", previous_state=previous)
+    loaded = store.get_position(p.trade_id)
+    assert loaded is not None
+    assert loaded.state == TradeState.READY
+    assert len(store.open_positions()) == 1
+    store.remember_candidate("XYZ", "POSITIONAL_6_12M", "2026-02-02", 82.5)
+    store.remember_candidate("XYZ", "POSITIONAL_6_12M", "2026-02-03", 79.0)
