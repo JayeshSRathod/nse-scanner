@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from .candidates import Candidate, evaluate_candidate, rank_candidates
-from .daily_portfolio import process_daily_portfolio
+from .daily_portfolio import process_portfolio_day
 from .database import V2Database
 from .freshness import FreshnessStatus, assess_freshness
 from .lifecycle import new_position
@@ -118,15 +118,16 @@ def run_daily(
         str(symbol): frame.sort_values("trade_date").iloc[-1].to_dict()
         for symbol, frame in prices.groupby("symbol")
     }
-    processed = process_daily_portfolio(store, latest_bars, run_date.isoformat())
+    process_portfolio_day(store, run_date.isoformat(), latest_bars)
+    portfolio_positions = store.open_positions()
     warning = _warning_header(freshness, benchmark_source)
     candidate_message = warning + render_candidate_preview(ranked, regime, run_date.isoformat())
-    portfolio_message = warning + render_portfolio_message(processed, run_date.isoformat())
+    portfolio_message = warning + render_portfolio_message(portfolio_positions, run_date.isoformat())
     delivery = send_messages([candidate_message, portfolio_message], enabled=send_telegram)
     return DailyRunResult(
         trade_date=run_date.isoformat(), regime=regime,
         benchmark_source=benchmark_source, freshness=freshness,
         evaluated=len(candidates), selected=len(selected), created_positions=created,
-        portfolio_positions=len(processed), candidate_message=candidate_message,
+        portfolio_positions=len(portfolio_positions), candidate_message=candidate_message,
         portfolio_message=portfolio_message, delivery=delivery,
     )
