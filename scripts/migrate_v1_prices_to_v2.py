@@ -67,6 +67,7 @@ def migrate(db_path: Path, schema_path: Path, dry_run: bool = False) -> dict:
                         ELSE 'VALID'
                     END
                 FROM daily_prices
+                WHERE 1 = 1
                 ON CONFLICT(symbol, trade_date) DO UPDATE SET
                     prev_close=excluded.prev_close,
                     open=excluded.open,
