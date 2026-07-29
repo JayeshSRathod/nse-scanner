@@ -1,0 +1,1 @@
+The V2 branch must keep nse_loader.py byte-for-byte aligned with main. This marker is temporary documentation for the restoration checkpoint.
