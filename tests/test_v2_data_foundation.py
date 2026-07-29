@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import sqlite3
+from datetime import date, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,8 +30,9 @@ def build_v1_fixture(db_path: Path, sessions: int = 400) -> None:
             delivery_qty INTEGER, delivery_pct REAL,
             UNIQUE(symbol, date))"""
     )
+    start = date(2024, 1, 1)
     for i in range(sessions):
-        day = f"2025-{(i // 28) % 12 + 1:02d}-{(i % 28) + 1:02d}"
+        day = (start + timedelta(days=i)).isoformat()
         base = 100.0 + i / 10
         conn.execute(
             """INSERT INTO daily_prices (
@@ -55,7 +57,7 @@ def test_audit_passes_valid_400_session_fixture(tmp_path: Path):
     )
     report = audit.audit_database(db_path)
     assert report["status"] == "PASS"
-    assert report["metrics"]["session_count"] == 336 or report["metrics"]["session_count"] == 400
+    assert report["metrics"]["session_count"] == 400
 
 
 def test_migration_is_idempotent(tmp_path: Path):
