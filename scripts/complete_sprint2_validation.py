@@ -1,22 +1,21 @@
 """Restore repository market snapshots and complete Sprint 2 validation.
 
-This command is safe for CI: it creates a temporary SQLite database, never sends
-Telegram messages, and writes only JSON/CSV outputs under output/v2_validation.
+Safe for CI: creates a temporary SQLite database, never sends Telegram messages,
+and writes only JSON/CSV outputs under output/v2_validation.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import sqlite3
 from pathlib import Path
 
 import pandas as pd
 
 from nse_loader import init_database
 from nse_market_store import restore_prices, snapshot_dates
-from v2.database import MarketDatabase
-from v2.indicators import atr, hybrid_hull, relative_strength
-from v2.snapshots import build_market_regime_snapshot, persist_market_regime_snapshot
+from v2.database import V2Database
+from v2.indicators import atr, hybrid_hull, relative_strength_return
+from v2.snapshots import build_market_snapshot, persist_market_snapshot
 
 
 def _equal_weight_benchmark(prices: pd.DataFrame) -> pd.DataFrame:
@@ -29,47 +28,55 @@ def _equal_weight_benchmark(prices: pd.DataFrame) -> pd.DataFrame:
 
 def run(db_path: Path, output_dir: Path) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
+    if db_path.exists():
+        db_path.unlink()
     init_database(str(db_path))
     restored = restore_prices(db_path, min_days=1)
     dates = snapshot_dates()
 
-    market = MarketDatabase(db_path)
+    market = V2Database(db_path)
     prices = market.load_prices(min_sessions=55)
     if prices.empty:
         raise RuntimeError("No usable market prices were restored")
 
-    benchmark = market.load_index_history()
+    indices = market.load_indices()
     benchmark_source = "INDEX_PERF"
-    if benchmark.empty:
+    if indices.empty:
         benchmark = _equal_weight_benchmark(prices)
         benchmark_source = "EQUAL_WEIGHT_UNIVERSE_FALLBACK"
+    else:
+        counts = indices.groupby("index_name")["trade_date"].nunique().sort_values(ascending=False)
+        benchmark_name = counts.index[0]
+        benchmark = indices[indices["index_name"] == benchmark_name][["trade_date", "close"]]
+        benchmark_source = f"INDEX_PERF:{benchmark_name}"
 
-    snapshot = build_market_regime_snapshot(prices, benchmark)
+    snapshot = build_market_snapshot(prices, benchmark)
     snapshot["benchmark_source"] = benchmark_source
     snapshot["sector_history_validated"] = False
     snapshot["sector_validation_note"] = (
         "Sector index history is not persisted in market_data snapshots; "
         "sector-relative outputs remain disabled."
     )
-    persist_market_regime_snapshot(db_path, snapshot)
+    persist_market_snapshot(db_path, snapshot)
 
-    latest_symbol = (
-        prices.groupby("symbol").size().sort_values(ascending=False).index[0]
-    )
-    sample = prices[prices["symbol"] == latest_symbol].sort_values("trade_date")
+    latest_symbol = prices.groupby("symbol").size().sort_values(ascending=False).index[0]
+    sample = prices[prices["symbol"] == latest_symbol].sort_values("trade_date").copy()
+    hh = hybrid_hull(sample)
     sample_out = {
         "symbol": latest_symbol,
         "sessions": int(len(sample)),
-        "latest_atr14": float(atr(sample["high"], sample["low"], sample["close"], 14).iloc[-1]),
-        "latest_hybrid_hull": str(hybrid_hull(sample["close"]).iloc[-1]),
+        "latest_atr14": float(atr(sample, 14).iloc[-1]),
+        "latest_hybrid_hull_state": int(hh["hybrid_hull_state"].iloc[-1]),
     }
 
     aligned = sample[["trade_date", "close"]].merge(
         benchmark, on="trade_date", how="inner", suffixes=("_stock", "_benchmark")
     )
     if len(aligned) >= 66:
-        rs = relative_strength(aligned["close_stock"], aligned["close_benchmark"], 66)
-        sample_out["latest_rs66"] = float(rs.iloc[-1])
+        rs = relative_strength_return(
+            aligned["close_stock"], aligned["close_benchmark"], lookback=66
+        )
+        sample_out["latest_rs66_excess_return"] = float(rs.iloc[-1])
 
     result = {
         "status": "PASS",
