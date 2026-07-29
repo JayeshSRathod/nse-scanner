@@ -1,0 +1,33 @@
+name: V2 Indicators and Regime Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop/v2-multi-horizon
+    paths:
+      - 'v2/**'
+      - 'tests/test_v2_indicators_regime.py'
+      - '.github/workflows/v2-indicators-regime-tests.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v2-indicators-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip pytest pandas numpy
+      - name: Run Sprint 2 tests
+        run: pytest -q tests/test_v2_indicators_regime.py
