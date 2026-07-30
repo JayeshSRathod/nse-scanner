@@ -1,0 +1,141 @@
+name: Monthly Portfolio Review
+
+on:
+  workflow_dispatch:
+    inputs:
+      review_period:
+        description: Optional review period in YYYY-MM format
+        required: false
+        type: string
+      generate_reviews:
+        description: Call configured LLM providers and generate reports
+        required: false
+        default: false
+        type: boolean
+      force_refresh:
+        description: Ignore fresh cached reviews
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    # 03:30 UTC = 09:00 IST on the first day of each month.
+    - cron: "30 3 1 * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: monthly-portfolio-review
+  cancel-in-progress: false
+
+jobs:
+  portfolio-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip pytest requests
+
+      - name: Run Sprint 8 tests
+        run: >-
+          python -m pytest
+          tests/test_portfolio_reader.py
+          tests/test_review_contracts.py
+          tests/test_review_runner.py
+          tests/test_portfolio_health.py
+          tests/test_review_policy.py
+          tests/test_portfolio_review_integration.py
+          -q
+
+      - name: Build active portfolio review queue
+        shell: bash
+        run: |
+          PERIOD="${{ inputs.review_period }}"
+          if [ -n "$PERIOD" ]; then
+            python scripts/run_monthly_portfolio_review.py --period "$PERIOD"
+          else
+            python scripts/run_monthly_portfolio_review.py
+          fi
+
+      - name: Generate validated portfolio reviews
+        id: generate
+        continue-on-error: true
+        if: ${{ github.event_name == 'schedule' || inputs.generate_reviews == true }}
+        env:
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'gemini' }}
+          LLM_FALLBACK_PROVIDER: ${{ vars.LLM_FALLBACK_PROVIDER || 'groq' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.0-flash' }}
+          GROQ_MODEL: ${{ vars.GROQ_MODEL || 'llama-3.3-70b-versatile' }}
+          PORTFOLIO_REVIEW_MAX_RETRIES: "1"
+          PORTFOLIO_REVIEW_RETRY_DELAY_SECONDS: "3"
+          PORTFOLIO_REVIEW_MAX_AGE_DAYS: ${{ vars.PORTFOLIO_REVIEW_MAX_AGE_DAYS || '45' }}
+          PORTFOLIO_REVIEW_MAX_SYMBOLS: ${{ vars.PORTFOLIO_REVIEW_MAX_SYMBOLS || '30' }}
+          PORTFOLIO_REVIEW_MAX_PROVIDER_CALLS: ${{ vars.PORTFOLIO_REVIEW_MAX_PROVIDER_CALLS || '60' }}
+          PORTFOLIO_REVIEW_FORCE_REFRESH: ${{ inputs.force_refresh || 'false' }}
+        run: python scripts/run_portfolio_reviews.py
+
+      - name: Build consolidated portfolio health
+        if: ${{ always() }}
+        run: python scripts/build_portfolio_health.py
+
+      - name: Validate generated portfolio intelligence
+        if: ${{ always() }}
+        run: python scripts/validate_portfolio_intelligence.py
+
+      - name: Upload review artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: monthly-portfolio-review
+          path: |
+            data/review_queue.json
+            data/portfolio_review_run.json
+            data/portfolio_review_recovery.json
+            data/portfolio_health.json
+            data/portfolio_health_message.txt
+            reports/portfolio/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Commit generated review data
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          git add data/review_queue.json
+          for FILE in \
+            data/portfolio_review_run.json \
+            data/portfolio_review_recovery.json \
+            data/portfolio_health.json \
+            data/portfolio_health_message.txt; do
+            if [ -f "$FILE" ]; then git add "$FILE"; fi
+          done
+          if [ -d reports/portfolio ]; then git add reports/portfolio; fi
+          if git diff --cached --quiet; then
+            echo "No portfolio review changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          PERIOD=$(python -c "import json; print(json.load(open('data/review_queue.json'))['review_period'])")
+          git commit -m "chore: update monthly portfolio reviews ${PERIOD}"
+          git push
+
+      - name: Report partial review failure
+        if: ${{ steps.generate.outcome == 'failure' }}
+        run: |
+          echo "One or more AI reviews failed. Recovery details are stored in data/portfolio_review_recovery.json."
+          exit 1
