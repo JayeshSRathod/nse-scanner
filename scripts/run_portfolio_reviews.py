@@ -1,5 +1,4 @@
 """Generate validated monthly reviews for the prepared portfolio queue."""
-
 from __future__ import annotations
 
 import argparse
@@ -12,7 +11,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.portfolio_review.review_runner import run_review
+from src.portfolio_review.recovery import write_recovery_manifest
+from src.portfolio_review.review_policy import ReviewPolicy, should_review_symbol
+from src.portfolio_review.review_runner import ReviewRunResult, run_review
 
 
 def parse_args() -> argparse.Namespace:
@@ -22,8 +23,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--reports-root", default="reports/portfolio")
     parser.add_argument("--primary-provider", default=None)
     parser.add_argument("--fallback-provider", default=None)
-    parser.add_argument("--max-symbols", type=int, default=30)
+    parser.add_argument("--max-symbols", type=int, default=None)
+    parser.add_argument("--max-age-days", type=int, default=None)
+    parser.add_argument("--force-refresh", action="store_true")
     parser.add_argument("--result", default="data/portfolio_review_run.json")
+    parser.add_argument("--recovery", default="data/portfolio_review_recovery.json")
     return parser.parse_args()
 
 
@@ -39,35 +43,65 @@ def main() -> int:
     if not isinstance(items, list):
         raise ValueError("Review queue items must be a list")
 
-    normalized_items = []
-    for item in items[: max(args.max_symbols, 0)]:
+    env_policy = ReviewPolicy.from_env()
+    policy = ReviewPolicy(
+        max_age_days=args.max_age_days or env_policy.max_age_days,
+        max_symbols_per_run=(args.max_symbols if args.max_symbols is not None else env_policy.max_symbols_per_run),
+        max_provider_calls_per_run=env_policy.max_provider_calls_per_run,
+        force_refresh=args.force_refresh or env_policy.force_refresh,
+    )
+
+    normalized_items: list[dict] = []
+    for item in items[: policy.max_symbols_per_run]:
         normalized_items.append(item if isinstance(item, dict) else {"symbol": str(item), "position": {}})
 
-    results = [
-        run_review(
+    results: list[ReviewRunResult] = []
+    estimated_calls = 0
+    for item in normalized_items:
+        symbol = str(item.get("symbol", "")).strip().upper()
+        should_run, reason = should_review_symbol(
+            symbol, reports_root=args.reports_root, policy=policy
+        )
+        if not should_run:
+            results.append(ReviewRunResult(symbol=symbol, status="SKIPPED", error=reason))
+            continue
+
+        # Primary + fallback with one retry each can consume up to four calls.
+        worst_case_calls = 4
+        if estimated_calls + worst_case_calls > policy.max_provider_calls_per_run:
+            results.append(ReviewRunResult(
+                symbol=symbol,
+                status="SKIPPED",
+                error="provider-call budget exhausted",
+            ))
+            continue
+        estimated_calls += worst_case_calls
+        results.append(run_review(
             item,
             period,
             scanner_path=args.scanner,
             reports_root=args.reports_root,
             primary_provider=args.primary_provider,
             fallback_provider=args.fallback_provider,
-        )
-        for item in normalized_items
-    ]
+        ))
 
+    serialized = [asdict(result) for result in results]
     payload = {
         "review_period": period,
         "requested_count": len(normalized_items),
         "success_count": sum(result.status == "SUCCESS" for result in results),
         "skipped_count": sum(result.status == "SKIPPED" for result in results),
         "failed_count": sum(result.status == "FAILED" for result in results),
-        "results": [asdict(result) for result in results],
+        "estimated_provider_call_budget_used": estimated_calls,
+        "policy": asdict(policy),
+        "results": serialized,
     }
     output = Path(args.result)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    write_recovery_manifest(serialized, review_period=period, path=args.recovery)
     print(json.dumps(payload, indent=2, ensure_ascii=False))
-    return 0
+    return 0 if payload["failed_count"] == 0 else 2
 
 
 if __name__ == "__main__":
