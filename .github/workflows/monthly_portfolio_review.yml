@@ -56,6 +56,7 @@ jobs:
           tests/test_review_runner.py
           tests/test_portfolio_health.py
           tests/test_review_policy.py
+          tests/test_portfolio_review_integration.py
           -q
 
       - name: Build active portfolio review queue
@@ -90,6 +91,10 @@ jobs:
       - name: Build consolidated portfolio health
         if: ${{ always() }}
         run: python scripts/build_portfolio_health.py
+
+      - name: Validate generated portfolio intelligence
+        if: ${{ always() }}
+        run: python scripts/validate_portfolio_intelligence.py
 
       - name: Upload review artifacts
         if: ${{ always() }}
