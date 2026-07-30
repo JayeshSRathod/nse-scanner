@@ -1,0 +1,42 @@
+name: V2 Sprint 2 Live Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop/v2-multi-horizon
+      - main
+    paths:
+      - 'market_data/**'
+      - 'v2/**'
+      - 'scripts/complete_sprint2_validation.py'
+      - '.github/workflows/v2-sprint2-live-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip pandas numpy pytest
+      - name: Run all V2 tests
+        run: python -m pytest -q tests/test_v2_data_foundation.py tests/test_v2_indicators_regime.py tests/test_v2_database_snapshots.py
+      - name: Restore repository market history and validate Sprint 2
+        run: python scripts/complete_sprint2_validation.py
+      - name: Upload validation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-sprint2-validation
+          path: output/v2_validation/
+          if-no-files-found: error
+          retention-days: 30

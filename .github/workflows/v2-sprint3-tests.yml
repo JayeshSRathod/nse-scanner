@@ -1,0 +1,32 @@
+name: V2 Sprint 3 Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop/v2-multi-horizon
+      - main
+    paths:
+      - 'v2/setups.py'
+      - 'v2/participation.py'
+      - 'v2/trade_plan.py'
+      - 'v2/candidates.py'
+      - 'v2/preview.py'
+      - 'tests/test_v2_sprint3.py'
+      - '.github/workflows/v2-sprint3-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install --upgrade pip pytest pandas numpy
+      - run: python -m pytest -q tests/test_v2_sprint3.py

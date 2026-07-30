@@ -1,0 +1,31 @@
+name: V2 Sprint 7 Validation Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop/v2-multi-horizon
+      - main
+    paths:
+      - 'v2/backtest.py'
+      - 'v2/performance.py'
+      - 'v2/walk_forward.py'
+      - 'scripts/run_v2_validation.py'
+      - 'tests/test_v2_sprint7.py'
+      - '.github/workflows/v2-sprint7-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install --upgrade pip pytest pandas numpy
+      - run: python -m pytest -q tests/test_v2_sprint7.py tests/test_v2_sprint4_processor.py tests/test_v2_sprint3.py

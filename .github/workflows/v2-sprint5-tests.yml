@@ -1,0 +1,31 @@
+name: V2 Sprint 5 Integration Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop/v2-multi-horizon
+      - main
+    paths:
+      - 'v2/freshness.py'
+      - 'v2/telegram_delivery.py'
+      - 'v2/orchestrator.py'
+      - 'scripts/run_v2_daily.py'
+      - 'tests/test_v2_sprint5.py'
+      - '.github/workflows/v2-sprint5-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install --upgrade pip pytest pandas numpy requests
+      - run: python -m pytest -q tests/test_v2_sprint3.py tests/test_v2_sprint4.py tests/test_v2_sprint4_processor.py tests/test_v2_sprint5.py
