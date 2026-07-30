@@ -7,6 +7,11 @@ on:
         description: Optional review period in YYYY-MM format
         required: false
         type: string
+      generate_reviews:
+        description: Call configured LLM providers and generate reports
+        required: false
+        default: false
+        type: boolean
   schedule:
     # 03:30 UTC = 09:00 IST on the first day of each month.
     - cron: "30 3 1 * *"
@@ -19,9 +24,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-review-queue:
+  portfolio-review:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -33,11 +38,11 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Install test dependency
-        run: python -m pip install --upgrade pip pytest
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip pytest requests
 
       - name: Run Sprint 8 tests
-        run: python -m pytest tests/test_portfolio_reader.py -q
+        run: python -m pytest tests/test_portfolio_reader.py tests/test_review_contracts.py tests/test_review_runner.py -q
 
       - name: Build active portfolio review queue
         shell: bash
@@ -49,22 +54,41 @@ jobs:
             python scripts/run_monthly_portfolio_review.py
           fi
 
-      - name: Upload review queue
+      - name: Generate validated portfolio reviews
+        if: ${{ github.event_name == 'schedule' || inputs.generate_reviews == true }}
+        env:
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'gemini' }}
+          LLM_FALLBACK_PROVIDER: ${{ vars.LLM_FALLBACK_PROVIDER || 'groq' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.0-flash' }}
+          GROQ_MODEL: ${{ vars.GROQ_MODEL || 'llama-3.3-70b-versatile' }}
+          PORTFOLIO_REVIEW_MAX_RETRIES: "1"
+          PORTFOLIO_REVIEW_RETRY_DELAY_SECONDS: "3"
+        run: python scripts/run_portfolio_reviews.py --max-symbols 30
+
+      - name: Upload review artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: monthly-portfolio-review-queue
-          path: data/review_queue.json
-          if-no-files-found: error
+          name: monthly-portfolio-review
+          path: |
+            data/review_queue.json
+            data/portfolio_review_run.json
+            reports/portfolio/
+          if-no-files-found: warn
 
-      - name: Commit generated queue
+      - name: Commit generated review data
         shell: bash
         run: |
-          if git diff --quiet -- data/review_queue.json; then
-            echo "No review queue changes to commit."
+          git add data/review_queue.json
+          if [ -f data/portfolio_review_run.json ]; then git add data/portfolio_review_run.json; fi
+          if [ -d reports/portfolio ]; then git add reports/portfolio; fi
+          if git diff --cached --quiet; then
+            echo "No portfolio review changes to commit."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/review_queue.json
-          git commit -m "chore: update monthly portfolio review queue"
+          PERIOD=$(python -c "import json; print(json.load(open('data/review_queue.json'))['review_period'])")
+          git commit -m "chore: update monthly portfolio reviews ${PERIOD}"
           git push
