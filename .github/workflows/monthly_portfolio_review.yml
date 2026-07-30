@@ -42,7 +42,13 @@ jobs:
         run: python -m pip install --upgrade pip pytest requests
 
       - name: Run Sprint 8 tests
-        run: python -m pytest tests/test_portfolio_reader.py tests/test_review_contracts.py tests/test_review_runner.py -q
+        run: >-
+          python -m pytest
+          tests/test_portfolio_reader.py
+          tests/test_review_contracts.py
+          tests/test_review_runner.py
+          tests/test_portfolio_health.py
+          -q
 
       - name: Build active portfolio review queue
         shell: bash
@@ -67,6 +73,9 @@ jobs:
           PORTFOLIO_REVIEW_RETRY_DELAY_SECONDS: "3"
         run: python scripts/run_portfolio_reviews.py --max-symbols 30
 
+      - name: Build consolidated portfolio health
+        run: python scripts/build_portfolio_health.py
+
       - name: Upload review artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -74,6 +83,8 @@ jobs:
           path: |
             data/review_queue.json
             data/portfolio_review_run.json
+            data/portfolio_health.json
+            data/portfolio_health_message.txt
             reports/portfolio/
           if-no-files-found: warn
 
@@ -82,6 +93,8 @@ jobs:
         run: |
           git add data/review_queue.json
           if [ -f data/portfolio_review_run.json ]; then git add data/portfolio_review_run.json; fi
+          if [ -f data/portfolio_health.json ]; then git add data/portfolio_health.json; fi
+          if [ -f data/portfolio_health_message.txt ]; then git add data/portfolio_health_message.txt; fi
           if [ -d reports/portfolio ]; then git add reports/portfolio; fi
           if git diff --cached --quiet; then
             echo "No portfolio review changes to commit."
