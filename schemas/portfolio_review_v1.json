@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "portfolio_review_v1.json",
+  "title": "Portfolio Review V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "symbol", "review_date", "review_period", "technical_status",
+    "fundamental_status", "management_status", "risk_status",
+    "suggested_action", "material_change", "confidence_score",
+    "summary", "key_positives", "key_concerns", "evidence_status",
+    "data_limitations"
+  ],
+  "properties": {
+    "symbol": {"type": "string", "pattern": "^[A-Z0-9&.-]{1,30}$"},
+    "review_date": {"type": "string", "format": "date"},
+    "review_period": {"type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"},
+    "technical_status": {"enum": ["BULLISH", "NEUTRAL", "WEAK", "BROKEN"]},
+    "fundamental_status": {"enum": ["HEALTHY", "STABLE", "WATCH", "CONCERN", "NOT_REVIEWED"]},
+    "management_status": {"enum": ["POSITIVE", "STABLE", "WATCH", "CONCERN", "UNKNOWN"]},
+    "risk_status": {"enum": ["LOW", "MEDIUM", "HIGH", "UNKNOWN"]},
+    "suggested_action": {"enum": ["HOLD", "WATCH", "REVIEW", "REDUCE", "TECHNICAL_EXIT", "INSUFFICIENT_DATA"]},
+    "material_change": {"type": "boolean"},
+    "confidence_score": {"type": "number", "minimum": 0, "maximum": 100},
+    "summary": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "key_positives": {"type": "array", "items": {"type": "string", "maxLength": 300}, "maxItems": 10},
+    "key_concerns": {"type": "array", "items": {"type": "string", "maxLength": 300}, "maxItems": 10},
+    "evidence_status": {"enum": ["COMPLETE", "PARTIAL", "TECHNICAL_ONLY", "FAILED"]},
+    "data_limitations": {"type": "array", "items": {"type": "string", "maxLength": 300}, "maxItems": 10}
+  }
+}
