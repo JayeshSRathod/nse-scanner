@@ -48,6 +48,7 @@ def build_portfolio_health(
         if review is None:
             rows.append({
                 "symbol": symbol,
+                "review_status": "MISSING",
                 "review_available": False,
                 "technical_status": "NOT_REVIEWED",
                 "fundamental_status": "NOT_REVIEWED",
@@ -64,6 +65,7 @@ def build_portfolio_health(
         if errors:
             rows.append({
                 "symbol": symbol,
+                "review_status": "INVALID",
                 "review_available": False,
                 "technical_status": "NOT_REVIEWED",
                 "fundamental_status": "NOT_REVIEWED",
@@ -79,6 +81,7 @@ def build_portfolio_health(
 
         rows.append({
             "symbol": symbol,
+            "review_status": "VALID",
             "review_available": True,
             "technical_status": review["technical_status"],
             "fundamental_status": review["fundamental_status"],
@@ -93,11 +96,19 @@ def build_portfolio_health(
         })
 
     rows.sort(key=lambda row: (_ACTION_PRIORITY.get(row["suggested_action"], 99), row["symbol"]))
+    reviewed_count = sum(row["review_available"] for row in rows)
+    pending_count = sum(not row["review_available"] for row in rows)
+    summary = {
+        "active_positions": len(rows),
+        "reviewed": reviewed_count,
+        "pending": pending_count,
+    }
     return {
         "generated_date": date.today().isoformat(),
-        "position_count": len(rows),
-        "reviewed_count": sum(row["review_available"] for row in rows),
-        "pending_count": sum(not row["review_available"] for row in rows),
+        "summary": summary,
+        "position_count": summary["active_positions"],
+        "reviewed_count": summary["reviewed"],
+        "pending_count": summary["pending"],
         "action_counts": {
             action: sum(row["suggested_action"] == action for row in rows)
             for action in _ACTION_PRIORITY
