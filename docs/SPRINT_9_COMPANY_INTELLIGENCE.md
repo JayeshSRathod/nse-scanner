@@ -1,15 +1,15 @@
-# Sprint 9 — Company Intelligence
+# Market Intelligence Suite (MIS) — Sprint 9 Company Intelligence
 
 ## Objective
 
-Build a deterministic company-intelligence layer that converts verified company evidence into a reusable dossier without changing the production V2 scanner or the Sprint 8 portfolio-review authority model.
+Build a deterministic company-intelligence layer that converts verified company evidence into a reusable dossier without changing the production scanner or Sprint 8 portfolio authority model.
 
 ## Scope
 
-Sprint 9 will add:
+Sprint 9 adds:
 
 1. Company dossier contracts and versioned storage.
-2. Evidence-source registry with provenance and freshness metadata.
+2. Evidence registry with provenance and freshness controls.
 3. Deterministic company profile builder.
 4. Material-event classification.
 5. Evidence completeness and stale-data scoring.
@@ -19,12 +19,12 @@ Sprint 9 will add:
 ## Non-goals
 
 - No automated trade execution.
-- No replacement of scanner entry, stop-loss, or exit logic.
+- No replacement of scanner entry, stop-loss, ranking, or exit logic.
 - No invented financial metrics or news.
 - No unrestricted web scraping.
 - No direct modification of active portfolio positions.
 
-## Proposed flow
+## Evidence-first flow
 
 ```text
 Symbol request
@@ -42,25 +42,55 @@ Optional evidence-bound LLM interpretation
 Versioned company report
 ```
 
-## Initial artifacts
+## Sprint 9A — Foundation
+
+- Company evidence and dossier contracts
+- Controlled evidence and dossier statuses
+- Validation against unsupported assumptions
+
+## Sprint 9B — Evidence Platform
+
+Implemented components:
+
+- `EvidenceRegistry` for deterministic validation and registration
+- SHA-256 evidence fingerprints for duplicate prevention
+- Explicit symbol normalization and category controls
+- Provenance requirement for verified evidence
+- Future-date rejection
+- Latest, category, history, and stale-evidence queries
+- `EvidenceRepository` for append-only JSON persistence
+- Symbol/year/month/category partitioning
+- Atomic filesystem writes
+- Repository round-trip and contract tests
+
+Storage layout:
 
 ```text
-data/company_intelligence_queue.json
-reports/company/SYMBOL/YYYY-MM-DD.json
-reports/company/SYMBOL/latest.json
+company_data/
+  SYMBOL/
+    evidence/
+      YYYY/
+        MM/
+          category_<evidence-id>.json
 ```
-
-## Sprint slices
-
-- 9A: Domain contracts and dossier schema
-- 9B: Evidence registry and provenance
-- 9C: Profile builder
-- 9D: Material-event classifier
-- 9E: Freshness/completeness scoring
-- 9F: Prompt and provider integration
-- 9G: Validation and repository
-- 9H: Workflow, tests, deployment
 
 ## Safety invariant
 
 Every statement about a company must be traceable to supplied evidence. Missing or stale evidence must produce `UNKNOWN`, `NOT_REVIEWED`, or `INSUFFICIENT_DATA` rather than an inferred fact.
+
+Verified evidence requires a source reference, and existing evidence files are never overwritten.
+
+## Validation
+
+```bash
+python -m pytest tests/test_company_intelligence_models.py tests/test_evidence_registry.py -q
+```
+
+## Remaining slices
+
+- 9C: Deterministic Company Dossier Builder
+- 9D: Material-event classifier
+- 9E: Freshness/completeness scoring
+- 9F: Prompt and provider integration
+- 9G: Dossier validation and repository
+- 9H: Workflow, integration tests, and deployment
