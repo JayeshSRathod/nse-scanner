@@ -1,6 +1,14 @@
 {
-  "last_updated": "2026-07-28",
+  "last_updated": "2026-07-29",
   "stocks": {
+    "360ONE": {
+      "days_tracked": 1,
+      "first_seen_date": "2026-07-29",
+      "last_seen_date": "2026-07-29",
+      "origin": "DIRECT",
+      "stage": "DIRECT_3M",
+      "stage_since": "2026-07-29"
+    },
     "AARTIDRUGS": {
       "days_tracked": 1,
       "first_seen_date": "2026-07-24",
@@ -17,6 +25,14 @@
       "stage": "CORE_12M",
       "stage_since": "2026-07-24"
     },
+    "ACE": {
+      "days_tracked": 1,
+      "first_seen_date": "2026-07-29",
+      "last_seen_date": "2026-07-29",
+      "origin": "DIRECT",
+      "stage": "DIRECT_6M",
+      "stage_since": "2026-07-29"
+    },
     "AIIL": {
       "days_tracked": 1,
       "first_seen_date": "2026-07-27",
@@ -26,17 +42,17 @@
       "stage_since": "2026-07-27"
     },
     "AMANTA": {
-      "days_tracked": 1,
+      "days_tracked": 2,
       "first_seen_date": "2026-07-28",
-      "last_seen_date": "2026-07-28",
+      "last_seen_date": "2026-07-29",
       "origin": "DIRECT",
       "stage": "DIRECT_3M",
       "stage_since": "2026-07-28"
     },
     "ANANTRAJ": {
-      "days_tracked": 1,
+      "days_tracked": 2,
       "first_seen_date": "2026-07-24",
-      "last_seen_date": "2026-07-24",
+      "last_seen_date": "2026-07-29",
       "origin": "DIRECT",
       "stage": "CORE_12M",
       "stage_since": "2026-07-24"
@@ -82,20 +98,28 @@
       "stage_since": "2026-07-27"
     },
     "ASHAPURMIN": {
-      "days_tracked": 1,
+      "days_tracked": 2,
       "first_seen_date": "2026-07-27",
-      "last_seen_date": "2026-07-27",
+      "last_seen_date": "2026-07-29",
+      "origin": "DIRECT",
+      "stage": "DIRECT_3M",
+      "stage_since": "2026-07-29"
+    },
+    "ASIANENE": {
+      "days_tracked": 1,
+      "first_seen_date": "2026-07-29",
+      "last_seen_date": "2026-07-29",
       "origin": "DIRECT",
       "stage": "CORE_12M",
-      "stage_since": "2026-07-27"
+      "stage_since": "2026-07-29"
     },
     "BAJAJHLDNG": {
-      "days_tracked": 1,
+      "days_tracked": 2,
       "first_seen_date": "2026-07-27",
-      "last_seen_date": "2026-07-27",
+      "last_seen_date": "2026-07-29",
       "origin": "DIRECT",
-      "stage": "EXIT_ALERT",
-      "stage_since": "2026-07-27"
+      "stage": "DIRECT_3M",
+      "stage_since": "2026-07-29"
     },
     "BHARATFORG": {
       "days_tracked": 1,
@@ -104,6 +128,14 @@
       "origin": "DIRECT",
       "stage": "CORE_12M",
       "stage_since": "2026-07-27"
+    },
+    "BHARTIHEXA": {
+      "days_tracked": 1,
+      "first_seen_date": "2026-07-29",
+      "last_seen_date": "2026-07-29",
+      "origin": "DIRECT",
+      "stage": "DIRECT_3M",
+      "stage_since": "2026-07-29"
     },
     "BIOCON": {
       "days_tracked": 2,
@@ -122,12 +154,20 @@
       "stage_since": "2026-07-24"
     },
     "CASHIETF": {
-      "days_tracked": 1,
+      "days_tracked": 2,
       "first_seen_date": "2026-07-28",
-      "last_seen_date": "2026-07-28",
+      "last_seen_date": "2026-07-29",
       "origin": "DIRECT",
       "stage": "CORE_12M",
       "stage_since": "2026-07-28"
+    },
+    "CREDITACC": {
+      "days_tracked": 1,
+      "first_seen_date": "2026-07-29",
+      "last_seen_date": "2026-07-29",
+      "origin": "DIRECT",
+      "stage": "CORE_12M",
+      "stage_since": "2026-07-29"
     },
     "DIVISLAB": {
       "days_tracked": 2,
@@ -138,9 +178,9 @@
       "stage_since": "2026-07-24"
     },
     "EMCURE": {
-      "days_tracked": 3,
+      "days_tracked": 4,
       "first_seen_date": "2026-07-24",
-      "last_seen_date": "2026-07-28",
+      "last_seen_date": "2026-07-29",
       "origin": "DIRECT",
       "stage": "CORE_12M",
       "stage_since": "2026-07-24"
@@ -154,20 +194,28 @@
       "stage_since": "2026-07-27"
     },
     "GEPIL": {
-      "days_tracked": 1,
+      "days_tracked": 2,
       "first_seen_date": "2026-07-24",
-      "last_seen_date": "2026-07-24",
+      "last_seen_date": "2026-07-29",
       "origin": "DIRECT",
       "stage": "DIRECT_3M",
       "stage_since": "2026-07-24"
     },
     "GPTHEALTH": {
-      "days_tracked": 2,
+      "days_tracked": 3,
       "first_seen_date": "2026-07-27",
-      "last_seen_date": "2026-07-28",
+      "last_seen_date": "2026-07-29",
       "origin": "DIRECT",
-      "stage": "DIRECT_6M",
-      "stage_since": "2026-07-27"
+      "stage": "CORE_12M",
+      "stage_since": "2026-07-29"
+    },
+    "GROWWLIQID": {
+      "days_tracked": 1,
+      "first_seen_date": "2026-07-29",
+      "last_seen_date": "2026-07-29",
+      "origin": "DIRECT",
+      "stage": "CORE_12M",
+      "stage_since": "2026-07-29"
     },
     "HAL": {
       "days_tracked": 1,
@@ -226,9 +274,9 @@
       "stage_since": "2026-07-28"
     },
     "KIRLFER": {
-      "days_tracked": 2,
+      "days_tracked": 3,
       "first_seen_date": "2026-07-27",
-      "last_seen_date": "2026-07-28",
+      "last_seen_date": "2026-07-29",
       "origin": "DIRECT",
       "stage": "DIRECT_3M",
       "stage_since": "2026-07-27"
@@ -240,6 +288,14 @@
       "origin": "DIRECT",
       "stage": "DIRECT_6M",
       "stage_since": "2026-07-27"
+    },
+    "KROSS": {
+      "days_tracked": 1,
+      "first_seen_date": "2026-07-29",
+      "last_seen_date": "2026-07-29",
+      "origin": "DIRECT",
+      "stage": "DIRECT_3M",
+      "stage_since": "2026-07-29"
     },
     "KTKBANK": {
       "days_tracked": 1,
@@ -281,6 +337,22 @@
       "stage": "CORE_12M",
       "stage_since": "2026-07-24"
     },
+    "MANKIND": {
+      "days_tracked": 1,
+      "first_seen_date": "2026-07-29",
+      "last_seen_date": "2026-07-29",
+      "origin": "DIRECT",
+      "stage": "CORE_12M",
+      "stage_since": "2026-07-29"
+    },
+    "MANORAMA": {
+      "days_tracked": 1,
+      "first_seen_date": "2026-07-29",
+      "last_seen_date": "2026-07-29",
+      "origin": "DIRECT",
+      "stage": "CORE_12M",
+      "stage_since": "2026-07-29"
+    },
     "MAXIND": {
       "days_tracked": 1,
       "first_seen_date": "2026-07-28",
@@ -298,17 +370,17 @@
       "stage_since": "2026-07-24"
     },
     "NESTLEIND": {
-      "days_tracked": 1,
+      "days_tracked": 2,
       "first_seen_date": "2026-07-28",
-      "last_seen_date": "2026-07-28",
+      "last_seen_date": "2026-07-29",
       "origin": "DIRECT",
       "stage": "DIRECT_6M",
       "stage_since": "2026-07-28"
     },
     "PEL": {
-      "days_tracked": 3,
+      "days_tracked": 4,
       "first_seen_date": "2026-07-24",
-      "last_seen_date": "2026-07-28",
+      "last_seen_date": "2026-07-29",
       "origin": "DIRECT",
       "stage": "DIRECT_3M",
       "stage_since": "2026-07-24"
@@ -354,9 +426,9 @@
       "stage_since": "2026-07-28"
     },
     "SGFIN": {
-      "days_tracked": 2,
+      "days_tracked": 3,
       "first_seen_date": "2026-07-27",
-      "last_seen_date": "2026-07-28",
+      "last_seen_date": "2026-07-29",
       "origin": "DIRECT",
       "stage": "CORE_12M",
       "stage_since": "2026-07-27"
@@ -409,6 +481,22 @@
       "stage": "DIRECT_3M",
       "stage_since": "2026-07-24"
     },
+    "SUNPHARMA": {
+      "days_tracked": 1,
+      "first_seen_date": "2026-07-29",
+      "last_seen_date": "2026-07-29",
+      "origin": "DIRECT",
+      "stage": "CORE_12M",
+      "stage_since": "2026-07-29"
+    },
+    "THYROCARE": {
+      "days_tracked": 1,
+      "first_seen_date": "2026-07-29",
+      "last_seen_date": "2026-07-29",
+      "origin": "DIRECT",
+      "stage": "DIRECT_3M",
+      "stage_since": "2026-07-29"
+    },
     "TMB": {
       "days_tracked": 1,
       "first_seen_date": "2026-07-24",
@@ -416,6 +504,14 @@
       "origin": "DIRECT",
       "stage": "CORE_12M",
       "stage_since": "2026-07-24"
+    },
+    "TNPL": {
+      "days_tracked": 1,
+      "first_seen_date": "2026-07-29",
+      "last_seen_date": "2026-07-29",
+      "origin": "DIRECT",
+      "stage": "DIRECT_6M",
+      "stage_since": "2026-07-29"
     },
     "VISHNU": {
       "days_tracked": 2,
@@ -426,9 +522,9 @@
       "stage_since": "2026-07-24"
     },
     "WSTCSTPAPR": {
-      "days_tracked": 1,
+      "days_tracked": 2,
       "first_seen_date": "2026-07-24",
-      "last_seen_date": "2026-07-24",
+      "last_seen_date": "2026-07-29",
       "origin": "DIRECT",
       "stage": "CORE_12M",
       "stage_since": "2026-07-24"
