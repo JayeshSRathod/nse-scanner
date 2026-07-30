@@ -63,6 +63,7 @@ MIN_SCAN_HISTORY_DAYS = int(os.environ.get("MIN_SCAN_HISTORY_DAYS", "400"))
 # First bootstrap requests a little more history; successful daily snapshots
 # then make later GitHub Actions runs incremental.
 BOOTSTRAP_HISTORY_DAYS = int(os.environ.get("BOOTSTRAP_HISTORY_DAYS", "420"))
+V2_GO_LIVE_DATE = date.fromisoformat(os.environ.get("V2_GO_LIVE_DATE", "2026-08-04"))
 
 missing = []
 if not TOKEN:   missing.append("TELEGRAM_TOKEN")
@@ -322,6 +323,34 @@ def run_pipeline():
         return False
 
     # ── STEP 3: Scan ──────────────────────────────────────────
+    # Compare against the runner's date, not the previous completed EOD date:
+    # the 04-Aug-2026 morning report correctly uses the 03-Aug market close.
+    if date.today() >= V2_GO_LIVE_DATE:
+        print(f"[V2] Go-live active from {V2_GO_LIVE_DATE.isoformat()}; V1 Telegram delivery is disabled.")
+        try:
+            from v2.orchestrator import run_daily as run_v2_daily
+            from v2.state_file import export_state_file, restore_state_file
+
+            restored_state = restore_state_file("nse_scanner.db", "v2_portfolio_state.json")
+            print(f"[V2] Portfolio state restored: {'yes' if restored_state else 'first run'}")
+            result = run_v2_daily("nse_scanner.db", as_of=today, top_n=10,
+                                  minimum_score=70.0, send_telegram=True)
+            export_state_file("nse_scanner.db", "v2_portfolio_state.json")
+            Path("output").mkdir(exist_ok=True)
+            Path("output/v2_daily_run.json").write_text(
+                json.dumps(result.to_dict(), indent=2, default=str), encoding="utf-8"
+            )
+            write_health(status="SUCCESS", scan_date=today.strftime("%Y-%m-%d"),
+                         scanner_version="V2", selected=result.selected,
+                         portfolio_positions=result.portfolio_positions)
+            print("[V2] Two Telegram messages sent and portfolio state saved.")
+            return True
+        except Exception as e:
+            send_failure_alert("V2 Daily Run", str(e), today)
+            write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"),
+                         scanner_version="V2", failed_step="V2", reason=str(e))
+            return False
+
     print(f"\n{'='*55}\n  Step 3: Scanner\n{'='*55}")
     try:
         from nse_scanner import scan_stocks

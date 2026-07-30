@@ -1,0 +1,33 @@
+name: V2 Sprint 4 Lifecycle Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop/v2-multi-horizon
+      - main
+    paths:
+      - 'v2/lifecycle.py'
+      - 'v2/lifecycle_processor.py'
+      - 'v2/daily_portfolio.py'
+      - 'v2/portfolio_store.py'
+      - 'v2/portfolio_message.py'
+      - 'tests/test_v2_sprint4.py'
+      - 'tests/test_v2_sprint4_processor.py'
+      - '.github/workflows/v2-sprint4-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install --upgrade pip pytest pandas numpy
+      - run: python -m pytest -q tests/test_v2_sprint4.py tests/test_v2_sprint4_processor.py tests/test_v2_sprint3.py
