@@ -1,9 +1,9 @@
 {
-  "run_time": "2026-07-30 03:43:22 IST",
+  "run_time": "2026-07-31 04:02:07 IST",
   "status": "SUCCESS",
-  "scan_date": "2026-07-29",
+  "scan_date": "2026-07-30",
   "stocks_scanned": 25,
-  "high_conviction": 19,
-  "watchlist": 6,
+  "high_conviction": 18,
+  "watchlist": 7,
   "json_fresh": true
 }
