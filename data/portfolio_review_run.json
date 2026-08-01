@@ -1,0 +1,24 @@
+{
+  "review_period": "2026-08",
+  "requested_count": 1,
+  "success_count": 0,
+  "skipped_count": 0,
+  "failed_count": 1,
+  "estimated_provider_call_budget_used": 4,
+  "policy": {
+    "max_age_days": 45,
+    "max_symbols_per_run": 30,
+    "max_provider_calls_per_run": 60,
+    "force_refresh": false
+  },
+  "results": [
+    {
+      "symbol": "BEL",
+      "status": "FAILED",
+      "provider": "",
+      "model": "",
+      "report_path": "",
+      "error": "gemini: configuration failed: GEMINI_API_KEY is not configured | groq: configuration failed: GROQ_API_KEY is not configured"
+    }
+  ]
+}

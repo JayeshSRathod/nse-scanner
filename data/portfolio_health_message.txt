@@ -1,0 +1,12 @@
+🧠 KJ PORTFOLIO INTELLIGENCE
+Health Date: 2026-08-01
+Positions: 1 | Reviewed: 0 | Pending: 1
+
+━━━━━━━━━━━━━━━━━━
+⚪ BEL
+Technical: NOT_REVIEWED | Fundamental: NOT_REVIEWED
+Risk: ⚪ UNKNOWN | Action: INSUFFICIENT_DATA
+Reviewed: Pending | Confidence: 0%
+View: Monthly AI portfolio review is not yet available.
+━━━━━━━━━━━━━━━━━━
+AI review supports monitoring only; existing stop-loss rules remain authoritative.

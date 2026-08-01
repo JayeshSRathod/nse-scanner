@@ -1,0 +1,34 @@
+{
+  "generated_date": "2026-08-01",
+  "summary": {
+    "active_positions": 1,
+    "reviewed": 0,
+    "pending": 1
+  },
+  "position_count": 1,
+  "reviewed_count": 0,
+  "pending_count": 1,
+  "action_counts": {
+    "TECHNICAL_EXIT": 0,
+    "REDUCE": 0,
+    "REVIEW": 0,
+    "WATCH": 0,
+    "INSUFFICIENT_DATA": 1,
+    "HOLD": 0
+  },
+  "positions": [
+    {
+      "symbol": "BEL",
+      "review_status": "MISSING",
+      "review_available": false,
+      "technical_status": "NOT_REVIEWED",
+      "fundamental_status": "NOT_REVIEWED",
+      "risk_status": "UNKNOWN",
+      "suggested_action": "INSUFFICIENT_DATA",
+      "review_date": null,
+      "review_period": null,
+      "confidence_score": 0,
+      "summary": "Monthly AI portfolio review is not yet available."
+    }
+  ]
+}

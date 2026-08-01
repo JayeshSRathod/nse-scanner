@@ -1,0 +1,19 @@
+{
+  "review_period": "2026-08",
+  "generated_at": "2026-08-01T06:16:43.671277+00:00",
+  "failed_symbols": [
+    "BEL"
+  ],
+  "skipped_symbols": [],
+  "retry_required": true,
+  "results": [
+    {
+      "symbol": "BEL",
+      "status": "FAILED",
+      "provider": "",
+      "model": "",
+      "report_path": "",
+      "error": "gemini: configuration failed: GEMINI_API_KEY is not configured | groq: configuration failed: GROQ_API_KEY is not configured"
+    }
+  ]
+}
