@@ -1,10 +1,10 @@
 {
-  "last_updated": "2026-07-30",
+  "last_updated": "2026-07-31",
   "stocks": {
     "360ONE": {
-      "days_tracked": 2,
+      "days_tracked": 3,
       "first_seen_date": "2026-07-29",
-      "last_seen_date": "2026-07-30",
+      "last_seen_date": "2026-07-31",
       "origin": "DIRECT",
       "stage": "CORE_12M",
       "stage_since": "2026-07-30"
@@ -26,12 +26,20 @@
       "stage_since": "2026-07-24"
     },
     "ACE": {
-      "days_tracked": 2,
+      "days_tracked": 3,
       "first_seen_date": "2026-07-29",
-      "last_seen_date": "2026-07-30",
+      "last_seen_date": "2026-07-31",
       "origin": "DIRECT",
-      "stage": "DIRECT_6M",
-      "stage_since": "2026-07-29"
+      "stage": "CORE_12M",
+      "stage_since": "2026-07-31"
+    },
+    "AFFLE": {
+      "days_tracked": 1,
+      "first_seen_date": "2026-07-31",
+      "last_seen_date": "2026-07-31",
+      "origin": "DIRECT",
+      "stage": "DIRECT_3M",
+      "stage_since": "2026-07-31"
     },
     "AIIL": {
       "days_tracked": 1,
@@ -41,10 +49,18 @@
       "stage": "DIRECT_3M",
       "stage_since": "2026-07-27"
     },
+    "ALKEM": {
+      "days_tracked": 1,
+      "first_seen_date": "2026-07-31",
+      "last_seen_date": "2026-07-31",
+      "origin": "DIRECT",
+      "stage": "DIRECT_3M",
+      "stage_since": "2026-07-31"
+    },
     "AMANTA": {
-      "days_tracked": 3,
+      "days_tracked": 4,
       "first_seen_date": "2026-07-28",
-      "last_seen_date": "2026-07-30",
+      "last_seen_date": "2026-07-31",
       "origin": "DIRECT",
       "stage": "DIRECT_3M",
       "stage_since": "2026-07-28"
@@ -98,12 +114,12 @@
       "stage_since": "2026-07-27"
     },
     "ASHAPURMIN": {
-      "days_tracked": 2,
+      "days_tracked": 3,
       "first_seen_date": "2026-07-27",
-      "last_seen_date": "2026-07-29",
+      "last_seen_date": "2026-07-31",
       "origin": "DIRECT",
-      "stage": "DIRECT_3M",
-      "stage_since": "2026-07-29"
+      "stage": "CORE_12M",
+      "stage_since": "2026-07-31"
     },
     "ASIANENE": {
       "days_tracked": 1,
@@ -154,9 +170,9 @@
       "stage_since": "2026-07-24"
     },
     "CAMS": {
-      "days_tracked": 1,
+      "days_tracked": 2,
       "first_seen_date": "2026-07-30",
-      "last_seen_date": "2026-07-30",
+      "last_seen_date": "2026-07-31",
       "origin": "DIRECT",
       "stage": "DIRECT_3M",
       "stage_since": "2026-07-30"
@@ -169,10 +185,26 @@
       "stage": "CORE_12M",
       "stage_since": "2026-07-28"
     },
+    "CASTROLIND": {
+      "days_tracked": 1,
+      "first_seen_date": "2026-07-31",
+      "last_seen_date": "2026-07-31",
+      "origin": "DIRECT",
+      "stage": "DIRECT_3M",
+      "stage_since": "2026-07-31"
+    },
+    "CRAFTSMAN": {
+      "days_tracked": 1,
+      "first_seen_date": "2026-07-31",
+      "last_seen_date": "2026-07-31",
+      "origin": "DIRECT",
+      "stage": "CORE_12M",
+      "stage_since": "2026-07-31"
+    },
     "CREDITACC": {
-      "days_tracked": 2,
+      "days_tracked": 3,
       "first_seen_date": "2026-07-29",
-      "last_seen_date": "2026-07-30",
+      "last_seen_date": "2026-07-31",
       "origin": "DIRECT",
       "stage": "CORE_12M",
       "stage_since": "2026-07-29"
@@ -233,6 +265,14 @@
       "stage": "DIRECT_3M",
       "stage_since": "2026-07-24"
     },
+    "HEALTHIETF": {
+      "days_tracked": 1,
+      "first_seen_date": "2026-07-31",
+      "last_seen_date": "2026-07-31",
+      "origin": "DIRECT",
+      "stage": "CORE_12M",
+      "stage_since": "2026-07-31"
+    },
     "HINDOILEXP": {
       "days_tracked": 1,
       "first_seen_date": "2026-07-24",
@@ -264,6 +304,14 @@
       "origin": "DIRECT",
       "stage": "DIRECT_3M",
       "stage_since": "2026-07-27"
+    },
+    "INDIGOPNTS": {
+      "days_tracked": 1,
+      "first_seen_date": "2026-07-31",
+      "last_seen_date": "2026-07-31",
+      "origin": "DIRECT",
+      "stage": "CORE_12M",
+      "stage_since": "2026-07-31"
     },
     "INDOAMIN": {
       "days_tracked": 1,
@@ -314,9 +362,9 @@
       "stage_since": "2026-07-29"
     },
     "KTKBANK": {
-      "days_tracked": 2,
+      "days_tracked": 3,
       "first_seen_date": "2026-07-27",
-      "last_seen_date": "2026-07-30",
+      "last_seen_date": "2026-07-31",
       "origin": "DIRECT",
       "stage": "CORE_12M",
       "stage_since": "2026-07-27"
@@ -338,17 +386,17 @@
       "stage_since": "2026-07-28"
     },
     "LIQUIDETF": {
-      "days_tracked": 1,
+      "days_tracked": 2,
       "first_seen_date": "2026-07-30",
-      "last_seen_date": "2026-07-30",
+      "last_seen_date": "2026-07-31",
       "origin": "DIRECT",
       "stage": "DIRECT_3M",
       "stage_since": "2026-07-30"
     },
     "LIQUIDPLUS": {
-      "days_tracked": 2,
+      "days_tracked": 3,
       "first_seen_date": "2026-07-27",
-      "last_seen_date": "2026-07-28",
+      "last_seen_date": "2026-07-31",
       "origin": "DIRECT",
       "stage": "CORE_12M",
       "stage_since": "2026-07-27"
@@ -394,9 +442,9 @@
       "stage_since": "2026-07-24"
     },
     "NESTLEIND": {
-      "days_tracked": 3,
+      "days_tracked": 4,
       "first_seen_date": "2026-07-28",
-      "last_seen_date": "2026-07-30",
+      "last_seen_date": "2026-07-31",
       "origin": "DIRECT",
       "stage": "CORE_12M",
       "stage_since": "2026-07-30"
@@ -409,10 +457,18 @@
       "stage": "CORE_12M",
       "stage_since": "2026-07-30"
     },
+    "NIFTYBETA": {
+      "days_tracked": 1,
+      "first_seen_date": "2026-07-31",
+      "last_seen_date": "2026-07-31",
+      "origin": "DIRECT",
+      "stage": "DIRECT_3M",
+      "stage_since": "2026-07-31"
+    },
     "PEL": {
-      "days_tracked": 5,
+      "days_tracked": 6,
       "first_seen_date": "2026-07-24",
-      "last_seen_date": "2026-07-30",
+      "last_seen_date": "2026-07-31",
       "origin": "DIRECT",
       "stage": "DIRECT_3M",
       "stage_since": "2026-07-24"
@@ -426,9 +482,9 @@
       "stage_since": "2026-07-24"
     },
     "PROTEAN": {
-      "days_tracked": 1,
+      "days_tracked": 2,
       "first_seen_date": "2026-07-30",
-      "last_seen_date": "2026-07-30",
+      "last_seen_date": "2026-07-31",
       "origin": "DIRECT",
       "stage": "DIRECT_3M",
       "stage_since": "2026-07-30"
@@ -440,6 +496,14 @@
       "origin": "DIRECT",
       "stage": "CORE_12M",
       "stage_since": "2026-07-24"
+    },
+    "RRKABEL": {
+      "days_tracked": 1,
+      "first_seen_date": "2026-07-31",
+      "last_seen_date": "2026-07-31",
+      "origin": "DIRECT",
+      "stage": "CORE_12M",
+      "stage_since": "2026-07-31"
     },
     "RSL": {
       "days_tracked": 3,
@@ -458,9 +522,9 @@
       "stage_since": "2026-07-28"
     },
     "SAMHI": {
-      "days_tracked": 1,
+      "days_tracked": 2,
       "first_seen_date": "2026-07-30",
-      "last_seen_date": "2026-07-30",
+      "last_seen_date": "2026-07-31",
       "origin": "DIRECT",
       "stage": "DIRECT_6M",
       "stage_since": "2026-07-30"
@@ -554,17 +618,25 @@
       "stage_since": "2026-07-24"
     },
     "TNPL": {
-      "days_tracked": 1,
+      "days_tracked": 2,
       "first_seen_date": "2026-07-29",
-      "last_seen_date": "2026-07-29",
+      "last_seen_date": "2026-07-31",
       "origin": "DIRECT",
       "stage": "DIRECT_6M",
       "stage_since": "2026-07-29"
     },
-    "VIMTALABS": {
+    "UNIPARTS": {
       "days_tracked": 1,
+      "first_seen_date": "2026-07-31",
+      "last_seen_date": "2026-07-31",
+      "origin": "DIRECT",
+      "stage": "CORE_12M",
+      "stage_since": "2026-07-31"
+    },
+    "VIMTALABS": {
+      "days_tracked": 2,
       "first_seen_date": "2026-07-30",
-      "last_seen_date": "2026-07-30",
+      "last_seen_date": "2026-07-31",
       "origin": "DIRECT",
       "stage": "DIRECT_6M",
       "stage_since": "2026-07-30"
@@ -578,9 +650,9 @@
       "stage_since": "2026-07-24"
     },
     "WSTCSTPAPR": {
-      "days_tracked": 3,
+      "days_tracked": 4,
       "first_seen_date": "2026-07-24",
-      "last_seen_date": "2026-07-30",
+      "last_seen_date": "2026-07-31",
       "origin": "DIRECT",
       "stage": "CORE_12M",
       "stage_since": "2026-07-24"
