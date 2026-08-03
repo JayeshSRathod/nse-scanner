@@ -115,7 +115,8 @@ class PortfolioStore:
                     :entry,:initial_stop,:stop,:target1,:target2,:quantity,:remaining_quantity,
                     :realised_quantity,:realised_pnl,:last_price,:exit_price,:reason)
                    ON CONFLICT(trade_id) DO UPDATE SET
-                    state=excluded.state, updated_date=excluded.updated_date,
+                    horizon=excluded.horizon, state=excluded.state,
+                    updated_date=excluded.updated_date,
                     initial_stop=COALESCE(v2_positions.initial_stop, excluded.initial_stop),
                     stop=excluded.stop, remaining_quantity=excluded.remaining_quantity,
                     realised_quantity=excluded.realised_quantity,

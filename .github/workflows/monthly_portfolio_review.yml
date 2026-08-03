@@ -35,18 +35,30 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 1
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
 
       - name: Install dependencies
-        run: python -m pip install --upgrade pip pytest requests
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+
+      - name: Restore saved market snapshots
+        run: >-
+          python -c "import config; from nse_market_store import restore_prices; print('Restored snapshots:', restore_prices(config.DB_PATH, min_days=1))"
+
+      - name: Send monthly V2 portfolio review
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/run_monthly_v2_portfolio_review.py --send-telegram
 
       - name: Run Sprint 8 tests
         run: >-
@@ -108,6 +120,8 @@ jobs:
             data/portfolio_health.json
             data/portfolio_health_message.txt
             reports/portfolio/
+            v2_portfolio_state.json
+            output/v2_monthly_portfolio_review.json
           if-no-files-found: warn
           retention-days: 30
 
@@ -123,6 +137,8 @@ jobs:
             data/portfolio_health_message.txt; do
             if [ -f "$FILE" ]; then git add "$FILE"; fi
           done
+          git add v2_portfolio_state.json 2>/dev/null || true
+          git add output/v2_monthly_portfolio_review.json 2>/dev/null || true
           if [ -d reports/portfolio ]; then git add reports/portfolio; fi
           if git diff --cached --quiet; then
             echo "No portfolio review changes to commit."
