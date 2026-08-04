@@ -23,7 +23,7 @@ from .portfolio_risk import PortfolioConfig, allocate_long_position
 from .portfolio_store import PortfolioStore
 from .preview import render_candidate_messages
 from .snapshots import build_market_snapshot
-from .telegram_delivery import DeliveryResult, send_messages
+from .telegram_delivery import DeliveryResult, send_admin_messages, send_messages
 
 
 @dataclass(frozen=True)
@@ -46,6 +46,7 @@ class DailyRunResult:
     admin_message: str = ""
     diagnostics_json_path: str = ""
     diagnostics_text_path: str = ""
+    admin_delivery: DeliveryResult = DeliveryResult(False, 0, "not_attempted")
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -76,6 +77,7 @@ def run_daily(
     top_n: int = 10,
     minimum_score: float = 70.0,
     send_telegram: bool = False,
+    send_admin_telegram: bool | None = None,
     portfolio_config: PortfolioConfig = PortfolioConfig(),
     diagnostics_output_dir: str | Path = "output",
 ) -> DailyRunResult:
@@ -187,7 +189,11 @@ def run_daily(
     candidate_message = "\n\n".join(candidate_messages)
     warning = _warning_header(freshness, benchmark_source)
     portfolio_message = warning + render_portfolio_message(report_positions, run_date.isoformat())
+
     delivery = send_messages(candidate_messages + [portfolio_message], enabled=send_telegram)
+    admin_enabled = send_telegram if send_admin_telegram is None else send_admin_telegram
+    admin_delivery = send_admin_messages([admin_message], enabled=admin_enabled)
+
     return DailyRunResult(
         trade_date=run_date.isoformat(), regime=regime,
         benchmark_source=benchmark_source, freshness=freshness,
@@ -199,4 +205,5 @@ def run_daily(
         admin_message=admin_message,
         diagnostics_json_path=str(diagnostics_json),
         diagnostics_text_path=str(diagnostics_text),
+        admin_delivery=admin_delivery,
     )
