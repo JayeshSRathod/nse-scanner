@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .candidates import Candidate, evaluate_candidate, rank_candidates
+from .candidates import Candidate, evaluate_candidate, rank_candidates, watch_candidates
 from .daily_portfolio import process_portfolio_day
 from .database import V2Database
 from .freshness import FreshnessStatus, assess_freshness
@@ -35,6 +35,7 @@ class DailyRunResult:
     portfolio_message: str
     delivery: DeliveryResult
     portfolio_snapshot: dict
+    watch_count: int = 0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -55,8 +56,8 @@ def _existing_keys(store: PortfolioStore) -> set[tuple[str, str]]:
 def _warning_header(freshness: FreshnessStatus, benchmark_source: str) -> str:
     warnings = list(freshness.reasons)
     if benchmark_source != "OFFICIAL_INDEX_HISTORY":
-        warnings.append("official_index_history_unavailable_equal_weight_fallback")
-    return "" if not warnings else "DATA WARNING: " + "; ".join(warnings) + "\n\n"
+        warnings.append("Benchmark source: Equal-weight NSE universe; official index history unavailable")
+    return "" if not warnings else "DATA NOTE: " + "; ".join(warnings) + "\n\n"
 
 
 def run_daily(
@@ -90,16 +91,22 @@ def run_daily(
 
     snapshot = build_market_snapshot(prices, benchmark)
     regime = snapshot["regime"]
+    benchmark_close = benchmark.sort_values("trade_date")["close"].reset_index(drop=True)
     candidates = [
         evaluate_candidate(
             str(symbol), frame, regime,
             stale_data=freshness.prices_stale,
             minimum_score=minimum_score,
+            benchmark_close=benchmark_close,
         )
         for symbol, frame in prices.groupby("symbol")
     ]
-    ranked = rank_candidates(candidates, top_n=top_n)
+
+    # Every ACTION candidate is processed and delivered. ``top_n`` is retained
+    # only for backward-compatible renderer configuration.
+    ranked = rank_candidates(candidates, top_n=None)
     selected = [candidate for rows in ranked.values() for candidate in rows]
+    watches = watch_candidates(candidates)
 
     store = PortfolioStore(db_path)
     store.initialize()
@@ -152,7 +159,7 @@ def run_daily(
         and (candidate.symbol, candidate.horizon) in allocations
     ]
     candidate_message = warning + render_candidate_preview(
-        rank_candidates(fresh_allocated, top_n=top_n), regime, run_date.isoformat(),
+        rank_candidates(fresh_allocated, top_n=None), regime, run_date.isoformat(),
         freshness=freshness, evaluated=len(candidates), allocations=allocations,
     )
     portfolio_message = warning + render_portfolio_message(report_positions, run_date.isoformat())
@@ -163,5 +170,5 @@ def run_daily(
         evaluated=len(candidates), selected=len(selected), created_positions=created,
         portfolio_positions=len(portfolio_positions), candidate_message=candidate_message,
         portfolio_message=portfolio_message, delivery=delivery,
-        portfolio_snapshot=portfolio_snapshot.to_dict(),
+        portfolio_snapshot=portfolio_snapshot.to_dict(), watch_count=len(watches),
     )
