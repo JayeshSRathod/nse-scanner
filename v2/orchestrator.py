@@ -7,6 +7,11 @@ from pathlib import Path
 
 import pandas as pd
 
+from .candidate_diagnostics import (
+    build_scanner_diagnostics,
+    render_admin_diagnostics,
+    save_scanner_diagnostics,
+)
 from .candidates import Candidate, evaluate_candidate, rank_candidates, watch_candidates
 from .daily_portfolio import process_portfolio_day
 from .database import V2Database
@@ -37,6 +42,10 @@ class DailyRunResult:
     portfolio_snapshot: dict
     watch_count: int = 0
     candidate_message_count: int = 0
+    diagnostics: dict | None = None
+    admin_message: str = ""
+    diagnostics_json_path: str = ""
+    diagnostics_text_path: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -68,6 +77,7 @@ def run_daily(
     minimum_score: float = 70.0,
     send_telegram: bool = False,
     portfolio_config: PortfolioConfig = PortfolioConfig(),
+    diagnostics_output_dir: str | Path = "output",
 ) -> DailyRunResult:
     del top_n  # ACTION delivery is intentionally uncapped.
     run_date = pd.Timestamp(as_of or date.today()).date()
@@ -93,7 +103,8 @@ def run_daily(
 
     snapshot = build_market_snapshot(prices, benchmark)
     regime = snapshot["regime"]
-    benchmark_close = benchmark.sort_values("trade_date")["close"].reset_index(drop=True)
+    benchmark = benchmark.sort_values("trade_date").reset_index(drop=True)
+    benchmark_close = benchmark["close"].reset_index(drop=True)
     candidates = [
         evaluate_candidate(
             str(symbol), frame, regime,
@@ -107,10 +118,18 @@ def run_daily(
     ranked = rank_candidates(candidates, top_n=None)
     selected = [candidate for rows in ranked.values() for candidate in rows]
     watches = watch_candidates(candidates)
-    quality_qualified = sum(
-        1 for candidate in candidates
-        if candidate.classification in {"ACTION", "WATCH"}
+    quality_qualified = sum(1 for candidate in candidates if candidate.eligible_horizons)
+
+    diagnostics = build_scanner_diagnostics(
+        candidates,
+        trade_date=run_date.isoformat(),
+        benchmark_source=benchmark_source,
+        benchmark_sessions=int(benchmark["trade_date"].nunique()),
     )
+    diagnostics_json, diagnostics_text = save_scanner_diagnostics(
+        diagnostics, output_dir=diagnostics_output_dir,
+    )
+    admin_message = render_admin_diagnostics(diagnostics)
 
     store = PortfolioStore(db_path)
     store.initialize()
@@ -176,5 +195,8 @@ def run_daily(
         portfolio_positions=len(portfolio_positions), candidate_message=candidate_message,
         portfolio_message=portfolio_message, delivery=delivery,
         portfolio_snapshot=portfolio_snapshot.to_dict(), watch_count=len(watches),
-        candidate_message_count=len(candidate_messages),
+        candidate_message_count=len(candidate_messages), diagnostics=diagnostics.to_dict(),
+        admin_message=admin_message,
+        diagnostics_json_path=str(diagnostics_json),
+        diagnostics_text_path=str(diagnostics_text),
     )
