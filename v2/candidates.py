@@ -22,7 +22,6 @@ _LEGACY_HORIZON = {
 
 @dataclass(frozen=True)
 class Candidate:
-    # Existing production fields retained for portfolio and Telegram compatibility.
     symbol: str
     trade_date: str
     horizon: str
@@ -38,8 +37,6 @@ class Candidate:
     reward_risk_t1: float
     reward_risk_t2: float
     metrics: dict[str, float | bool | str]
-
-    # Sprint 16 institutional contract.
     classification: str = "REJECT"
     primary_horizon: str = ""
     eligible_horizons: tuple[str, ...] = ()
@@ -62,7 +59,6 @@ class Candidate:
 def _choose_primary_horizon(scores: dict[str, HorizonScore]) -> str:
     qualified = [row for row in scores.values() if row.state == "QUALIFIED"]
     if qualified:
-        # Prefer the strongest quality score; longer horizon wins exact ties.
         return max(qualified, key=lambda row: (row.score, _HORIZON_ORDER[row.horizon])).horizon
     watched = [row for row in scores.values() if row.state == "WATCH"]
     if watched:
@@ -73,13 +69,7 @@ def _choose_primary_horizon(scores: dict[str, HorizonScore]) -> str:
     return "1M"
 
 
-def _classification(
-    scores: dict[str, HorizonScore],
-    trigger: EntryTrigger,
-    plan: TradePlan,
-    *,
-    stale_data: bool,
-) -> str:
+def _classification(scores: dict[str, HorizonScore], trigger: EntryTrigger, plan: TradePlan, *, stale_data: bool) -> str:
     if stale_data:
         return "REJECT"
     has_qualified = any(row.state == "QUALIFIED" for row in scores.values())
@@ -99,27 +89,16 @@ def evaluate_candidate(
     minimum_score: float = 70.0,
     benchmark_close: pd.Series | None = None,
 ) -> Candidate:
-    """Evaluate one stock through quality -> trigger -> trade-plan layers.
-
-    ``minimum_score`` is retained for caller compatibility. Horizon states are
-    governed by the frozen 80/70/60 thresholds inside ``score_horizons``.
-    """
     del minimum_score
     data = frame.sort_values("trade_date").copy()
-    trade_date = (
-        pd.Timestamp(data.iloc[-1]["trade_date"]).date().isoformat()
-        if not data.empty else ""
-    )
-
+    trade_date = pd.Timestamp(data.iloc[-1]["trade_date"]).date().isoformat() if not data.empty else ""
     horizons = score_horizons(data, regime, benchmark_close=benchmark_close)
     primary_horizon = _choose_primary_horizon(horizons)
     pullback: PullbackResult = evaluate_pullback(data, horizons)
     triggers = evaluate_entry_triggers(data, horizons, pullback)
     primary_trigger = select_primary_trigger(triggers)
     plan = build_trigger_trade_plan(data, primary_trigger, primary_horizon)
-    classification = _classification(
-        horizons, primary_trigger, plan, stale_data=stale_data,
-    )
+    classification = _classification(horizons, primary_trigger, plan, stale_data=stale_data)
 
     eligible = tuple(h for h in ("1M", "3M", "6M", "12M") if horizons[h].state == "QUALIFIED")
     watched = tuple(h for h in ("1M", "3M", "6M", "12M") if horizons[h].state == "WATCH")
@@ -131,6 +110,8 @@ def evaluate_candidate(
     reasons_for.extend(reason for reason in plan.reasons if reason.endswith("_ok") or reason == "resistance_clear")
 
     reasons_against: list[str] = list(horizons[primary_horizon].reasons_against)
+    if regime.upper() in {"BEAR", "BEARISH"}:
+        reasons_against.append("bear_market_hard_override")
     if stale_data:
         reasons_against.append("stale_data_hard_override")
     if not primary_trigger.actionable:
@@ -184,11 +165,6 @@ def evaluate_candidate(
 
 
 def rank_candidates(candidates: list[Candidate], top_n: int | None = 10) -> dict[str, list[Candidate]]:
-    """Group all ACTION candidates by primary horizon.
-
-    ``top_n=None`` returns every actionable candidate for complete Telegram
-    delivery. A numeric cap remains available to legacy callers and previews.
-    """
     selected = [candidate for candidate in candidates if candidate.classification == "ACTION"]
     selected.sort(key=lambda candidate: (-candidate.score, -candidate.trade_plan_score, candidate.symbol))
     grouped: dict[str, list[Candidate]] = {}
@@ -200,6 +176,5 @@ def rank_candidates(candidates: list[Candidate], top_n: int | None = 10) -> dict
 
 
 def watch_candidates(candidates: list[Candidate]) -> list[Candidate]:
-    """Return all qualified/watch-quality stocks that lack a READY entry."""
     rows = [candidate for candidate in candidates if candidate.classification == "WATCH"]
     return sorted(rows, key=lambda candidate: (-candidate.score, candidate.symbol))
