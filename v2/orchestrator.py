@@ -7,12 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from .candidate_diagnostics import (
-    build_scanner_diagnostics,
-    render_admin_diagnostics,
-    save_scanner_diagnostics,
-)
-from .candidates import Candidate, evaluate_candidate, rank_candidates, watch_candidates
+from .candidate_diagnostics import build_scanner_diagnostics, render_admin_diagnostics, save_scanner_diagnostics
+from .candidates import evaluate_candidate, rank_candidates, watch_candidates
 from .daily_portfolio import process_portfolio_day
 from .database import V2Database
 from .freshness import FreshnessStatus, assess_freshness
@@ -67,7 +63,7 @@ def _existing_keys(store: PortfolioStore) -> set[tuple[str, str]]:
 def _warning_header(freshness: FreshnessStatus, benchmark_source: str) -> str:
     warnings = list(freshness.reasons)
     if benchmark_source != "OFFICIAL_INDEX_HISTORY":
-        warnings.append("Benchmark source: Equal-weight NSE universe; official index history unavailable")
+        warnings.append("equal_weight_fallback: Benchmark source is the equal-weight NSE universe because official index history is unavailable")
     return "" if not warnings else "DATA NOTE: " + "; ".join(warnings) + "\n\n"
 
 
@@ -81,7 +77,7 @@ def run_daily(
     portfolio_config: PortfolioConfig = PortfolioConfig(),
     diagnostics_output_dir: str | Path = "output",
 ) -> DailyRunResult:
-    del top_n  # ACTION delivery is intentionally uncapped.
+    del top_n
     run_date = pd.Timestamp(as_of or date.today()).date()
     database = V2Database(db_path)
     prices = database.load_prices(end_date=run_date.isoformat(), min_sessions=60)
@@ -123,21 +119,16 @@ def run_daily(
     quality_qualified = sum(1 for candidate in candidates if candidate.eligible_horizons)
 
     diagnostics = build_scanner_diagnostics(
-        candidates,
-        trade_date=run_date.isoformat(),
-        benchmark_source=benchmark_source,
+        candidates, trade_date=run_date.isoformat(), benchmark_source=benchmark_source,
         benchmark_sessions=int(benchmark["trade_date"].nunique()),
     )
-    diagnostics_json, diagnostics_text = save_scanner_diagnostics(
-        diagnostics, output_dir=diagnostics_output_dir,
-    )
+    diagnostics_json, diagnostics_text = save_scanner_diagnostics(diagnostics, output_dir=diagnostics_output_dir)
     admin_message = render_admin_diagnostics(diagnostics)
 
     store = PortfolioStore(db_path)
     store.initialize()
     existing = _existing_keys(store)
-    created = 0
-    allocations = {}
+    created, allocations = 0, {}
     committed = store.open_positions()
     committed_capital = sum(p.quantity * p.entry for p in committed)
     committed_risk = sum(p.quantity * (p.entry - p.initial_stop) for p in committed)
@@ -165,45 +156,30 @@ def run_daily(
         committed_risk += allocation.initial_risk
         created += 1
 
-    latest_bars = {
-        str(symbol): frame.sort_values("trade_date").iloc[-1].to_dict()
-        for symbol, frame in prices.groupby("symbol")
-    }
+    latest_bars = {str(symbol): frame.sort_values("trade_date").iloc[-1].to_dict() for symbol, frame in prices.groupby("symbol")}
     process_portfolio_day(store, run_date.isoformat(), latest_bars)
     portfolio_positions = store.open_positions()
     report_positions = store.positions_for_daily_report(run_date.isoformat())
-    portfolio_snapshot = build_portfolio_snapshot(
-        store.all_positions(), run_date.isoformat(), portfolio_config.capital_base,
-    )
+    portfolio_snapshot = build_portfolio_snapshot(store.all_positions(), run_date.isoformat(), portfolio_config.capital_base)
     store.save_portfolio_snapshot(portfolio_snapshot)
 
     candidate_messages = render_candidate_messages(
-        selected, watches, regime, run_date.isoformat(),
-        freshness=freshness,
-        evaluated=len(candidates),
-        tradable=len(candidates),
-        quality_qualified=quality_qualified,
-        benchmark_source=benchmark_source,
-        allocations=allocations,
+        selected, watches, regime, run_date.isoformat(), freshness=freshness,
+        evaluated=len(candidates), tradable=len(candidates), quality_qualified=quality_qualified,
+        benchmark_source=benchmark_source, allocations=allocations,
     )
     candidate_message = "\n\n".join(candidate_messages)
-    warning = _warning_header(freshness, benchmark_source)
-    portfolio_message = warning + render_portfolio_message(report_positions, run_date.isoformat())
-
+    portfolio_message = _warning_header(freshness, benchmark_source) + render_portfolio_message(report_positions, run_date.isoformat())
     delivery = send_messages(candidate_messages + [portfolio_message], enabled=send_telegram)
     admin_enabled = send_telegram if send_admin_telegram is None else send_admin_telegram
     admin_delivery = send_admin_messages([admin_message], enabled=admin_enabled)
 
     return DailyRunResult(
-        trade_date=run_date.isoformat(), regime=regime,
-        benchmark_source=benchmark_source, freshness=freshness,
-        evaluated=len(candidates), selected=len(selected), created_positions=created,
+        trade_date=run_date.isoformat(), regime=regime, benchmark_source=benchmark_source,
+        freshness=freshness, evaluated=len(candidates), selected=len(selected), created_positions=created,
         portfolio_positions=len(portfolio_positions), candidate_message=candidate_message,
-        portfolio_message=portfolio_message, delivery=delivery,
-        portfolio_snapshot=portfolio_snapshot.to_dict(), watch_count=len(watches),
-        candidate_message_count=len(candidate_messages), diagnostics=diagnostics.to_dict(),
-        admin_message=admin_message,
-        diagnostics_json_path=str(diagnostics_json),
-        diagnostics_text_path=str(diagnostics_text),
-        admin_delivery=admin_delivery,
+        portfolio_message=portfolio_message, delivery=delivery, portfolio_snapshot=portfolio_snapshot.to_dict(),
+        watch_count=len(watches), candidate_message_count=len(candidate_messages), diagnostics=diagnostics.to_dict(),
+        admin_message=admin_message, diagnostics_json_path=str(diagnostics_json),
+        diagnostics_text_path=str(diagnostics_text), admin_delivery=admin_delivery,
     )
