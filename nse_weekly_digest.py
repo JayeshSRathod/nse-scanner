@@ -403,8 +403,12 @@ def generate_weekly_digest(week_ending=None, dry_run=False):
         cid = getattr(config,'TELEGRAM_CHATID','')
         if token and cid:
             try:
+                payload = {'chat_id':cid, 'text':message, 'parse_mode':'HTML'}
+                topic_id = os.getenv("TELEGRAM_WEEKLY_TOPIC_ID")
+                if topic_id and topic_id.isdigit():
+                    payload["message_thread_id"] = int(topic_id)
                 r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
-                    data={'chat_id':cid,'text':message,'parse_mode':'HTML'}, timeout=10)
+                    data=payload, timeout=10)
                 return r.status_code == 200
             except: pass
     return True

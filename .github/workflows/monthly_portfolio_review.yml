@@ -58,6 +58,7 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_MONTHLY_TOPIC_ID: ${{ secrets.TELEGRAM_MONTHLY_TOPIC_ID }}
         run: python scripts/run_monthly_v2_portfolio_review.py --send-telegram
 
       - name: Run Sprint 8 tests

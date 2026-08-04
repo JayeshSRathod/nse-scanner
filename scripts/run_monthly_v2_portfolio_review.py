@@ -12,7 +12,7 @@ if str(ROOT) not in sys.path:
 
 from v2.monthly_portfolio import run_monthly_portfolio_review
 from v2.state_file import export_state_file, restore_state_file
-from v2.telegram_delivery import send_messages
+from v2.telegram_delivery import send_messages, topic_id
 
 
 def main() -> int:
@@ -25,7 +25,10 @@ def main() -> int:
     args = parser.parse_args()
     restored = restore_state_file(args.db, args.state_file)
     result = run_monthly_portfolio_review(args.db, as_of=args.as_of)
-    delivery = send_messages([result.message], enabled=args.send_telegram)
+    delivery = send_messages(
+        [result.message], enabled=args.send_telegram,
+        message_thread_id=topic_id("MONTHLY"),
+    )
     output = result.to_dict()
     output["state_restored"] = restored
     output["delivery"] = {"sent": delivery.sent, "message_count": delivery.message_count, "reason": delivery.reason}

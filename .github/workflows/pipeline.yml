@@ -37,6 +37,8 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_CANDIDATES_TOPIC_ID: ${{ secrets.TELEGRAM_CANDIDATES_TOPIC_ID }}
+          TELEGRAM_PORTFOLIO_TOPIC_ID: ${{ secrets.TELEGRAM_PORTFOLIO_TOPIC_ID }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}
           GITHUB_BRANCH: main

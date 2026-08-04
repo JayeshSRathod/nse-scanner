@@ -33,6 +33,18 @@ def test_user_delivery_remains_on_user_chat_id(monkeypatch) -> None:
     assert post.call_args.kwargs["json"]["chat_id"] == "user-123"
 
 
+def test_topic_and_url_buttons_work_without_callback_worker(monkeypatch) -> None:
+    monkeypatch.setenv("TELEGRAM_TOKEN", "token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "group-123")
+    message = "🟢 ALL ACTIONABLE CANDIDATES\n\n1. ABC\nState: ACTION"
+    with patch("v2.telegram_delivery.requests.post", return_value=_ok_response()) as post:
+        result = send_messages([message], enabled=True, message_thread_id=321)
+    assert result.sent is True
+    payload = post.call_args.kwargs["json"]
+    assert payload["message_thread_id"] == 321
+    assert payload["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("NSE%3AABC")
+
+
 def test_missing_admin_chat_id_does_not_raise(monkeypatch) -> None:
     monkeypatch.setenv("TELEGRAM_TOKEN", "token")
     monkeypatch.delenv("ADMIN_CHAT_ID", raising=False)
