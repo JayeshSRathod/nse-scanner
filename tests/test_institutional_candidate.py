@@ -1,0 +1,63 @@
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+
+from v2.candidates import Candidate, rank_candidates, watch_candidates
+
+
+def _candidate(classification: str, symbol: str = "ABC", score: float = 82.0) -> Candidate:
+    return Candidate(
+        symbol=symbol,
+        trade_date="2026-08-04",
+        horizon="POSITIONAL_3_6M",
+        setup="TREND_CONTINUATION",
+        selected=classification == "ACTION",
+        score=score,
+        reasons_for=("daily_trend",),
+        reasons_against=(),
+        entry=100.0,
+        stop=94.0,
+        target1=109.0,
+        target2=118.0,
+        reward_risk_t1=1.5,
+        reward_risk_t2=3.0,
+        metrics={},
+        classification=classification,
+        primary_horizon="3M",
+        eligible_horizons=("3M",),
+        entry_trigger="TREND_CONTINUATION",
+        trade_plan_state="READY" if classification == "ACTION" else "WAIT",
+        trade_plan_score=88.0,
+    )
+
+
+def test_rank_candidates_returns_every_action_when_uncapped() -> None:
+    rows = [_candidate("ACTION", f"S{i}", 80 + i) for i in range(15)]
+    grouped = rank_candidates(rows, top_n=None)
+    assert sum(len(values) for values in grouped.values()) == 15
+
+
+def test_rank_candidates_excludes_watch_rows() -> None:
+    rows = [_candidate("ACTION", "ACTION"), _candidate("WATCH", "WATCH")]
+    grouped = rank_candidates(rows, top_n=None)
+    symbols = [row.symbol for values in grouped.values() for row in values]
+    assert symbols == ["ACTION"]
+
+
+def test_watch_candidates_returns_quality_without_ready_entry() -> None:
+    rows = [
+        _candidate("WATCH", "LOW", 75.0),
+        _candidate("WATCH", "HIGH", 88.0),
+        _candidate("ACTION", "ACTION", 90.0),
+    ]
+    assert [row.symbol for row in watch_candidates(rows)] == ["HIGH", "LOW"]
+
+
+def test_candidate_contract_exposes_horizon_and_plan_fields() -> None:
+    row = _candidate("ACTION")
+    payload = row.to_dict()
+    assert payload["primary_horizon"] == "3M"
+    assert payload["classification"] == "ACTION"
+    assert payload["entry_trigger"] == "TREND_CONTINUATION"
+    assert payload["trade_plan_state"] == "READY"

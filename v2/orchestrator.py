@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from .candidates import Candidate, evaluate_candidate, rank_candidates
+from .candidate_diagnostics import build_scanner_diagnostics, render_admin_diagnostics, save_scanner_diagnostics
+from .candidates import evaluate_candidate, rank_candidates, watch_candidates
 from .daily_portfolio import process_portfolio_day
 from .database import V2Database
 from .freshness import FreshnessStatus, assess_freshness
@@ -16,9 +17,9 @@ from .portfolio_message import render_portfolio_message
 from .portfolio_performance import build_portfolio_snapshot
 from .portfolio_risk import PortfolioConfig, allocate_long_position
 from .portfolio_store import PortfolioStore
-from .preview import render_candidate_preview
+from .preview import render_candidate_messages
 from .snapshots import build_market_snapshot
-from .telegram_delivery import DeliveryResult, send_messages
+from .telegram_delivery import DeliveryResult, send_admin_messages, send_messages
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,13 @@ class DailyRunResult:
     portfolio_message: str
     delivery: DeliveryResult
     portfolio_snapshot: dict
+    watch_count: int = 0
+    candidate_message_count: int = 0
+    diagnostics: dict | None = None
+    admin_message: str = ""
+    diagnostics_json_path: str = ""
+    diagnostics_text_path: str = ""
+    admin_delivery: DeliveryResult = DeliveryResult(False, 0, "not_attempted")
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -55,8 +63,8 @@ def _existing_keys(store: PortfolioStore) -> set[tuple[str, str]]:
 def _warning_header(freshness: FreshnessStatus, benchmark_source: str) -> str:
     warnings = list(freshness.reasons)
     if benchmark_source != "OFFICIAL_INDEX_HISTORY":
-        warnings.append("official_index_history_unavailable_equal_weight_fallback")
-    return "" if not warnings else "DATA WARNING: " + "; ".join(warnings) + "\n\n"
+        warnings.append("equal_weight_fallback: Benchmark source is the equal-weight NSE universe because official index history is unavailable")
+    return "" if not warnings else "DATA NOTE: " + "; ".join(warnings) + "\n\n"
 
 
 def run_daily(
@@ -65,8 +73,11 @@ def run_daily(
     top_n: int = 10,
     minimum_score: float = 70.0,
     send_telegram: bool = False,
+    send_admin_telegram: bool | None = None,
     portfolio_config: PortfolioConfig = PortfolioConfig(),
+    diagnostics_output_dir: str | Path = "output",
 ) -> DailyRunResult:
+    del top_n
     run_date = pd.Timestamp(as_of or date.today()).date()
     database = V2Database(db_path)
     prices = database.load_prices(end_date=run_date.isoformat(), min_sessions=60)
@@ -90,23 +101,34 @@ def run_daily(
 
     snapshot = build_market_snapshot(prices, benchmark)
     regime = snapshot["regime"]
+    benchmark = benchmark.sort_values("trade_date").reset_index(drop=True)
+    benchmark_close = benchmark["close"].reset_index(drop=True)
     candidates = [
         evaluate_candidate(
             str(symbol), frame, regime,
             stale_data=freshness.prices_stale,
             minimum_score=minimum_score,
+            benchmark_close=benchmark_close,
         )
         for symbol, frame in prices.groupby("symbol")
     ]
-    ranked = rank_candidates(candidates, top_n=top_n)
+
+    ranked = rank_candidates(candidates, top_n=None)
     selected = [candidate for rows in ranked.values() for candidate in rows]
+    watches = watch_candidates(candidates)
+    quality_qualified = sum(1 for candidate in candidates if candidate.eligible_horizons)
+
+    diagnostics = build_scanner_diagnostics(
+        candidates, trade_date=run_date.isoformat(), benchmark_source=benchmark_source,
+        benchmark_sessions=int(benchmark["trade_date"].nunique()),
+    )
+    diagnostics_json, diagnostics_text = save_scanner_diagnostics(diagnostics, output_dir=diagnostics_output_dir)
+    admin_message = render_admin_diagnostics(diagnostics)
 
     store = PortfolioStore(db_path)
     store.initialize()
     existing = _existing_keys(store)
-    existing_at_start = set(existing)
-    created = 0
-    allocations = {}
+    created, allocations = 0, {}
     committed = store.open_positions()
     committed_capital = sum(p.quantity * p.entry for p in committed)
     committed_risk = sum(p.quantity * (p.entry - p.initial_stop) for p in committed)
@@ -134,34 +156,30 @@ def run_daily(
         committed_risk += allocation.initial_risk
         created += 1
 
-    latest_bars = {
-        str(symbol): frame.sort_values("trade_date").iloc[-1].to_dict()
-        for symbol, frame in prices.groupby("symbol")
-    }
+    latest_bars = {str(symbol): frame.sort_values("trade_date").iloc[-1].to_dict() for symbol, frame in prices.groupby("symbol")}
     process_portfolio_day(store, run_date.isoformat(), latest_bars)
     portfolio_positions = store.open_positions()
     report_positions = store.positions_for_daily_report(run_date.isoformat())
-    portfolio_snapshot = build_portfolio_snapshot(
-        store.all_positions(), run_date.isoformat(), portfolio_config.capital_base,
-    )
+    portfolio_snapshot = build_portfolio_snapshot(store.all_positions(), run_date.isoformat(), portfolio_config.capital_base)
     store.save_portfolio_snapshot(portfolio_snapshot)
-    warning = _warning_header(freshness, benchmark_source)
-    fresh_allocated = [
-        candidate for candidate in selected
-        if (candidate.symbol, candidate.horizon) not in existing_at_start
-        and (candidate.symbol, candidate.horizon) in allocations
-    ]
-    candidate_message = warning + render_candidate_preview(
-        rank_candidates(fresh_allocated, top_n=top_n), regime, run_date.isoformat(),
-        freshness=freshness, evaluated=len(candidates), allocations=allocations,
+
+    candidate_messages = render_candidate_messages(
+        selected, watches, regime, run_date.isoformat(), freshness=freshness,
+        evaluated=len(candidates), tradable=len(candidates), quality_qualified=quality_qualified,
+        benchmark_source=benchmark_source, allocations=allocations,
     )
-    portfolio_message = warning + render_portfolio_message(report_positions, run_date.isoformat())
-    delivery = send_messages([candidate_message, portfolio_message], enabled=send_telegram)
+    candidate_message = "\n\n".join(candidate_messages)
+    portfolio_message = _warning_header(freshness, benchmark_source) + render_portfolio_message(report_positions, run_date.isoformat())
+    delivery = send_messages(candidate_messages + [portfolio_message], enabled=send_telegram)
+    admin_enabled = send_telegram if send_admin_telegram is None else send_admin_telegram
+    admin_delivery = send_admin_messages([admin_message], enabled=admin_enabled)
+
     return DailyRunResult(
-        trade_date=run_date.isoformat(), regime=regime,
-        benchmark_source=benchmark_source, freshness=freshness,
-        evaluated=len(candidates), selected=len(selected), created_positions=created,
+        trade_date=run_date.isoformat(), regime=regime, benchmark_source=benchmark_source,
+        freshness=freshness, evaluated=len(candidates), selected=len(selected), created_positions=created,
         portfolio_positions=len(portfolio_positions), candidate_message=candidate_message,
-        portfolio_message=portfolio_message, delivery=delivery,
-        portfolio_snapshot=portfolio_snapshot.to_dict(),
+        portfolio_message=portfolio_message, delivery=delivery, portfolio_snapshot=portfolio_snapshot.to_dict(),
+        watch_count=len(watches), candidate_message_count=len(candidate_messages), diagnostics=diagnostics.to_dict(),
+        admin_message=admin_message, diagnostics_json_path=str(diagnostics_json),
+        diagnostics_text_path=str(diagnostics_text), admin_delivery=admin_delivery,
     )
