@@ -19,7 +19,7 @@ from .portfolio_risk import PortfolioConfig, allocate_long_position
 from .portfolio_store import PortfolioStore
 from .preview import render_candidate_messages
 from .snapshots import build_market_snapshot
-from .telegram_delivery import DeliveryResult, send_admin_messages, send_messages
+from .telegram_delivery import DeliveryResult, send_admin_messages, send_messages, topic_id
 
 
 @dataclass(frozen=True)
@@ -170,7 +170,19 @@ def run_daily(
     )
     candidate_message = "\n\n".join(candidate_messages)
     portfolio_message = _warning_header(freshness, benchmark_source) + render_portfolio_message(report_positions, run_date.isoformat())
-    delivery = send_messages(candidate_messages + [portfolio_message], enabled=send_telegram)
+    candidate_delivery = send_messages(
+        candidate_messages, enabled=send_telegram,
+        message_thread_id=topic_id("CANDIDATES"),
+    )
+    portfolio_delivery = send_messages(
+        [portfolio_message], enabled=send_telegram,
+        message_thread_id=topic_id("PORTFOLIO"),
+    )
+    delivery = DeliveryResult(
+        sent=candidate_delivery.sent or portfolio_delivery.sent,
+        message_count=candidate_delivery.message_count + portfolio_delivery.message_count,
+        reason="sent" if candidate_delivery.sent or portfolio_delivery.sent else candidate_delivery.reason,
+    )
     admin_enabled = send_telegram if send_admin_telegram is None else send_admin_telegram
     admin_delivery = send_admin_messages([admin_message], enabled=admin_enabled)
 

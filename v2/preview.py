@@ -123,7 +123,7 @@ def render_candidate_messages(
     watch_rows = sorted(list(watches), key=lambda row: (-row.score, row.symbol))
     benchmark = "Official NIFTY index history" if benchmark_source == "OFFICIAL_INDEX_HISTORY" else "Equal-weight NSE universe (official index history unavailable)"
     summary = [
-        "📊 KJ MARKET INTELLIGENCE SUITE", f"Trade Date: {trade_date}",
+        "📊 KJ NSE SCANNER V2 — DAILY CANDIDATES", f"Trade Date: {trade_date}",
         f"Market Regime: {regime.upper()}", f"Data Status: {_status(freshness)}",
         f"Benchmark: {benchmark}", "", "Scanner Funnel",
         f"Universe Loaded: {evaluated if evaluated is not None else '-'}",

@@ -334,7 +334,8 @@ def run_pipeline():
             restored_state = restore_state_file("nse_scanner.db", "v2_portfolio_state.json")
             print(f"[V2] Portfolio state restored: {'yes' if restored_state else 'first run'}")
             result = run_v2_daily("nse_scanner.db", as_of=today, top_n=10,
-                                  minimum_score=70.0, send_telegram=True)
+                                  minimum_score=70.0, send_telegram=True,
+                                  send_admin_telegram=False)
             export_state_file("nse_scanner.db", "v2_portfolio_state.json")
             Path("output").mkdir(exist_ok=True)
             Path("output/v2_daily_run.json").write_text(
@@ -343,7 +344,7 @@ def run_pipeline():
             write_health(status="SUCCESS", scan_date=today.strftime("%Y-%m-%d"),
                          scanner_version="V2", selected=result.selected,
                          portfolio_positions=result.portfolio_positions)
-            print("[V2] Two Telegram messages sent and portfolio state saved.")
+            print(f"[V2] {result.delivery.message_count} user Telegram message(s) sent and portfolio state saved.")
             return True
         except Exception as e:
             send_failure_alert("V2 Daily Run", str(e), today)
