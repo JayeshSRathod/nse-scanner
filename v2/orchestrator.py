@@ -16,7 +16,7 @@ from .portfolio_message import render_portfolio_message
 from .portfolio_performance import build_portfolio_snapshot
 from .portfolio_risk import PortfolioConfig, allocate_long_position
 from .portfolio_store import PortfolioStore
-from .preview import render_candidate_preview
+from .preview import render_candidate_messages
 from .snapshots import build_market_snapshot
 from .telegram_delivery import DeliveryResult, send_messages
 
@@ -36,6 +36,7 @@ class DailyRunResult:
     delivery: DeliveryResult
     portfolio_snapshot: dict
     watch_count: int = 0
+    candidate_message_count: int = 0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -68,6 +69,7 @@ def run_daily(
     send_telegram: bool = False,
     portfolio_config: PortfolioConfig = PortfolioConfig(),
 ) -> DailyRunResult:
+    del top_n  # ACTION delivery is intentionally uncapped.
     run_date = pd.Timestamp(as_of or date.today()).date()
     database = V2Database(db_path)
     prices = database.load_prices(end_date=run_date.isoformat(), min_sessions=60)
@@ -102,16 +104,17 @@ def run_daily(
         for symbol, frame in prices.groupby("symbol")
     ]
 
-    # Every ACTION candidate is processed and delivered. ``top_n`` is retained
-    # only for backward-compatible renderer configuration.
     ranked = rank_candidates(candidates, top_n=None)
     selected = [candidate for rows in ranked.values() for candidate in rows]
     watches = watch_candidates(candidates)
+    quality_qualified = sum(
+        1 for candidate in candidates
+        if candidate.classification in {"ACTION", "WATCH"}
+    )
 
     store = PortfolioStore(db_path)
     store.initialize()
     existing = _existing_keys(store)
-    existing_at_start = set(existing)
     created = 0
     allocations = {}
     committed = store.open_positions()
@@ -152,18 +155,20 @@ def run_daily(
         store.all_positions(), run_date.isoformat(), portfolio_config.capital_base,
     )
     store.save_portfolio_snapshot(portfolio_snapshot)
-    warning = _warning_header(freshness, benchmark_source)
-    fresh_allocated = [
-        candidate for candidate in selected
-        if (candidate.symbol, candidate.horizon) not in existing_at_start
-        and (candidate.symbol, candidate.horizon) in allocations
-    ]
-    candidate_message = warning + render_candidate_preview(
-        rank_candidates(fresh_allocated, top_n=None), regime, run_date.isoformat(),
-        freshness=freshness, evaluated=len(candidates), allocations=allocations,
+
+    candidate_messages = render_candidate_messages(
+        selected, watches, regime, run_date.isoformat(),
+        freshness=freshness,
+        evaluated=len(candidates),
+        tradable=len(candidates),
+        quality_qualified=quality_qualified,
+        benchmark_source=benchmark_source,
+        allocations=allocations,
     )
+    candidate_message = "\n\n".join(candidate_messages)
+    warning = _warning_header(freshness, benchmark_source)
     portfolio_message = warning + render_portfolio_message(report_positions, run_date.isoformat())
-    delivery = send_messages([candidate_message, portfolio_message], enabled=send_telegram)
+    delivery = send_messages(candidate_messages + [portfolio_message], enabled=send_telegram)
     return DailyRunResult(
         trade_date=run_date.isoformat(), regime=regime,
         benchmark_source=benchmark_source, freshness=freshness,
@@ -171,4 +176,5 @@ def run_daily(
         portfolio_positions=len(portfolio_positions), candidate_message=candidate_message,
         portfolio_message=portfolio_message, delivery=delivery,
         portfolio_snapshot=portfolio_snapshot.to_dict(), watch_count=len(watches),
+        candidate_message_count=len(candidate_messages),
     )
