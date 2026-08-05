@@ -115,8 +115,10 @@ def run_daily(
 
     ranked = rank_candidates(candidates, top_n=None)
     selected = [candidate for rows in ranked.values() for candidate in rows]
-    watches = watch_candidates(candidates)
-    quality_qualified = sum(1 for candidate in candidates if candidate.eligible_horizons)
+    selected.sort(key=lambda candidate: (-candidate.score, -candidate.trade_plan_score, candidate.symbol))
+    selected = selected[:3]
+    watches = watch_candidates(candidates)[:12]
+    quality_qualified = sum(1 for candidate in candidates if candidate.metrics.get("focus_horizons"))
 
     diagnostics = build_scanner_diagnostics(
         candidates, trade_date=run_date.isoformat(), benchmark_source=benchmark_source,
