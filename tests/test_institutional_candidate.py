@@ -3,7 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from v2.candidates import Candidate, rank_candidates, watch_candidates
+from v2.candidates import Candidate, focus_horizons, rank_candidates, watch_candidates
+from v2.horizon_scoring import HorizonScore
 
 
 def _candidate(classification: str, symbol: str = "ABC", score: float = 82.0) -> Candidate:
@@ -61,3 +62,16 @@ def test_candidate_contract_exposes_horizon_and_plan_fields() -> None:
     assert payload["classification"] == "ACTION"
     assert payload["entry_trigger"] == "TREND_CONTINUATION"
     assert payload["trade_plan_state"] == "READY"
+
+
+def test_focus_scores_are_horizon_specific() -> None:
+    def score(horizon: str, value: float) -> HorizonScore:
+        return HorizonScore(horizon, value, "QUALIFIED", {}, (), (), (), {})
+
+    rows = {
+        "1M": score("1M", 80.0),
+        "3M": score("3M", 80.0),
+        "6M": score("6M", 81.0),
+        "12M": score("12M", 82.0),
+    }
+    assert focus_horizons(rows) == ("1M", "3M", "12M")

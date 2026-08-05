@@ -12,6 +12,7 @@ from .trade_plan import TradePlan, build_trigger_trade_plan
 
 
 _HORIZON_ORDER = {"1M": 1, "3M": 2, "6M": 3, "12M": 4}
+FOCUS_SCORE_BY_HORIZON = {"1M": 80.0, "3M": 80.0, "6M": 82.0, "12M": 82.0}
 _LEGACY_HORIZON = {
     "1M": "SWING_1_3M",
     "3M": "POSITIONAL_3_6M",
@@ -69,14 +70,27 @@ def _choose_primary_horizon(scores: dict[str, HorizonScore]) -> str:
     return "1M"
 
 
+def focus_horizons(scores: dict[str, HorizonScore]) -> tuple[str, ...]:
+    """Return horizons that pass the stricter daily-focus threshold.
+
+    Scores from 70 upward remain useful research information, but only these
+    horizon-specific thresholds can reach the daily ACTION/WATCH output.
+    """
+    return tuple(
+        horizon
+        for horizon in ("1M", "3M", "6M", "12M")
+        if scores[horizon].score >= FOCUS_SCORE_BY_HORIZON[horizon]
+        and not scores[horizon].hard_blocks
+    )
+
+
 def _classification(scores: dict[str, HorizonScore], trigger: EntryTrigger, plan: TradePlan, *, stale_data: bool) -> str:
     if stale_data:
         return "REJECT"
-    has_qualified = any(row.state == "QUALIFIED" for row in scores.values())
-    has_watch = any(row.state == "WATCH" for row in scores.values())
-    if has_qualified and trigger.actionable and plan.state == "READY":
+    focused = focus_horizons(scores)
+    if focused and trigger.actionable and plan.state == "READY":
         return "ACTION"
-    if has_qualified or has_watch:
+    if focused:
         return "WATCH"
     return "REJECT"
 
@@ -102,6 +116,8 @@ def evaluate_candidate(
 
     eligible = tuple(h for h in ("1M", "3M", "6M", "12M") if horizons[h].state == "QUALIFIED")
     watched = tuple(h for h in ("1M", "3M", "6M", "12M") if horizons[h].state == "WATCH")
+    focused = focus_horizons(horizons)
+    research = tuple(h for h in ("1M", "3M", "6M", "12M") if horizons[h].state in {"QUALIFIED", "WATCH"})
     primary_score = float(horizons[primary_horizon].score)
 
     reasons_for: list[str] = list(horizons[primary_horizon].reasons_for)
@@ -126,6 +142,8 @@ def evaluate_candidate(
         "primary_horizon": primary_horizon,
         "eligible_horizons": ",".join(eligible),
         "watch_horizons": ",".join(watched),
+        "focus_horizons": ",".join(focused),
+        "research_horizons": ",".join(research),
         "trade_plan_state": plan.state,
         "trade_plan_score": plan.score,
         "pullback_state": pullback.state,

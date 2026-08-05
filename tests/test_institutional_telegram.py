@@ -70,6 +70,19 @@ def test_watchlist_is_compact_and_separate() -> None:
     assert any("WATCHLIST" in message and "WATCH1" in message and "WATCH2" in message for message in messages)
 
 
+def test_action_cards_are_grouped_by_primary_horizon() -> None:
+    swing = replace(_candidate("SWING"), primary_horizon="1M")
+    positional = replace(_candidate("POSITIONAL"), primary_horizon="3M")
+    messages = render_candidate_messages(
+        [swing, positional], [], "NEUTRAL", "2026-08-04",
+        evaluated=100, quality_qualified=2,
+        benchmark_source="OFFICIAL_INDEX_HISTORY",
+    )
+    joined = "\n".join(messages)
+    assert "1M SWING" in joined
+    assert "3M POSITIONAL" in joined
+
+
 def test_fallback_reason_is_readable() -> None:
     messages = render_candidate_messages(
         [], [], "NEUTRAL", "2026-08-04",

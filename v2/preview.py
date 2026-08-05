@@ -9,6 +9,12 @@ from .portfolio_risk import Allocation
 
 
 HORIZON_LABELS = {"1M": "1 month", "3M": "3 months", "6M": "6 months", "12M": "12 months"}
+ACTION_SECTION_LABELS = {
+    "1M": "1M SWING — 2 to 6 weeks",
+    "3M": "3M POSITIONAL — 1 to 3 months",
+    "6M": "6M TREND — 3 to 6 months",
+    "12M": "12M COMPOUNDER — 6 to 12 months",
+}
 TRIGGER_LABELS = {
     "QUALIFIED_PULLBACK": "Qualified pullback", "BREAKOUT": "Breakout",
     "COMPRESSION_RELEASE": "Compression release", "HULL_CROSSOVER": "Hybrid Hull crossover",
@@ -101,6 +107,24 @@ def _action_card(candidate: Candidate, rank: int, allocations: dict[tuple[str, s
     return "\n".join(lines)
 
 
+def _action_messages(
+    action_rows: list[Candidate],
+    allocations: dict[tuple[str, str], Allocation] | None,
+) -> list[str]:
+    """Render action cards in practical holding-period sections."""
+    messages: list[str] = []
+    rank = 1
+    for horizon in ("1M", "3M", "6M", "12M"):
+        rows = [candidate for candidate in action_rows if candidate.primary_horizon == horizon]
+        if not rows:
+            continue
+        cards = [_action_card(candidate, rank + index, allocations) for index, candidate in enumerate(rows)]
+        rank += len(rows)
+        header = f"🟢 ALL ACTIONABLE CANDIDATES — {ACTION_SECTION_LABELS[horizon]}"
+        messages.extend(_chunk_cards(cards, header))
+    return messages
+
+
 def _watch_reason(candidate: Candidate) -> str:
     if candidate.trade_plan_state in {"WAIT", "RISKY"}:
         return f"Trade plan {candidate.trade_plan_state.lower()}"
@@ -129,17 +153,24 @@ def render_candidate_messages(
         f"Universe Loaded: {evaluated if evaluated is not None else '-'}",
         f"Tradable/Evaluated: {tradable if tradable is not None else (evaluated if evaluated is not None else '-')}",
         f"Quality Qualified: {quality_qualified if quality_qualified is not None else len(action_rows) + len(watch_rows)}",
-        f"Fresh Actionable: {len(action_rows)}", f"Watchlist: {len(watch_rows)}",
+        "Focus Scores: 1M/3M 80+ | 6M/12M 82+",
+        f"Fresh Actionable: {len(action_rows)}", f"Focus Watchlist: {len(watch_rows)}",
     ]
     if not action_rows:
         summary.extend(["", "No new candidates met the qualified-quality, actionable-trigger and READY trade-plan criteria today."])
     messages = ["\n".join(summary)]
-    cards = [_action_card(candidate, rank, allocations) for rank, candidate in enumerate(action_rows, 1)]
-    messages.extend(_chunk_cards(cards, "🟢 ALL ACTIONABLE CANDIDATES"))
+    messages.extend(_action_messages(action_rows, allocations))
     if watch_rows:
-        watch_lines = ["🟡 WATCHLIST — QUALIFIED, NO READY ENTRY"]
-        for index, candidate in enumerate(watch_rows, 1):
-            watch_lines.append(f"{index}. {candidate.symbol} | {candidate.primary_horizon} {candidate.score:.0f} | {_watch_reason(candidate)}")
+        watch_lines = ["🟡 FOCUS WATCHLIST — PASSED HORIZON THRESHOLD, NO READY ENTRY"]
+        rank = 1
+        for horizon in ("1M", "3M", "6M", "12M"):
+            rows = [candidate for candidate in watch_rows if candidate.primary_horizon == horizon]
+            if not rows:
+                continue
+            watch_lines.extend(["", f"{ACTION_SECTION_LABELS[horizon]}"])
+            for candidate in rows:
+                watch_lines.append(f"{rank}. {candidate.symbol} | Score {candidate.score:.0f} | {_watch_reason(candidate)}")
+                rank += 1
         watch_text = "\n".join(watch_lines)
         messages.append(watch_text) if len(watch_text) <= 3900 else messages.extend(_chunk_cards(watch_lines[1:], watch_lines[0]))
     return messages
