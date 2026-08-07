@@ -1,0 +1,59 @@
+name: Pine Hull EOD Paper System
+
+on:
+  workflow_run:
+    workflows: ["NSE Pipeline Daily Run"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pine-hull-daily
+  cancel-in-progress: false
+
+jobs:
+  pine-hull-daily:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout latest persisted market history
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run isolated Pine Hull paper system
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_PINE_SIGNALS_TOPIC_ID: ${{ secrets.TELEGRAM_PINE_SIGNALS_TOPIC_ID }}
+          TELEGRAM_PINE_PORTFOLIO_TOPIC_ID: ${{ secrets.TELEGRAM_PINE_PORTFOLIO_TOPIC_ID }}
+        run: python scripts/run_pine_hull_daily.py --restore-snapshots --send-telegram
+
+      - name: Persist Pine-only paper state
+        shell: bash
+        run: |
+          git config user.name "nse-scanner-bot"
+          git config user.email "nse-scanner-bot@users.noreply.github.com"
+          git add pine_hull_state.json output/pine_hull_daily_run.json
+          if git diff --cached --quiet; then
+            echo "No Pine Hull state changes to commit."
+          else
+            git commit -m "Auto: persist Pine Hull paper state"
+            git push origin HEAD:main
+          fi
