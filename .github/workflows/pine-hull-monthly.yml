@@ -1,0 +1,28 @@
+name: Pine Hull Monthly Review
+
+on:
+  schedule:
+    - cron: '40 3 1 * *'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
+
+jobs:
+  pine-hull-monthly:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Send Pine Hull monthly review
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_PINE_MONTHLY_TOPIC_ID: ${{ secrets.TELEGRAM_PINE_MONTHLY_TOPIC_ID }}
+        run: python scripts/run_pine_hull_period.py monthly --send-telegram

@@ -1,0 +1,41 @@
+"""Run the isolated Pine Hull EOD paper-trading system."""
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+from nse_loader import init_database
+from nse_market_store import restore_prices
+from pine_hull.engine import PineConfig, render_daily_signals, render_portfolio_message, run_daily
+from pine_hull.telegram import send_portfolio, send_signals
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--db", default="nse_scanner.db")
+    parser.add_argument("--state-file", default="pine_hull_state.json")
+    parser.add_argument("--output", default="output/pine_hull_daily_run.json")
+    parser.add_argument("--date")
+    parser.add_argument("--capital", type=float, default=300_000.0)
+    parser.add_argument("--restore-snapshots", action="store_true")
+    parser.add_argument("--send-telegram", action="store_true")
+    args = parser.parse_args()
+    if args.restore_snapshots:
+        init_database(args.db)
+        print("Restored snapshots:", restore_prices(args.db, min_days=1))
+    result = run_daily(args.db, state_path=args.state_file, as_of=args.date, config=PineConfig(capital_base=args.capital))
+    signals, portfolio = render_daily_signals(result), render_portfolio_message(result)
+    signals_delivery = send_signals([signals], enabled=args.send_telegram)
+    portfolio_delivery = send_portfolio(portfolio, enabled=args.send_telegram)
+    payload = {**result, "delivery": {"signals": signals_delivery.__dict__, "portfolio": portfolio_delivery.__dict__}}
+    destination = Path(args.output)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    print(signals)
+    print("\n" + portfolio)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
