@@ -137,6 +137,66 @@ def _watch_reason(candidate: Candidate) -> str:
     return "Qualified quality — waiting for entry"
 
 
+def _watch_entry_guidance(candidate: Candidate) -> tuple[float, float, float, str] | None:
+    """Return a non-actionable preferred retest/reclaim zone for WATCH stocks.
+
+    WATCH is intentionally different from ACTION.  The suggested level is a
+    structural area to monitor; a fresh trigger is still required before the
+    stock can move to ACTION.  Shorter horizons use the faster HMA21/Hull area,
+    while 6M/12M use the slower Hull/HMA51 structure and a wider ATR allowance.
+    """
+    metrics = candidate.metrics or {}
+    try:
+        hull55 = float(metrics.get("hull55", 0.0) or 0.0)
+        hma21 = float(metrics.get("hma21", 0.0) or 0.0)
+        hma51 = float(metrics.get("hma51", 0.0) or 0.0)
+        atr14 = float(metrics.get("atr14", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        hull55 = hma21 = hma51 = atr14 = 0.0
+
+    if atr14 > 0:
+        if candidate.primary_horizon in {"1M", "3M"}:
+            supports = [value for value in (hull55, hma21) if value > 0]
+            allowance = {"1M": 0.20, "3M": 0.30}[candidate.primary_horizon]
+            basis = "Hull55/HMA21 retest"
+        else:
+            supports = [value for value in (hull55, hma51) if value > 0]
+            allowance = {"6M": 0.40, "12M": 0.50}.get(candidate.primary_horizon, 0.35)
+            basis = "Hull55/HMA51 structural retest"
+        if supports:
+            support = max(supports)
+            low = max(0.01, support - allowance * atr14)
+            high = support + 0.15 * atr14
+            preferred = (low + high) / 2.0
+            return round(preferred, 2), round(low, 2), round(high, 2), basis
+
+    # When a WAIT/RISKY plan already calculated a non-zero trigger level, keep
+    # it as a reference rather than inventing a structural level from missing
+    # metrics. It is explicitly labelled as confirmation-required.
+    if candidate.entry > 0:
+        return candidate.entry, candidate.entry, candidate.entry, "existing trigger reference"
+    return None
+
+
+def _watch_card(candidate: Candidate, rank: int) -> str:
+    lines = [
+        f"{rank}. {candidate.symbol} | {candidate.primary_horizon} | Score {candidate.score:.0f}",
+        f"Status: {_watch_reason(candidate)}",
+    ]
+    guidance = _watch_entry_guidance(candidate)
+    if guidance:
+        preferred, low, high, basis = guidance
+        if low == high:
+            lines.append(f"Preferred Entry: {_price(preferred)} — confirmation required")
+        else:
+            lines.append(
+                f"Preferred Entry: {_price(preferred)} | Zone: {_price(low)}–{_price(high)}"
+            )
+        lines.append(f"Entry basis: {basis}")
+    lines.append("Action: WAIT for a fresh trigger; this is not an active buy signal.")
+    return "\n".join(lines)
+
+
 def render_candidate_messages(
     actions: Iterable[Candidate], watches: Iterable[Candidate], regime: str, trade_date: str, *,
     freshness: FreshnessStatus | None = None, evaluated: int | None = None,
@@ -161,18 +221,17 @@ def render_candidate_messages(
     messages = ["\n".join(summary)]
     messages.extend(_action_messages(action_rows, allocations))
     if watch_rows:
-        watch_lines = ["🟡 FOCUS WATCHLIST — PASSED HORIZON THRESHOLD, NO READY ENTRY"]
+        cards: list[str] = []
         rank = 1
         for horizon in ("1M", "3M", "6M", "12M"):
             rows = [candidate for candidate in watch_rows if candidate.primary_horizon == horizon]
             if not rows:
                 continue
-            watch_lines.extend(["", f"{ACTION_SECTION_LABELS[horizon]}"])
+            cards.append(ACTION_SECTION_LABELS[horizon])
             for candidate in rows:
-                watch_lines.append(f"{rank}. {candidate.symbol} | Score {candidate.score:.0f} | {_watch_reason(candidate)}")
+                cards.append(_watch_card(candidate, rank))
                 rank += 1
-        watch_text = "\n".join(watch_lines)
-        messages.append(watch_text) if len(watch_text) <= 3900 else messages.extend(_chunk_cards(watch_lines[1:], watch_lines[0]))
+        messages.extend(_chunk_cards(cards, "🟡 FOCUS WATCHLIST — PREFERRED ENTRY AREAS, NOT ACTIVE BUY SIGNALS"))
     return messages
 
 
