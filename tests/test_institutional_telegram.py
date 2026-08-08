@@ -22,7 +22,7 @@ def _candidate(symbol: str, classification: str = "ACTION") -> Candidate:
         target2=118.0,
         reward_risk_t1=1.5,
         reward_risk_t2=3.0,
-        metrics={},
+        metrics={"hull55": 96.0, "hma21": 98.0, "hma51": 94.0, "atr14": 4.0},
         classification=classification,
         primary_horizon="3M",
         eligible_horizons=("3M",),
@@ -59,7 +59,7 @@ def test_every_action_candidate_is_present() -> None:
     assert all(len(message) <= 4096 for message in messages)
 
 
-def test_watchlist_is_compact_and_separate() -> None:
+def test_watchlist_is_compact_separate_and_has_preferred_entry() -> None:
     watches = [replace(_candidate("WATCH1", "WATCH")), replace(_candidate("WATCH2", "WATCH"))]
     messages = render_candidate_messages(
         [], watches, "NEUTRAL", "2026-08-04",
@@ -67,7 +67,23 @@ def test_watchlist_is_compact_and_separate() -> None:
         benchmark_source="OFFICIAL_INDEX_HISTORY",
     )
     assert "Fresh Actionable: 0" in messages[0]
-    assert any("WATCHLIST" in message and "WATCH1" in message and "WATCH2" in message for message in messages)
+    watch_message = next(message for message in messages if "WATCHLIST" in message)
+    assert "WATCH1" in watch_message and "WATCH2" in watch_message
+    assert "Preferred Entry:" in watch_message
+    assert "Zone:" in watch_message
+    assert "WAIT for a fresh trigger" in watch_message
+
+
+def test_watch_entry_uses_slower_structure_for_long_horizon() -> None:
+    watch = replace(_candidate("LONGWATCH", "WATCH"), primary_horizon="12M")
+    messages = render_candidate_messages(
+        [], [watch], "NEUTRAL", "2026-08-04",
+        evaluated=100, quality_qualified=1,
+        benchmark_source="OFFICIAL_INDEX_HISTORY",
+    )
+    watch_message = next(message for message in messages if "WATCHLIST" in message)
+    assert "Hull55/HMA51 structural retest" in watch_message
+    assert "not an active buy signal" in watch_message
 
 
 def test_action_cards_are_grouped_by_primary_horizon() -> None:
