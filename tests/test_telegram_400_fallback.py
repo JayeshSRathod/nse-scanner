@@ -49,7 +49,7 @@ def test_delivery_failure_does_not_raise(monkeypatch):
     assert "chat not found" in result.reason
 
 
-def test_action_keyboard_is_capped(monkeypatch):
+def test_action_keyboard_is_capped_below_telegram_100_button_limit(monkeypatch):
     monkeypatch.setenv("TELEGRAM_TOKEN", "123:abc")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "-100123")
     post = Mock(return_value=_response(200))
@@ -62,5 +62,6 @@ def test_action_keyboard_is_capped(monkeypatch):
 
     assert result.sent
     keyboard = post.call_args.kwargs["json"]["reply_markup"]["inline_keyboard"]
-    assert len(keyboard) == 40
-    assert sum(len(row) for row in keyboard) == 80
+    assert len(keyboard) == 30
+    assert sum(len(row) for row in keyboard) == 90
+    assert sum(len(row) for row in keyboard) < 100
