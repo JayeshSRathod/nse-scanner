@@ -7,8 +7,16 @@ from v2.telegram_delivery import send_admin_messages, send_messages
 
 def _ok_response() -> Mock:
     response = Mock()
-    response.raise_for_status.return_value = None
+    response.status_code = 200
     response.json.return_value = {"ok": True}
+    return response
+
+
+def _error_response(status: int, description: str) -> Mock:
+    response = Mock()
+    response.status_code = status
+    response.json.return_value = {"ok": False, "description": description}
+    response.text = description
     return response
 
 
@@ -21,6 +29,7 @@ def test_admin_delivery_uses_admin_chat_id(monkeypatch) -> None:
     assert result.sent is True
     assert result.message_count == 1
     assert post.call_args.kwargs["json"]["chat_id"] == "admin-456"
+    assert post.call_args.args[0].endswith("/sendRichMessage")
 
 
 def test_user_delivery_remains_on_user_chat_id(monkeypatch) -> None:
@@ -33,16 +42,49 @@ def test_user_delivery_remains_on_user_chat_id(monkeypatch) -> None:
     assert post.call_args.kwargs["json"]["chat_id"] == "user-123"
 
 
-def test_topic_and_url_buttons_work_without_callback_worker(monkeypatch) -> None:
+def test_topic_url_and_copy_buttons_work_without_callback_worker(monkeypatch) -> None:
     monkeypatch.setenv("TELEGRAM_TOKEN", "token")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "group-123")
-    message = "🟢 ALL ACTIONABLE CANDIDATES\n\n1. ABC\nState: ACTION"
+    message = (
+        "🟢 ALL ACTIONABLE CANDIDATES\n\n"
+        "1. ABC\nState: ACTION\n"
+        "Entry: ₹100.00 | SL: ₹94.00\nT1: ₹109.00 | T2: ₹118.00"
+    )
     with patch("v2.telegram_delivery.requests.post", return_value=_ok_response()) as post:
         result = send_messages([message], enabled=True, message_thread_id=321)
     assert result.sent is True
     payload = post.call_args.kwargs["json"]
     assert payload["message_thread_id"] == 321
-    assert payload["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("NSE%3AABC")
+    keyboard = payload["reply_markup"]["inline_keyboard"][0]
+    assert keyboard[0]["url"].endswith("NSE%3AABC")
+    assert keyboard[2]["copy_text"]["text"] == "ABC | Entry ₹100.00 | SL ₹94.00 | T1 ₹109.00 | T2 ₹118.00"
+    assert all("callback_data" not in button for button in keyboard)
+
+
+def test_rich_failure_falls_back_to_plain_message(monkeypatch) -> None:
+    monkeypatch.setenv("TELEGRAM_TOKEN", "token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "group-123")
+    responses = [_error_response(400, "Bad Request: rich message invalid"), _ok_response()]
+    with patch("v2.telegram_delivery.requests.post", side_effect=responses) as post:
+        result = send_messages(["plain-compatible report"], enabled=True)
+    assert result.sent is True
+    assert post.call_count == 2
+    assert post.call_args_list[0].args[0].endswith("/sendRichMessage")
+    assert post.call_args_list[1].args[0].endswith("/sendMessage")
+    assert "sent_plain_fallback" in result.reason
+
+
+def test_topic_failure_falls_back_to_rich_general(monkeypatch) -> None:
+    monkeypatch.setenv("TELEGRAM_TOKEN", "token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "group-123")
+    responses = [_error_response(400, "Bad Request: message thread not found"), _ok_response()]
+    with patch("v2.telegram_delivery.requests.post", side_effect=responses) as post:
+        result = send_messages(["report"], enabled=True, message_thread_id=999)
+    assert result.sent is True
+    assert post.call_count == 2
+    assert post.call_args_list[0].kwargs["json"]["message_thread_id"] == 999
+    assert "message_thread_id" not in post.call_args_list[1].kwargs["json"]
+    assert "sent_rich_general_topic_fallback" in result.reason
 
 
 def test_missing_admin_chat_id_does_not_raise(monkeypatch) -> None:
