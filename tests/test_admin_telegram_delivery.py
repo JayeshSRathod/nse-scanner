@@ -42,13 +42,13 @@ def test_user_delivery_remains_on_user_chat_id(monkeypatch) -> None:
     assert post.call_args.kwargs["json"]["chat_id"] == "user-123"
 
 
-def test_topic_url_and_copy_buttons_work_without_callback_worker(monkeypatch) -> None:
+def test_topic_url_and_copy_buttons_work_for_compact_v2(monkeypatch) -> None:
     monkeypatch.setenv("TELEGRAM_TOKEN", "token")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "group-123")
     message = (
-        "🟢 ALL ACTIONABLE CANDIDATES\n\n"
-        "1. ABC\nState: ACTION\n"
-        "Entry: ₹100.00 | SL: ₹94.00\nT1: ₹109.00 | T2: ₹118.00"
+        "🚀 ACTION CANDIDATES\n1 Fresh Actionable Stocks\n\n"
+        "━━━━━━━━━━━━━━━━━━\n🥇 ABC\n3M • TREND CONTINUATION\nScore: 88/100\n\n"
+        "Entry       ₹100.00\nSL          ₹94.00\nT1          ₹109.00\nT2          ₹118.00"
     )
     with patch("v2.telegram_delivery.requests.post", return_value=_ok_response()) as post:
         result = send_messages([message], enabled=True, message_thread_id=321)
@@ -59,6 +59,22 @@ def test_topic_url_and_copy_buttons_work_without_callback_worker(monkeypatch) ->
     assert keyboard[0]["url"].endswith("NSE%3AABC")
     assert keyboard[2]["copy_text"]["text"] == "ABC | Entry ₹100.00 | SL ₹94.00 | T1 ₹109.00 | T2 ₹118.00"
     assert all("callback_data" not in button for button in keyboard)
+
+
+def test_pine_signal_gets_same_outbound_only_buttons(monkeypatch) -> None:
+    monkeypatch.setenv("TELEGRAM_TOKEN", "token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "group-123")
+    message = (
+        "📐 PINE HULL SIGNALS\n1 Fresh Paper Entries • 0 Watch\n\n"
+        "━━━━━━━━━━━━━━━━━━\n🥇 RELIANCE\nPINE HULL • READY LONG\n\n"
+        "Entry       ₹1,500.00\nSL          ₹1,450.00\nT1          ₹1,575.00\nT2          ₹1,650.00"
+    )
+    with patch("v2.telegram_delivery.requests.post", return_value=_ok_response()) as post:
+        result = send_messages([message], enabled=True)
+    assert result.sent is True
+    keyboard = post.call_args.kwargs["json"]["reply_markup"]["inline_keyboard"][0]
+    assert keyboard[0]["url"].endswith("NSE%3ARELIANCE")
+    assert keyboard[2]["copy_text"]["text"] == "RELIANCE | Entry ₹1,500.00 | SL ₹1,450.00 | T1 ₹1,575.00 | T2 ₹1,650.00"
 
 
 def test_rich_failure_falls_back_to_plain_message(monkeypatch) -> None:
