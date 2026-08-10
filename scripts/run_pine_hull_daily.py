@@ -12,7 +12,8 @@ if str(ROOT) not in sys.path:
 
 from nse_loader import init_database
 from nse_market_store import restore_prices
-from pine_hull.engine import PineConfig, render_daily_signals, render_portfolio_message, run_daily
+from pine_hull.engine import PineConfig, render_portfolio_message, run_daily
+from pine_hull.preview import render_daily_signals
 from pine_hull.telegram import send_portfolio, send_signals
 
 

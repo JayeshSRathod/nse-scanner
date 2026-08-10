@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from pine_hull.engine import PineConfig, load_state, pine_metrics, run_daily
+from pine_hull.preview import render_daily_signals
 
 
 def _frame(rows: int = 330, *, final_low: float | None = None) -> pd.DataFrame:
@@ -15,8 +16,6 @@ def _frame(rows: int = 330, *, final_low: float | None = None) -> pd.DataFrame:
     frame = pd.DataFrame({
         "trade_date": dates,
         "open": close - 0.3,
-        # A realistic daily range keeps the gentle trend within the Pine
-        # extension gate while still leaving a valid ATR-based stop.
         "high": close + 3.0,
         "low": close - 3.0,
         "close": close,
@@ -57,3 +56,25 @@ def test_pine_daily_state_is_independent_and_freezes_entry_levels(tmp_path: Path
     saved = load_state(state_path)
     assert saved["positions"][0]["trade_id"].startswith("PINE-")
     assert saved["positions"][0]["state"] == "OPEN"
+
+
+def test_pine_signal_message_matches_compact_daily_candidate_style() -> None:
+    result = {
+        "trade_date": "2026-08-07",
+        "created": [{
+            "symbol": "RELIANCE", "entry": 1500.0, "initial_stop": 1450.0,
+            "target1": 1575.0, "target2": 1650.0,
+            "htf_weekly_bullish": True,
+        }],
+        "watch": [{"symbol": "TCS", "score": 82.0, "overextended": False, "chop": False, "rotational": False}],
+    }
+    message = render_daily_signals(result)
+    assert "📐 PINE HULL SIGNALS" in message
+    assert "🥇 RELIANCE" in message
+    assert "PINE HULL • READY LONG" in message
+    assert "Entry       ₹1,500.00" in message
+    assert "SL          ₹1,450.00" in message
+    assert "T1          ₹1,575.00" in message
+    assert "T2          ₹1,650.00" in message
+    assert "✓ Daily Hull bullish" in message
+    assert "🟡 PINE WATCH" in message

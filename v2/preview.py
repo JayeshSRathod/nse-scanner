@@ -1,4 +1,4 @@
-"""Telegram market summary, complete ACTION delivery and compact WATCH output."""
+"""Telegram market summary, compact ACTION cards and WATCH guidance."""
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -16,11 +16,11 @@ ACTION_SECTION_LABELS = {
     "12M": "12M COMPOUNDER — 6 to 12 months",
 }
 TRIGGER_LABELS = {
-    "QUALIFIED_PULLBACK": "Qualified pullback", "BREAKOUT": "Breakout",
-    "COMPRESSION_RELEASE": "Compression release", "HULL_CROSSOVER": "Hybrid Hull crossover",
-    "KAMA_ALIGNMENT": "KAMA alignment", "RS_ACCELERATION": "Relative-strength acceleration",
-    "TREND_CONTINUATION": "Trend continuation", "REACCUMULATION": "Re-accumulation",
-    "NO_TRIGGER": "No current trigger",
+    "QUALIFIED_PULLBACK": "QUALIFIED PULLBACK", "BREAKOUT": "BREAKOUT",
+    "COMPRESSION_RELEASE": "COMPRESSION RELEASE", "HULL_CROSSOVER": "HYBRID HULL CROSSOVER",
+    "KAMA_ALIGNMENT": "KAMA ALIGNMENT", "RS_ACCELERATION": "RELATIVE-STRENGTH ACCELERATION",
+    "TREND_CONTINUATION": "TREND CONTINUATION", "REACCUMULATION": "RE-ACCUMULATION",
+    "NO_TRIGGER": "NO CURRENT TRIGGER",
 }
 
 
@@ -45,19 +45,13 @@ def _score_line(candidate: Candidate) -> str:
     return " | ".join(values)
 
 
-def _component_lines(candidate: Candidate) -> list[str]:
-    components = candidate.horizon_scores.get(candidate.primary_horizon, {}).get("component_scores", {})
-    ordered = sorted(components.items(), key=lambda item: (-float(item[1]), item[0]))
-    return [f"• {name.replace('_', ' ').title()}: {float(points):.1f}" for name, points in ordered[:5]]
-
-
 def _reason_lines(candidate: Candidate) -> list[str]:
     readable = []
     for reason in candidate.reasons_for:
         text = reason.replace("_", " ").strip().capitalize()
         if text and text not in readable:
             readable.append(text)
-    return readable[:4]
+    return readable[:5]
 
 
 def _chunk_cards(cards: list[str], header: str, limit: int = 3800) -> list[str]:
@@ -75,35 +69,42 @@ def _chunk_cards(cards: list[str], header: str, limit: int = 3800) -> list[str]:
     if current:
         messages.append(current)
     total = len(messages)
+    if total == 1:
+        return messages
     return [message.replace(header, f"{header} — {index}/{total}", 1) for index, message in enumerate(messages, 1)]
 
 
+def _rank_badge(rank: int) -> str:
+    return {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, f"#{rank}")
+
+
 def _action_card(candidate: Candidate, rank: int, allocations: dict[tuple[str, str], Allocation] | None) -> str:
-    allocation = (allocations or {}).get((candidate.symbol, candidate.horizon))
+    """Render the frozen mobile-first ACTION card.
+
+    Detailed entry/stop construction and component-score diagnostics remain in
+    persisted/admin data; the user message is intentionally decision-oriented.
+    """
+    del allocations
+    trigger = TRIGGER_LABELS.get(candidate.entry_trigger, candidate.entry_trigger.replace("_", " ").upper())
     lines = [
-        f"{rank}. {candidate.symbol}",
-        f"State: ACTION | Primary: {candidate.primary_horizon}",
-        f"Horizon Scores: {_score_line(candidate)}",
-        f"Trigger: {TRIGGER_LABELS.get(candidate.entry_trigger, candidate.entry_trigger)} ({candidate.trigger_score:.0f}/100)",
-        f"Trade Plan: {candidate.trade_plan_state} ({candidate.trade_plan_score:.0f}/100)",
-        f"Entry: {_price(candidate.entry)} | SL: {_price(candidate.stop)}",
-        f"T1: {_price(candidate.target1)} | T2: {_price(candidate.target2)}",
-        f"RR: {candidate.reward_risk_t1:.2f}R / {candidate.reward_risk_t2:.2f}R | Risk: {candidate.risk_percent:.2f}%",
-        f"Valid: {candidate.valid_for_sessions} trading sessions",
+        "━━━━━━━━━━━━━━━━━━",
+        f"{_rank_badge(rank)} {candidate.symbol}",
+        f"{candidate.primary_horizon} • {trigger}",
+        f"Score: {candidate.score:.0f}/100",
+        "",
+        f"Entry       {_price(candidate.entry)}",
+        f"SL          {_price(candidate.stop)}",
+        f"T1          {_price(candidate.target1)}",
+        f"T2          {_price(candidate.target2)}",
+        "",
+        f"Risk        {candidate.risk_percent:.2f}%",
+        f"RR          {candidate.reward_risk_t1:.2f}R / {candidate.reward_risk_t2:.2f}R",
+        f"Validity    {candidate.valid_for_sessions} sessions",
     ]
-    if allocation:
-        lines.append(
-            f"Proposed Quantity: {allocation.quantity} | Capital: {_price(allocation.entry_notional)} | Initial Risk: {_price(allocation.initial_risk)}"
-        )
-    lines.extend([f"Entry basis: {candidate.entry_basis}", f"Stop basis: {candidate.stop_basis}"])
     reasons = _reason_lines(candidate)
     if reasons:
-        lines.append("Why selected:")
-        lines.extend(f"• {reason}" for reason in reasons)
-    components = _component_lines(candidate)
-    if components:
-        lines.append(f"{candidate.primary_horizon} score breakdown:")
-        lines.extend(components)
+        lines.append("")
+        lines.extend(f"✓ {reason}" for reason in reasons)
     return "\n".join(lines)
 
 
@@ -111,18 +112,12 @@ def _action_messages(
     action_rows: list[Candidate],
     allocations: dict[tuple[str, str], Allocation] | None,
 ) -> list[str]:
-    """Render action cards in practical holding-period sections."""
-    messages: list[str] = []
-    rank = 1
-    for horizon in ("1M", "3M", "6M", "12M"):
-        rows = [candidate for candidate in action_rows if candidate.primary_horizon == horizon]
-        if not rows:
-            continue
-        cards = [_action_card(candidate, rank + index, allocations) for index, candidate in enumerate(rows)]
-        rank += len(rows)
-        header = f"🟢 ALL ACTIONABLE CANDIDATES — {ACTION_SECTION_LABELS[horizon]}"
-        messages.extend(_chunk_cards(cards, header))
-    return messages
+    """Render every ACTION candidate in one ranked stream, safely chunked."""
+    if not action_rows:
+        return []
+    cards = [_action_card(candidate, rank, allocations) for rank, candidate in enumerate(action_rows, 1)]
+    header = f"🚀 ACTION CANDIDATES\n{len(action_rows)} Fresh Actionable Stocks"
+    return _chunk_cards(cards, header)
 
 
 def _watch_reason(candidate: Candidate) -> str:
@@ -138,13 +133,7 @@ def _watch_reason(candidate: Candidate) -> str:
 
 
 def _watch_entry_guidance(candidate: Candidate) -> tuple[float, float, float, str] | None:
-    """Return a non-actionable preferred retest/reclaim zone for WATCH stocks.
-
-    WATCH is intentionally different from ACTION.  The suggested level is a
-    structural area to monitor; a fresh trigger is still required before the
-    stock can move to ACTION.  Shorter horizons use the faster HMA21/Hull area,
-    while 6M/12M use the slower Hull/HMA51 structure and a wider ATR allowance.
-    """
+    """Return a non-actionable preferred retest/reclaim zone for WATCH stocks."""
     metrics = candidate.metrics or {}
     try:
         hull55 = float(metrics.get("hull55", 0.0) or 0.0)
@@ -170,9 +159,6 @@ def _watch_entry_guidance(candidate: Candidate) -> tuple[float, float, float, st
             preferred = (low + high) / 2.0
             return round(preferred, 2), round(low, 2), round(high, 2), basis
 
-    # When a WAIT/RISKY plan already calculated a non-zero trigger level, keep
-    # it as a reference rather than inventing a structural level from missing
-    # metrics. It is explicitly labelled as confirmation-required.
     if candidate.entry > 0:
         return candidate.entry, candidate.entry, candidate.entry, "existing trigger reference"
     return None
@@ -189,9 +175,7 @@ def _watch_card(candidate: Candidate, rank: int) -> str:
         if low == high:
             lines.append(f"Preferred Entry: {_price(preferred)} — confirmation required")
         else:
-            lines.append(
-                f"Preferred Entry: {_price(preferred)} | Zone: {_price(low)}–{_price(high)}"
-            )
+            lines.append(f"Preferred Entry: {_price(preferred)} | Zone: {_price(low)}–{_price(high)}")
         lines.append(f"Entry basis: {basis}")
     lines.append("Action: WAIT for a fresh trigger; this is not an active buy signal.")
     return "\n".join(lines)
@@ -247,11 +231,20 @@ def render_candidate_preview(
     text = "\n\n".join(messages)
     if rows:
         first = rows[0]
+        allocation = (allocations or {}).get((first.symbol, first.horizon))
+        allocation_text = ""
+        if allocation:
+            allocation_text = (
+                f"\nProposed Quantity: {allocation.quantity} | "
+                f"Capital: {_price(allocation.entry_notional)} | "
+                f"Initial Risk: {_price(allocation.initial_risk)}"
+            )
         text = (
             "📊 KJ NSE SCANNER V2\n" + text +
             f"\n\nEntry Trigger: {_price(first.entry)}\n"
             "Hybrid Hull (fixed):\n"
             f"Daily: {'Bullish' if first.metrics.get('daily_bullish') else 'Not aligned'}\n"
-            f"Weekly: {'Bullish' if first.metrics.get('weekly_bullish') else 'Not aligned'}"
+            f"Weekly: {'Bullish' if first.metrics.get('weekly_bullish') else 'Not aligned'}" +
+            allocation_text
         )
     return text
