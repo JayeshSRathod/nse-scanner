@@ -56,7 +56,30 @@ def test_every_action_candidate_is_present() -> None:
     for candidate in actions:
         assert candidate.symbol in joined
     assert "Fresh Actionable: 17" in messages[0]
+    assert "🚀 ACTION CANDIDATES" in joined
+    assert "17 Fresh Actionable Stocks" in joined
     assert all(len(message) <= 4096 for message in messages)
+
+
+def test_action_card_matches_compact_mobile_layout() -> None:
+    messages = render_candidate_messages(
+        [_candidate("ABC")], [], "NEUTRAL", "2026-08-04",
+        evaluated=100, quality_qualified=1,
+        benchmark_source="OFFICIAL_INDEX_HISTORY",
+    )
+    action = next(message for message in messages if "ACTION CANDIDATES" in message)
+    assert "🥇 ABC" in action
+    assert "3M • TREND CONTINUATION" in action
+    assert "Score: 88/100" in action
+    assert "Entry       ₹100.00" in action
+    assert "SL          ₹94.00" in action
+    assert "T1          ₹109.00" in action
+    assert "T2          ₹118.00" in action
+    assert "RR          1.50R / 3.00R" in action
+    assert "Validity    5 sessions" in action
+    assert "✓ Daily trend" in action
+    assert "Entry basis:" not in action
+    assert "score breakdown:" not in action
 
 
 def test_watchlist_is_compact_separate_and_has_preferred_entry() -> None:
@@ -86,7 +109,7 @@ def test_watch_entry_uses_slower_structure_for_long_horizon() -> None:
     assert "not an active buy signal" in watch_message
 
 
-def test_action_cards_are_grouped_by_primary_horizon() -> None:
+def test_action_cards_keep_horizon_on_each_stock() -> None:
     swing = replace(_candidate("SWING"), primary_horizon="1M")
     positional = replace(_candidate("POSITIONAL"), primary_horizon="3M")
     messages = render_candidate_messages(
@@ -95,8 +118,8 @@ def test_action_cards_are_grouped_by_primary_horizon() -> None:
         benchmark_source="OFFICIAL_INDEX_HISTORY",
     )
     joined = "\n".join(messages)
-    assert "1M SWING" in joined
-    assert "3M POSITIONAL" in joined
+    assert "1M • TREND CONTINUATION" in joined
+    assert "3M • TREND CONTINUATION" in joined
 
 
 def test_fallback_reason_is_readable() -> None:
