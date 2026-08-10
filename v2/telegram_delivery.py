@@ -50,21 +50,38 @@ def topic_id(kind: str) -> int | None:
         return None
 
 
-def _action_cards(message: str) -> list[tuple[str, str]]:
-    """Return (symbol, copy_text) pairs from ACTION cards."""
-    starts = list(re.finditer(r"(?m)^(\d+)\. ([A-Z0-9&-]+)\s*$", message))
+def _signal_cards(message: str) -> list[tuple[str, str]]:
+    """Return outbound-link/copy data from compact V2 or Pine signal cards."""
+    starts = list(re.finditer(
+        r"(?m)^(?:🥇|🥈|🥉|#\d+|\d+\.)\s+([A-Z0-9&-]+)(?:\s+—\s+READY LONG)?\s*$",
+        message,
+    ))
     cards: list[tuple[str, str]] = []
     for index, match in enumerate(starts[:30]):
-        symbol = match.group(2)
+        symbol = match.group(1)
         end = starts[index + 1].start() if index + 1 < len(starts) else len(message)
         block = message[match.start():end]
-        entry = re.search(r"Entry:\s*(₹[\d,]+(?:\.\d+)?)\s*\|\s*SL:\s*(₹[\d,]+(?:\.\d+)?)", block)
-        targets = re.search(r"T1:\s*(₹[\d,]+(?:\.\d+)?)\s*\|\s*T2:\s*(₹[\d,]+(?:\.\d+)?)", block)
-        if entry and targets:
-            copy_text = (
-                f"{symbol} | Entry {entry.group(1)} | SL {entry.group(2)} | "
-                f"T1 {targets.group(1)} | T2 {targets.group(2)}"
-            )[:256]
+        entry = re.search(r"(?m)^Entry\s+[:]?\s*(₹[\d,]+(?:\.\d+)?)\s*$", block)
+        stop = re.search(r"(?m)^(?:SL|Stop)\s+[:]?\s*(₹[\d,]+(?:\.\d+)?)\s*$", block)
+        target1 = re.search(r"(?m)^T1\s+[:]?\s*(₹[\d,]+(?:\.\d+)?)\s*$", block)
+        target2 = re.search(r"(?m)^T2\s+[:]?\s*(₹[\d,]+(?:\.\d+)?)\s*$", block)
+
+        # Backward compatibility with the original horizontal layout.
+        if not (entry and stop):
+            pair = re.search(r"Entry:\s*(₹[\d,]+(?:\.\d+)?)\s*\|\s*SL:\s*(₹[\d,]+(?:\.\d+)?)", block)
+            if pair:
+                entry, stop = pair, pair
+        if not (target1 and target2):
+            pair = re.search(r"T1:\s*(₹[\d,]+(?:\.\d+)?)\s*\|\s*T2:\s*(₹[\d,]+(?:\.\d+)?)", block)
+            if pair:
+                target1, target2 = pair, pair
+
+        if entry and stop and target1 and target2:
+            e = entry.group(1)
+            s = stop.group(1) if stop.re is not entry.re else stop.group(2)
+            t1 = target1.group(1)
+            t2 = target2.group(1) if target2.re is not target1.re else target2.group(2)
+            copy_text = f"{symbol} | Entry {e} | SL {s} | T1 {t1} | T2 {t2}"[:256]
         else:
             copy_text = symbol
         cards.append((symbol, copy_text))
@@ -74,12 +91,14 @@ def _action_cards(message: str) -> list[tuple[str, str]]:
 def _action_link_keyboard(message: str) -> dict | None:
     """Build outbound-only buttons; no callback worker is required.
 
-    Each stock receives TradingView, NSE and Copy Levels buttons. We cap at
-    30 symbols (90 buttons), remaining below Telegram's 100-button limit.
+    V2 ACTION and Pine Hull signal cards both receive TradingView, NSE and Copy
+    Levels buttons. We cap at 30 symbols (90 buttons), below Telegram's limit.
     """
-    if "ALL ACTIONABLE CANDIDATES" not in message:
+    is_v2_action = "ACTION CANDIDATES" in message or "ALL ACTIONABLE CANDIDATES" in message
+    is_pine_signal = "PINE HULL" in message and "SIGNALS" in message
+    if not (is_v2_action or is_pine_signal):
         return None
-    cards = _action_cards(message)
+    cards = _signal_cards(message)
     if not cards:
         return None
     rows = []
@@ -163,9 +182,6 @@ def _send_one(
 ) -> tuple[bool, str]:
     keyboard = _action_link_keyboard(message)
 
-    # Bot API 10.1+ Rich Messages are ideal for structured scanner reports.
-    # They are outbound-only, so this remains fully compatible with scheduled
-    # GitHub Actions. Any rich-format or topic problem falls back safely.
     if prefer_rich:
         rich_payload = _rich_payload(chat_id, message, message_thread_id, keyboard)
         ok, reason = _post_message(rich_endpoint, rich_payload, timeout=timeout)
@@ -179,8 +195,6 @@ def _send_one(
                 return True, "sent_rich_general_topic_fallback"
             reason = f"{reason}; rich_topic_fallback={retry_reason}"
 
-        # Rich formatting is an enhancement, never a dependency. Continue to
-        # standard sendMessage after any rich failure.
         rich_failure = reason
     else:
         rich_failure = "rich_disabled"
@@ -197,7 +211,6 @@ def _send_one(
             return True, "sent_plain_general_topic_fallback"
         reason = f"{reason}; topic_fallback={retry_reason}"
 
-    # Invalid/unsupported keyboards should never prevent the report itself.
     if keyboard and ("HTTP 400" in reason or "HTTP 403" in reason):
         retry_payload = _plain_payload(chat_id, message, None, None)
         ok, retry_reason = _post_message(plain_endpoint, retry_payload, timeout=timeout)
