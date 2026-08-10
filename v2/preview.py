@@ -84,7 +84,7 @@ def _action_card(candidate: Candidate, rank: int, allocations: dict[tuple[str, s
     Detailed entry/stop construction and component-score diagnostics remain in
     persisted/admin data; the user message is intentionally decision-oriented.
     """
-    del allocations  # allocation details stay out of the compact user card
+    del allocations
     trigger = TRIGGER_LABELS.get(candidate.entry_trigger, candidate.entry_trigger.replace("_", " ").upper())
     lines = [
         "━━━━━━━━━━━━━━━━━━",
@@ -133,13 +133,7 @@ def _watch_reason(candidate: Candidate) -> str:
 
 
 def _watch_entry_guidance(candidate: Candidate) -> tuple[float, float, float, str] | None:
-    """Return a non-actionable preferred retest/reclaim zone for WATCH stocks.
-
-    WATCH is intentionally different from ACTION. The suggested level is a
-    structural area to monitor; a fresh trigger is still required before the
-    stock can move to ACTION. Shorter horizons use the faster HMA21/Hull area,
-    while 6M/12M use the slower Hull/HMA51 structure and a wider ATR allowance.
-    """
+    """Return a non-actionable preferred retest/reclaim zone for WATCH stocks."""
     metrics = candidate.metrics or {}
     try:
         hull55 = float(metrics.get("hull55", 0.0) or 0.0)
@@ -237,11 +231,20 @@ def render_candidate_preview(
     text = "\n\n".join(messages)
     if rows:
         first = rows[0]
+        allocation = (allocations or {}).get((first.symbol, first.horizon))
+        allocation_text = ""
+        if allocation:
+            allocation_text = (
+                f"\nProposed Quantity: {allocation.quantity} | "
+                f"Capital: {_price(allocation.entry_notional)} | "
+                f"Initial Risk: {_price(allocation.initial_risk)}"
+            )
         text = (
             "📊 KJ NSE SCANNER V2\n" + text +
             f"\n\nEntry Trigger: {_price(first.entry)}\n"
             "Hybrid Hull (fixed):\n"
             f"Daily: {'Bullish' if first.metrics.get('daily_bullish') else 'Not aligned'}\n"
-            f"Weekly: {'Bullish' if first.metrics.get('weekly_bullish') else 'Not aligned'}"
+            f"Weekly: {'Bullish' if first.metrics.get('weekly_bullish') else 'Not aligned'}" +
+            allocation_text
         )
     return text
