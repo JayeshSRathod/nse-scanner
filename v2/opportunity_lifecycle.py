@@ -7,7 +7,45 @@ from __future__ import annotations
 
 from typing import Mapping
 
+import pandas as pd
+
+from .indicators import hma
+
 _HORIZON_ORDER = {"1M": 1, "3M": 2, "6M": 3, "12M": 4}
+
+
+def compute_htf_transition(frame: pd.DataFrame) -> tuple[str, dict[str, float | bool]]:
+    """Classify weekly structure without treating not-yet-confirmed as bearish."""
+    data = frame.sort_values("trade_date").copy()
+    weekly = data.set_index(pd.to_datetime(data["trade_date"]))["close"].resample("W-FRI").last().dropna()
+    if len(weekly) < 52:
+        return "NEUTRAL", {"weekly_count": float(len(weekly))}
+    fast, slow = hma(weekly, 21), hma(weekly, 51)
+    required = [fast.iloc[-1], fast.iloc[-2], slow.iloc[-1], slow.iloc[-2]]
+    if any(pd.isna(value) for value in required):
+        return "NEUTRAL", {"weekly_count": float(len(weekly))}
+    gap = float(fast.iloc[-1] - slow.iloc[-1])
+    prior_gap = float(fast.iloc[-2] - slow.iloc[-2])
+    fast_slope = float(fast.iloc[-1] - fast.iloc[-2])
+    slow_slope = float(slow.iloc[-1] - slow.iloc[-2])
+    bullish = gap > 0 and fast_slope >= 0
+    if bullish:
+        state = "BULLISH"
+    elif gap < 0 and gap > prior_gap and fast_slope > 0:
+        state = "IMPROVING"
+    elif gap >= 0 and fast_slope > 0:
+        state = "IMPROVING"
+    elif fast_slope < 0 and slow_slope < 0 and gap <= prior_gap:
+        state = "BEARISH"
+    elif fast_slope < 0 or gap < prior_gap:
+        state = "DETERIORATING"
+    else:
+        state = "NEUTRAL"
+    return state, {
+        "weekly_count": float(len(weekly)), "weekly_hma_gap": round(gap, 4),
+        "weekly_hma_gap_prior": round(prior_gap, 4), "weekly_fast_slope": round(fast_slope, 4),
+        "weekly_slow_slope": round(slow_slope, 4), "weekly_bullish": bullish,
+    }
 
 
 def htf_transition(metrics: Mapping[str, object]) -> str:
