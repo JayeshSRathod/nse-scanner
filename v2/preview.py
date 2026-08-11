@@ -200,7 +200,7 @@ def render_candidate_messages(
     messages.extend(_action_messages(action_rows, allocations))
     if watch_rows:
         cards = [_watch_card(candidate, rank) for rank, candidate in enumerate(watch_rows, 1)]
-        messages.extend(_chunk_cards(cards, "🟡 V2 WATCH — EARLY / RE-ENTRY / EXTENDED OPPORTUNITIES"))
+        messages.extend(_chunk_cards(cards, "🟡 V2 WATCHLIST — EARLY / RE-ENTRY / EXTENDED OPPORTUNITIES"))
     return messages
 
 
