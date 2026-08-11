@@ -166,7 +166,7 @@ def _watch_card(candidate: Candidate, rank: int) -> str:
         else:
             lines.append(f"Preferred Entry: {_price(preferred)} | Zone: {_price(low)}–{_price(high)}")
         lines.append(f"Entry basis: {basis}")
-    action = "WAIT for pullback/re-entry trigger" if timing in {"EXTENDED", "PULLBACK_REENTRY"} else "WATCH closely for a fresh trigger"
+    action = "WAIT for pullback/re-entry trigger" if timing in {"EXTENDED", "PULLBACK_REENTRY"} else "WAIT for a fresh trigger; watch closely"
     lines.append(f"Action: {action}; this is not an active buy signal.")
     return "\n".join(lines)
 
