@@ -18,6 +18,7 @@ import pandas as pd
 
 from v2.database import V2Database
 from v2.indicators import atr, hma, kama, wma
+from .opportunity_lifecycle import timing_state as lifecycle_timing_state, weekly_transition
 
 
 STATE_VERSION = 1
@@ -68,7 +69,7 @@ def pine_metrics(frame: pd.DataFrame, *, atr_multiplier: float = 3.5) -> dict[st
     data = frame.sort_values("trade_date").copy().reset_index(drop=True)
     needed = {"open", "high", "low", "close", "volume"}
     if data.empty or needed.difference(data.columns) or len(data) < 300:
-        return {"available": False, "state": "INSUFFICIENT_HISTORY"}
+        return {"available": False, "state": "INSUFFICIENT_HISTORY", "timing_state": "WEAK", "htf_state": "NEUTRAL"}
 
     close = pd.to_numeric(data["close"], errors="coerce")
     volume = pd.to_numeric(data["volume"], errors="coerce").fillna(0.0)
@@ -86,7 +87,7 @@ def pine_metrics(frame: pd.DataFrame, *, atr_multiplier: float = 3.5) -> dict[st
     weekly21, weekly51 = hma(weekly_close, 21), hma(weekly_close, 51)
     values = [hybrid_hull.iloc[-1], hybrid_hull.iloc[-2], hma21.iloc[-1], hma51.iloc[-1], kama30.iloc[-1], kama30.iloc[-2], atr14.iloc[-1]]
     if any(pd.isna(value) for value in values):
-        return {"available": False, "state": "INSUFFICIENT_HISTORY"}
+        return {"available": False, "state": "INSUFFICIENT_HISTORY", "timing_state": "WEAK", "htf_state": "NEUTRAL"}
 
     last_close, last_atr = float(close.iloc[-1]), float(atr14.iloc[-1])
     distance_atr = (last_close - float(hybrid_hull.iloc[-1])) / last_atr if last_atr > 0 else 0.0
@@ -98,10 +99,8 @@ def pine_metrics(frame: pd.DataFrame, *, atr_multiplier: float = 3.5) -> dict[st
     rotational = abs(distance_atr) < 0.4 and abs(float(hull_slope.iloc[-1])) < abs(float(hull_slope.iloc[-2])) * 1.1
     chop = (int(no_impulse) + int(band_compressed)) >= 2
     daily_bullish = last_close > float(hybrid_hull.iloc[-1]) and float(hull_slope.iloc[-1]) > 0.0
-    weekly_bullish = bool(
-        len(weekly_close) >= 52 and pd.notna(weekly21.iloc[-1]) and pd.notna(weekly51.iloc[-1])
-        and weekly21.iloc[-1] > weekly51.iloc[-1] and weekly21.iloc[-1] >= weekly21.iloc[-2]
-    )
+    htf_state, htf_metrics = weekly_transition(weekly21, weekly51)
+    weekly_bullish = htf_state == "BULLISH"
     kama_rising = float(kama30.iloc[-1]) > float(kama30.iloc[-2])
     hma_aligned = float(hma21.iloc[-1]) > float(hma51.iloc[-1])
     trend_commitment = abs(float(hull_slope.iloc[-1])) > abs(float(hull_slope.iloc[-2]))
@@ -123,20 +122,26 @@ def pine_metrics(frame: pd.DataFrame, *, atr_multiplier: float = 3.5) -> dict[st
     score += 5 if daily_bullish else 0
     ready = bool(daily_bullish and hma_aligned and kama_rising and trend_commitment and not chop and not rotational and not overextended and score >= 70)
     state = "READY" if ready else "BLOCKED" if chop or rotational or overextended else "WATCH"
+    opportunity_state = lifecycle_timing_state(
+        daily_bullish=daily_bullish, hma_aligned=hma_aligned, kama_rising=kama_rising,
+        trend_commitment=trend_commitment, chop=chop, rotational=rotational,
+        overextended=overextended, score=score, htf_state=htf_state,
+    )
     initial_stop = float(data["high"].rolling(22, min_periods=22).max().iloc[-1]) - last_atr * atr_multiplier
     t2_base = 3.0 if last_atr > float(atr14.rolling(50).mean().iloc[-1]) * 1.15 else 2.0 if last_atr < float(atr14.rolling(50).mean().iloc[-1]) * 0.85 else 2.5
     hull_speed_mult = max(0.8, min(1.4, max(0.5, min(2.0, hull_speed * 10.0))))
     return {
-        "available": True, "state": state, "score": round(score, 2), "daily_bullish": daily_bullish,
-        "weekly_bullish": weekly_bullish, "hma_aligned": hma_aligned, "kama_rising": kama_rising,
-        "trend_commitment": trend_commitment, "chop": chop, "rotational": rotational,
-        "overextended": overextended, "close": round(last_close, 2), "atr14": round(last_atr, 2),
-        "hybrid_hull": round(float(hybrid_hull.iloc[-1]), 2), "hma21": round(float(hma21.iloc[-1]), 2),
-        "hma51": round(float(hma51.iloc[-1]), 2), "distance_atr": round(distance_atr, 2),
-        "volume_ratio": round(volume_ratio, 2), "rsi14": round(rsi_value, 2), "adx14": round(adx_value, 2),
+        "available": True, "state": state, "timing_state": opportunity_state, "htf_state": htf_state,
+        "score": round(score, 2), "daily_bullish": daily_bullish, "weekly_bullish": weekly_bullish,
+        "hma_aligned": hma_aligned, "kama_rising": kama_rising, "trend_commitment": trend_commitment,
+        "chop": chop, "rotational": rotational, "overextended": overextended,
+        "close": round(last_close, 2), "atr14": round(last_atr, 2), "hybrid_hull": round(float(hybrid_hull.iloc[-1]), 2),
+        "hma21": round(float(hma21.iloc[-1]), 2), "hma51": round(float(hma51.iloc[-1]), 2),
+        "distance_atr": round(distance_atr, 2), "volume_ratio": round(volume_ratio, 2),
+        "rsi14": round(rsi_value, 2), "adx14": round(adx_value, 2),
         "initial_stop": round(initial_stop, 2), "target1": round(last_close + last_atr * 1.5, 2),
-        "target2": round(last_close + last_atr * t2_base * hull_speed_mult, 2),
-        "trail_base": round(initial_stop, 2),
+        "target2": round(last_close + last_atr * t2_base * hull_speed_mult, 2), "trail_base": round(initial_stop, 2),
+        **htf_metrics,
     }
 
 
@@ -191,10 +196,10 @@ def _update_position(position: dict, frame: pd.DataFrame, metrics: dict, trade_d
     high, low, close = _number(last["high"]), _number(last["low"]), _number(last["close"])
     position["last_price"] = round(close, 2)
     position["htf_weekly_bullish"] = bool(metrics.get("weekly_bullish"))
+    position["htf_state"] = str(metrics.get("htf_state", "NEUTRAL"))
+    position["timing_state"] = str(metrics.get("timing_state", "WEAK"))
     position["daily_hull_bullish"] = bool(metrics.get("daily_bullish"))
     stop = _number(position["stop"])
-    # Conservative EOD order: if low reaches the stop on a bar, record the stop
-    # before recognising a same-day target.
     if low <= stop:
         position.update({"state": "CLOSED", "exit_date": trade_date, "exit_price": round(stop, 2), "exit_reason": "TRAILING_STOP"})
         position["realised_pnl"] = round((stop - _number(position["entry"])) * int(position["quantity"]), 2)
@@ -251,7 +256,8 @@ def run_daily(
             "stop": _number(row["initial_stop"]), "target1": _number(row["target1"]), "target2": _number(row["target2"]),
             "quantity": quantity, "last_price": _number(row["close"]), "t1_hit": False, "t2_hit": False,
             "prior_hma21": _number(row["hma21"]), "realised_pnl": 0.0,
-            "htf_weekly_bullish": bool(row["weekly_bullish"]), "daily_hull_bullish": bool(row["daily_bullish"]),
+            "htf_weekly_bullish": bool(row["weekly_bullish"]), "htf_state": row.get("htf_state", "NEUTRAL"),
+            "timing_state": row.get("timing_state", "WEAK"), "daily_hull_bullish": bool(row["daily_bullish"]),
         }
         state["positions"].append(position)
         created.append(position)
@@ -263,7 +269,10 @@ def run_daily(
     closed_positions = [position for position in state["positions"] if position.get("state") == "CLOSED"]
     realised = sum(_number(position.get("realised_pnl")) for position in closed_positions)
     unrealised = sum((_number(position.get("last_price")) - _number(position.get("entry"))) * int(position.get("quantity", 0)) for position in open_positions)
-    watch = sorted(((symbol, row) for symbol, row in metrics.items() if row.get("state") == "WATCH"), key=lambda item: (-_number(item[1].get("score")), item[0]))[:12]
+    watch = sorted(
+        ((symbol, row) for symbol, row in metrics.items() if row.get("timing_state") in {"EARLY", "EXTENDED"} and symbol not in active_symbols),
+        key=lambda item: (-_number(item[1].get("score")), item[0]),
+    )[:12]
     return {
         "trade_date": trade_date, "created": created, "watch": [{"symbol": symbol, **row} for symbol, row in watch],
         "positions": state["positions"], "open_positions": open_positions, "realised_pnl": round(realised, 2),
@@ -277,17 +286,39 @@ def _price(value: object) -> str:
 
 
 def render_daily_signals(result: dict) -> str:
-    lines = ["📐 PINE HULL — FRESH EOD SIGNALS", f"Data through: {result['trade_date']} close", "Fixed: Hull55 | HMA21/51 | ATR14×3.5 | KAMA30", ""]
     created = result["created"]
-    lines.append(f"🟢 Fresh paper entries: {len(created)} | 👀 Watch: {len(result['watch'])}")
+    watch = result["watch"]
+    early_count = sum(1 for row in created if row.get("timing_state") == "EARLY") + sum(1 for row in watch if row.get("timing_state") == "EARLY")
+    ready_count = sum(1 for row in created if row.get("timing_state") == "READY")
+    extended_count = sum(1 for row in watch if row.get("timing_state") == "EXTENDED")
+    lines = [
+        "📐 PINE HULL OPPORTUNITY MAP", f"Data: {result['trade_date']} close",
+        "Hull55 • HMA21/51 • KAMA30 • ATR14×3.5", "",
+        f"🟠 EARLY {early_count} | 🟢 READY {ready_count} | 🔴 EXTENDED {extended_count}",
+        f"Fresh paper entries: {len(created)} | Watch: {len(watch)}",
+    ]
     if not created:
-        lines.extend(["", "No fresh Pine Core entry met the closed-bar rules today."])
+        lines.extend(["", "No fresh Pine Core paper entry met the closed-bar rules today."])
     for index, position in enumerate(created, 1):
-        lines.extend(["", f"{index}. {position['symbol']} — READY LONG", f"Entry: {_price(position['entry'])} | SL: {_price(position['initial_stop'])}", f"T1: {_price(position['target1'])} | T2: {_price(position['target2'])}", "Action: Paper entry frozen at the EOD signal close."])
-    if result["watch"]:
-        lines.extend(["", "🟡 WATCH — trend present, entry not ready"])
-        for item in result["watch"]:
-            lines.append(f"• {item['symbol']} | Score {item['score']:.0f} | Daily Hull up; wait for commitment")
+        badge = {1: "🥇", 2: "🥈", 3: "🥉"}.get(index, f"#{index}")
+        timing = str(position.get("timing_state", "READY"))
+        lines.extend([
+            "", "━━━━━━━━━━━━━━━━━━", f"{badge} {position['symbol']}",
+            f"PINE HULL • {timing.replace('_', ' ')}", f"Weekly HTF  {position.get('htf_state', 'NEUTRAL')}",
+            "", f"Entry       {_price(position['entry'])}", f"SL          {_price(position['initial_stop'])}",
+            f"T1          {_price(position['target1'])}", f"T2          {_price(position['target2'])}", "",
+            "✓ Daily Hull bullish", "✓ HMA21 > HMA51", "✓ KAMA30 rising", "✓ Trend commitment confirmed",
+            "", "Paper entry frozen at EOD signal close.",
+        ])
+    if watch:
+        lines.extend(["", "🟡 PINE WATCH — EARLY / EXTENDED"])
+        for item in watch:
+            timing = str(item.get("timing_state", "WEAK"))
+            if timing == "EARLY":
+                action = "watch for HTF confirmation / continued commitment"
+            else:
+                action = "do not chase; wait for reset toward structure"
+            lines.append(f"• {item['symbol']} | {timing} | Score {item['score']:.0f} | HTF {item.get('htf_state', 'NEUTRAL')} | {action}")
     return "\n".join(lines)
 
 
@@ -297,8 +328,9 @@ def render_portfolio_message(result: dict) -> str:
         return "\n".join(lines + ["No open Pine Hull paper positions."])
     for position in result["open_positions"]:
         return_pct = ((_number(position['last_price']) / _number(position['entry'])) - 1.0) * 100 if _number(position['entry']) else 0.0
-        htf = "Confirmed" if position.get("htf_weekly_bullish") else "Pending / weak"
-        lines.extend([f"{position['symbol']} — {position['state']}", f"Entry {_price(position['entry'])} → Close {_price(position['last_price'])} ({return_pct:+.2f}%)", f"SL {_price(position['stop'])} | T1 {_price(position['target1'])}{' ✅' if position.get('t1_hit') else ''} | T2 {_price(position['target2'])}{' ✅' if position.get('t2_hit') else ''}", f"Weekly HTF carry: {htf}", "Action: Hold only while price respects the current trailing stop.", ""])
+        htf = position.get("htf_state") or ("BULLISH" if position.get("htf_weekly_bullish") else "NEUTRAL")
+        timing = position.get("timing_state", "HOLD_TREND")
+        lines.extend([f"{position['symbol']} — {position['state']} | Timing {timing}", f"Entry {_price(position['entry'])} → Close {_price(position['last_price'])} ({return_pct:+.2f}%)", f"SL {_price(position['stop'])} | T1 {_price(position['target1'])}{' ✅' if position.get('t1_hit') else ''} | T2 {_price(position['target2'])}{' ✅' if position.get('t2_hit') else ''}", f"Weekly HTF: {htf}", "Action: Hold only while price respects the current trailing stop.", ""])
     return "\n".join(lines).strip()
 
 
