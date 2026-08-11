@@ -1,0 +1,66 @@
+"""Opportunity timing and higher-timeframe transition helpers for V2.
+
+This layer enriches ACTION/WATCH/REJECT with where an opportunity sits in its
+move. It intentionally does not add new hard selection gates.
+"""
+from __future__ import annotations
+
+from typing import Mapping
+
+_HORIZON_ORDER = {"1M": 1, "3M": 2, "6M": 3, "12M": 4}
+
+
+def htf_transition(metrics: Mapping[str, object]) -> str:
+    if bool(metrics.get("weekly_bullish")):
+        return "BULLISH" if bool(metrics.get("weekly_rising", True)) else "DETERIORATING"
+    gap = float(metrics.get("weekly_hma_gap", 0.0) or 0.0)
+    prior_gap = float(metrics.get("weekly_hma_gap_prior", gap) or gap)
+    fast_slope = float(metrics.get("weekly_fast_slope", 0.0) or 0.0)
+    slow_slope = float(metrics.get("weekly_slow_slope", 0.0) or 0.0)
+    if gap < 0 and gap > prior_gap and fast_slope > 0:
+        return "IMPROVING"
+    if gap >= 0 and fast_slope >= 0:
+        return "IMPROVING"
+    if fast_slope < 0 and slow_slope < 0 and gap <= prior_gap:
+        return "BEARISH"
+    if fast_slope < 0 or gap < prior_gap:
+        return "DETERIORATING"
+    return "NEUTRAL"
+
+
+def entry_horizon(primary_horizon: str, trigger_name: str) -> str:
+    if trigger_name in {"HULL_CROSSOVER", "KAMA_ALIGNMENT", "RS_ACCELERATION"}:
+        preferred = "1M"
+    elif trigger_name in {"QUALIFIED_PULLBACK", "BREAKOUT", "COMPRESSION_RELEASE", "TREND_CONTINUATION", "REACCUMULATION"}:
+        preferred = "3M"
+    else:
+        preferred = primary_horizon
+    return preferred if _HORIZON_ORDER.get(primary_horizon, 1) >= _HORIZON_ORDER.get(preferred, 1) else primary_horizon
+
+
+def entry_route(trigger_name: str, pullback_state: str, classification: str) -> str:
+    if trigger_name == "QUALIFIED_PULLBACK" or "PULLBACK" in (pullback_state or ""):
+        return "PULLBACK / RE-ENTRY"
+    if classification == "ACTION" and trigger_name in {"TREND_CONTINUATION", "REACCUMULATION", "BREAKOUT"}:
+        return "DIRECT ENTRY"
+    if classification == "ACTION":
+        return "FRESH ENTRY"
+    return "DEVELOPING"
+
+
+def timing_state(*, classification: str, metrics: Mapping[str, object], htf_state: str,
+                 trade_plan_state: str, reward_risk_t1: float, pullback_state: str) -> str:
+    stretched = bool(metrics.get("stretched"))
+    daily_bullish = bool(metrics.get("daily_bullish"))
+    kama_rising = bool(metrics.get("kama_rising"))
+    if stretched or trade_plan_state == "RISKY" or (reward_risk_t1 > 0 and reward_risk_t1 < 1.0):
+        return "EXTENDED"
+    if "PULLBACK" in (pullback_state or "") and classification in {"ACTION", "WATCH"}:
+        return "PULLBACK_REENTRY" if classification == "WATCH" else "READY"
+    if classification == "ACTION" and trade_plan_state == "READY":
+        return "READY"
+    if classification == "WATCH" and daily_bullish and kama_rising and htf_state in {"BULLISH", "IMPROVING", "NEUTRAL"}:
+        return "EARLY"
+    if classification == "WATCH" and htf_state == "BULLISH":
+        return "EARLY"
+    return "WEAK"
