@@ -1,6 +1,7 @@
-"""Telegram market summary, compact ACTION cards and WATCH guidance."""
+"""Telegram market summary, compact ACTION cards and lifecycle-aware WATCH guidance."""
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Iterable
 
 from .candidates import Candidate
@@ -10,10 +11,8 @@ from .portfolio_risk import Allocation
 
 HORIZON_LABELS = {"1M": "1 month", "3M": "3 months", "6M": "6 months", "12M": "12 months"}
 ACTION_SECTION_LABELS = {
-    "1M": "1M SWING — 2 to 6 weeks",
-    "3M": "3M POSITIONAL — 1 to 3 months",
-    "6M": "6M TREND — 3 to 6 months",
-    "12M": "12M COMPOUNDER — 6 to 12 months",
+    "1M": "1M SWING — 2 to 6 weeks", "3M": "3M POSITIONAL — 1 to 3 months",
+    "6M": "6M TREND — 3 to 6 months", "12M": "12M COMPOUNDER — 6 to 12 months",
 }
 TRIGGER_LABELS = {
     "QUALIFIED_PULLBACK": "QUALIFIED PULLBACK", "BREAKOUT": "BREAKOUT",
@@ -22,6 +21,7 @@ TRIGGER_LABELS = {
     "TREND_CONTINUATION": "TREND CONTINUATION", "REACCUMULATION": "RE-ACCUMULATION",
     "NO_TRIGGER": "NO CURRENT TRIGGER",
 }
+TIMING_ICON = {"EARLY": "🟠", "READY": "🟢", "HOLD_TREND": "🔵", "PULLBACK_REENTRY": "🟣", "EXTENDED": "🔴", "WEAK": "⚫"}
 
 
 def _price(value: float) -> str:
@@ -32,17 +32,6 @@ def _status(freshness: FreshnessStatus | None) -> str:
     if freshness is None:
         return "Fresh"
     return "Warning — latest data needs review" if freshness.degraded else "Fresh"
-
-
-def _score_line(candidate: Candidate) -> str:
-    values = []
-    for horizon in ("1M", "3M", "6M", "12M"):
-        row = candidate.horizon_scores.get(horizon, {})
-        score, state = row.get("score"), row.get("state", "")
-        if score is not None:
-            marker = "Q" if state == "QUALIFIED" else ("W" if state == "WATCH" else "-")
-            values.append(f"{horizon} {float(score):.0f}{marker}")
-    return " | ".join(values)
 
 
 def _reason_lines(candidate: Candidate) -> list[str]:
@@ -78,25 +67,26 @@ def _rank_badge(rank: int) -> str:
     return {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, f"#{rank}")
 
 
-def _action_card(candidate: Candidate, rank: int, allocations: dict[tuple[str, str], Allocation] | None) -> str:
-    """Render the frozen mobile-first ACTION card.
+def _timing(candidate: Candidate) -> str:
+    return candidate.timing_state or str(candidate.metrics.get("timing_state", "WEAK"))
 
-    Detailed entry/stop construction and component-score diagnostics remain in
-    persisted/admin data; the user message is intentionally decision-oriented.
-    """
+
+def _action_card(candidate: Candidate, rank: int, allocations: dict[tuple[str, str], Allocation] | None) -> str:
     del allocations
     trigger = TRIGGER_LABELS.get(candidate.entry_trigger, candidate.entry_trigger.replace("_", " ").upper())
+    timing = _timing(candidate)
+    quality_horizon = candidate.quality_horizon or candidate.primary_horizon
+    execution_horizon = candidate.entry_horizon or candidate.primary_horizon
+    route = candidate.entry_route or "FRESH ENTRY"
+    htf = candidate.htf_state or "NEUTRAL"
     lines = [
-        "━━━━━━━━━━━━━━━━━━",
-        f"{_rank_badge(rank)} {candidate.symbol}",
-        f"{candidate.primary_horizon} • {trigger}",
-        f"Score: {candidate.score:.0f}/100",
-        "",
-        f"Entry       {_price(candidate.entry)}",
-        f"SL          {_price(candidate.stop)}",
-        f"T1          {_price(candidate.target1)}",
-        f"T2          {_price(candidate.target2)}",
-        "",
+        "━━━━━━━━━━━━━━━━━━", f"{_rank_badge(rank)} {candidate.symbol}",
+        f"{candidate.primary_horizon} • {trigger}", f"Score: {candidate.score:.0f}/100", "",
+        f"{TIMING_ICON.get(timing, '⚪')} Timing      {timing.replace('_', ' ')}",
+        f"Entry Horizon  {execution_horizon}", f"Quality Horizon {quality_horizon}",
+        f"Entry Route    {route}", f"Weekly HTF     {htf}", "",
+        f"Entry       {_price(candidate.entry)}", f"SL          {_price(candidate.stop)}",
+        f"T1          {_price(candidate.target1)}", f"T2          {_price(candidate.target2)}", "",
         f"Risk        {candidate.risk_percent:.2f}%",
         f"RR          {candidate.reward_risk_t1:.2f}R / {candidate.reward_risk_t2:.2f}R",
         f"Validity    {candidate.valid_for_sessions} sessions",
@@ -108,32 +98,31 @@ def _action_card(candidate: Candidate, rank: int, allocations: dict[tuple[str, s
     return "\n".join(lines)
 
 
-def _action_messages(
-    action_rows: list[Candidate],
-    allocations: dict[tuple[str, str], Allocation] | None,
-) -> list[str]:
-    """Render every ACTION candidate in one ranked stream, safely chunked."""
+def _action_messages(action_rows: list[Candidate], allocations: dict[tuple[str, str], Allocation] | None) -> list[str]:
     if not action_rows:
         return []
     cards = [_action_card(candidate, rank, allocations) for rank, candidate in enumerate(action_rows, 1)]
-    header = f"🚀 ACTION CANDIDATES\n{len(action_rows)} Fresh Actionable Stocks"
-    return _chunk_cards(cards, header)
+    return _chunk_cards(cards, f"🚀 ACTION CANDIDATES\n{len(action_rows)} Fresh Actionable Stocks")
 
 
 def _watch_reason(candidate: Candidate) -> str:
+    timing = _timing(candidate)
+    if timing == "EXTENDED":
+        return "Strong trend, entry location extended — do not chase"
+    if timing == "EARLY":
+        return "Early setup — higher timeframe still developing"
+    if timing == "PULLBACK_REENTRY":
+        return "Pullback / re-entry opportunity developing"
     if candidate.trade_plan_state in {"WAIT", "RISKY"}:
         return f"Trade plan {candidate.trade_plan_state.lower()}"
     if candidate.entry_trigger == "NO_TRIGGER":
         return "No actionable trigger"
-    if candidate.metrics.get("stretched"):
-        return "Extended"
     if candidate.pullback_state == "DEEP_PULLBACK":
         return "Deep pullback — confirmation pending"
     return "Qualified quality — waiting for entry"
 
 
 def _watch_entry_guidance(candidate: Candidate) -> tuple[float, float, float, str] | None:
-    """Return a non-actionable preferred retest/reclaim zone for WATCH stocks."""
     metrics = candidate.metrics or {}
     try:
         hull55 = float(metrics.get("hull55", 0.0) or 0.0)
@@ -142,7 +131,6 @@ def _watch_entry_guidance(candidate: Candidate) -> tuple[float, float, float, st
         atr14 = float(metrics.get("atr14", 0.0) or 0.0)
     except (TypeError, ValueError):
         hull55 = hma21 = hma51 = atr14 = 0.0
-
     if atr14 > 0:
         if candidate.primary_horizon in {"1M", "3M"}:
             supports = [value for value in (hull55, hma21) if value > 0]
@@ -156,17 +144,18 @@ def _watch_entry_guidance(candidate: Candidate) -> tuple[float, float, float, st
             support = max(supports)
             low = max(0.01, support - allowance * atr14)
             high = support + 0.15 * atr14
-            preferred = (low + high) / 2.0
-            return round(preferred, 2), round(low, 2), round(high, 2), basis
-
+            return round((low + high) / 2.0, 2), round(low, 2), round(high, 2), basis
     if candidate.entry > 0:
         return candidate.entry, candidate.entry, candidate.entry, "existing trigger reference"
     return None
 
 
 def _watch_card(candidate: Candidate, rank: int) -> str:
+    timing = _timing(candidate)
     lines = [
-        f"{rank}. {candidate.symbol} | {candidate.primary_horizon} | Score {candidate.score:.0f}",
+        "━━━━━━━━━━━━━━━━━━", f"{rank}. {candidate.symbol} | {candidate.primary_horizon} | Score {candidate.score:.0f}",
+        f"{TIMING_ICON.get(timing, '⚪')} Timing: {timing.replace('_', ' ')} | Weekly HTF: {candidate.htf_state or 'NEUTRAL'}",
+        f"Entry Horizon: {candidate.entry_horizon or candidate.primary_horizon} | Quality Horizon: {candidate.quality_horizon or candidate.primary_horizon}",
         f"Status: {_watch_reason(candidate)}",
     ]
     guidance = _watch_entry_guidance(candidate)
@@ -177,7 +166,8 @@ def _watch_card(candidate: Candidate, rank: int) -> str:
         else:
             lines.append(f"Preferred Entry: {_price(preferred)} | Zone: {_price(low)}–{_price(high)}")
         lines.append(f"Entry basis: {basis}")
-    lines.append("Action: WAIT for a fresh trigger; this is not an active buy signal.")
+    action = "WAIT for pullback/re-entry trigger" if timing in {"EXTENDED", "PULLBACK_REENTRY"} else "WAIT for a fresh trigger; watch closely"
+    lines.append(f"Action: {action}; this is not an active buy signal.")
     return "\n".join(lines)
 
 
@@ -189,33 +179,28 @@ def render_candidate_messages(
 ) -> list[str]:
     action_rows = sorted(list(actions), key=lambda row: (-row.score, -row.trade_plan_score, row.symbol))
     watch_rows = sorted(list(watches), key=lambda row: (-row.score, row.symbol))
+    all_rows = action_rows + watch_rows
+    timing_counts = Counter(_timing(row) for row in all_rows)
     benchmark = "Official NIFTY index history" if benchmark_source == "OFFICIAL_INDEX_HISTORY" else "Equal-weight NSE universe (official index history unavailable)"
     summary = [
-        "📊 KJ NSE SCANNER V2 — DAILY CANDIDATES", f"Trade Date: {trade_date}",
-        f"Market Regime: {regime.upper()}", f"Data Status: {_status(freshness)}",
-        f"Benchmark: {benchmark}", "", "Scanner Funnel",
+        "📊 V2 DAILY OPPORTUNITY MAP", f"Trade Date: {trade_date}", f"Market Regime: {regime.upper()}",
+        f"Data Status: {_status(freshness)}", f"Benchmark: {benchmark}", "", "Scanner Funnel",
         f"Universe Loaded: {evaluated if evaluated is not None else '-'}",
         f"Tradable/Evaluated: {tradable if tradable is not None else (evaluated if evaluated is not None else '-')}",
-        f"Quality Qualified: {quality_qualified if quality_qualified is not None else len(action_rows) + len(watch_rows)}",
-        "Focus Scores: 1M/3M 80+ | 6M/12M 82+",
-        f"Fresh Actionable: {len(action_rows)}", f"Focus Watchlist: {len(watch_rows)}",
+        f"Quality Qualified: {quality_qualified if quality_qualified is not None else len(all_rows)}",
+        f"Fresh Actionable: {len(action_rows)}", f"Focus Watchlist: {len(watch_rows)}", "",
+        "Opportunity Lifecycle",
+        f"🟠 EARLY: {timing_counts.get('EARLY', 0)} | 🟢 READY: {timing_counts.get('READY', 0)}",
+        f"🟣 PULLBACK/RE-ENTRY: {timing_counts.get('PULLBACK_REENTRY', 0)} | 🔴 EXTENDED: {timing_counts.get('EXTENDED', 0)}",
+        f"⚫ WEAK: {timing_counts.get('WEAK', 0)}",
     ]
     if not action_rows:
         summary.extend(["", "No new candidates met the qualified-quality, actionable-trigger and READY trade-plan criteria today."])
     messages = ["\n".join(summary)]
     messages.extend(_action_messages(action_rows, allocations))
     if watch_rows:
-        cards: list[str] = []
-        rank = 1
-        for horizon in ("1M", "3M", "6M", "12M"):
-            rows = [candidate for candidate in watch_rows if candidate.primary_horizon == horizon]
-            if not rows:
-                continue
-            cards.append(ACTION_SECTION_LABELS[horizon])
-            for candidate in rows:
-                cards.append(_watch_card(candidate, rank))
-                rank += 1
-        messages.extend(_chunk_cards(cards, "🟡 FOCUS WATCHLIST — PREFERRED ENTRY AREAS, NOT ACTIVE BUY SIGNALS"))
+        cards = [_watch_card(candidate, rank) for rank, candidate in enumerate(watch_rows, 1)]
+        messages.extend(_chunk_cards(cards, "🟡 V2 WATCHLIST — EARLY / RE-ENTRY / EXTENDED OPPORTUNITIES"))
     return messages
 
 
@@ -224,7 +209,6 @@ def render_candidate_preview(
     freshness: FreshnessStatus | None = None, evaluated: int | None = None,
     max_candidates: int = 5, allocations: dict[tuple[str, str], Allocation] | None = None,
 ) -> str:
-    """Backward-compatible single-message preview for legacy tests and inspection."""
     rows = [candidate for candidates in grouped.values() for candidate in candidates]
     messages = render_candidate_messages(rows[:max_candidates], [], regime, trade_date,
         freshness=freshness, evaluated=evaluated, allocations=allocations)
@@ -234,17 +218,11 @@ def render_candidate_preview(
         allocation = (allocations or {}).get((first.symbol, first.horizon))
         allocation_text = ""
         if allocation:
-            allocation_text = (
-                f"\nProposed Quantity: {allocation.quantity} | "
-                f"Capital: {_price(allocation.entry_notional)} | "
-                f"Initial Risk: {_price(allocation.initial_risk)}"
-            )
+            allocation_text = f"\nProposed Quantity: {allocation.quantity} | Capital: {_price(allocation.entry_notional)} | Initial Risk: {_price(allocation.initial_risk)}"
         text = (
-            "📊 KJ NSE SCANNER V2\n" + text +
-            f"\n\nEntry Trigger: {_price(first.entry)}\n"
+            "📊 KJ NSE SCANNER V2\n" + text + f"\n\nEntry Trigger: {_price(first.entry)}\n"
             "Hybrid Hull (fixed):\n"
             f"Daily: {'Bullish' if first.metrics.get('daily_bullish') else 'Not aligned'}\n"
-            f"Weekly: {'Bullish' if first.metrics.get('weekly_bullish') else 'Not aligned'}" +
-            allocation_text
+            f"Weekly: {'Bullish' if first.metrics.get('weekly_bullish') else 'Not aligned'}" + allocation_text
         )
     return text
