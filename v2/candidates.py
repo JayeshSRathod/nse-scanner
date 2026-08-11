@@ -7,6 +7,7 @@ import pandas as pd
 
 from .entry_triggers import EntryTrigger, evaluate_entry_triggers, select_primary_trigger
 from .horizon_scoring import HorizonScore, score_horizons
+from .opportunity_lifecycle import compute_htf_transition, entry_horizon, entry_route, timing_state
 from .pullback import PullbackResult, evaluate_pullback
 from .trade_plan import TradePlan, build_trigger_trade_plan
 
@@ -52,6 +53,11 @@ class Candidate:
     risk_percent: float = 0.0
     valid_for_sessions: int = 0
     pullback_state: str = "NOT_EVALUATED"
+    timing_state: str = "WEAK"
+    htf_state: str = "NEUTRAL"
+    quality_horizon: str = ""
+    entry_horizon: str = ""
+    entry_route: str = "DEVELOPING"
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -71,11 +77,6 @@ def _choose_primary_horizon(scores: dict[str, HorizonScore]) -> str:
 
 
 def focus_horizons(scores: dict[str, HorizonScore]) -> tuple[str, ...]:
-    """Return horizons that pass the stricter daily-focus threshold.
-
-    Scores from 70 upward remain useful research information, but only these
-    horizon-specific thresholds can reach the daily ACTION/WATCH output.
-    """
     return tuple(
         horizon
         for horizon in ("1M", "3M", "6M", "12M")
@@ -137,9 +138,26 @@ def evaluate_candidate(
 
     metrics: dict[str, float | bool | str] = dict(horizons[primary_horizon].metrics)
     metrics.update(primary_trigger.metrics)
+    htf_state, htf_metrics = compute_htf_transition(data)
+    metrics.update(htf_metrics)
+    execution_horizon = entry_horizon(primary_horizon, primary_trigger.name)
+    route = entry_route(primary_trigger.name, pullback.state, classification)
+    opportunity_state = timing_state(
+        classification=classification,
+        metrics=metrics,
+        htf_state=htf_state,
+        trade_plan_state=plan.state,
+        reward_risk_t1=plan.reward_risk_t1,
+        pullback_state=pullback.state,
+    )
     metrics.update({
         "classification": classification,
         "primary_horizon": primary_horizon,
+        "quality_horizon": primary_horizon,
+        "entry_horizon": execution_horizon,
+        "entry_route": route,
+        "timing_state": opportunity_state,
+        "htf_state": htf_state,
         "eligible_horizons": ",".join(eligible),
         "watch_horizons": ",".join(watched),
         "focus_horizons": ",".join(focused),
@@ -179,6 +197,11 @@ def evaluate_candidate(
         risk_percent=plan.risk_percent,
         valid_for_sessions=plan.valid_for_sessions,
         pullback_state=pullback.state,
+        timing_state=opportunity_state,
+        htf_state=htf_state,
+        quality_horizon=primary_horizon,
+        entry_horizon=execution_horizon,
+        entry_route=route,
     )
 
 
