@@ -12,10 +12,10 @@ import pandas as pd
 from .indicators import hma
 
 _HORIZON_ORDER = {"1M": 1, "3M": 2, "6M": 3, "12M": 4}
+_PULLBACK_STATES = {"DEEP_PULLBACK", "CONFIRMED_PULLBACK_ENTRY", "PULLBACK", "REENTRY_READY"}
 
 
 def compute_htf_transition(frame: pd.DataFrame) -> tuple[str, dict[str, float | bool]]:
-    """Classify weekly structure without treating not-yet-confirmed as bearish."""
     data = frame.sort_values("trade_date").copy()
     weekly = data.set_index(pd.to_datetime(data["trade_date"]))["close"].resample("W-FRI").last().dropna()
     if len(weekly) < 52:
@@ -77,7 +77,7 @@ def entry_horizon(primary_horizon: str, trigger_name: str) -> str:
 
 
 def entry_route(trigger_name: str, pullback_state: str, classification: str) -> str:
-    if trigger_name == "QUALIFIED_PULLBACK" or "PULLBACK" in (pullback_state or ""):
+    if trigger_name == "QUALIFIED_PULLBACK" or (pullback_state or "") in _PULLBACK_STATES:
         return "PULLBACK / RE-ENTRY"
     if classification == "ACTION" and trigger_name in {"TREND_CONTINUATION", "REACCUMULATION", "BREAKOUT"}:
         return "DIRECT ENTRY"
@@ -93,7 +93,7 @@ def timing_state(*, classification: str, metrics: Mapping[str, object], htf_stat
     kama_rising = bool(metrics.get("kama_rising"))
     if stretched or trade_plan_state == "RISKY" or (reward_risk_t1 > 0 and reward_risk_t1 < 1.0):
         return "EXTENDED"
-    if "PULLBACK" in (pullback_state or "") and classification in {"ACTION", "WATCH"}:
+    if (pullback_state or "") in _PULLBACK_STATES and classification in {"ACTION", "WATCH"}:
         return "PULLBACK_REENTRY" if classification == "WATCH" else "READY"
     if classification == "ACTION" and trade_plan_state == "READY":
         return "READY"
