@@ -1,0 +1,87 @@
+{
+  "capital_base": 300000.0,
+  "events": [
+    {
+      "date": "2026-08-10",
+      "event": "ENTRY",
+      "state": "OPEN",
+      "symbol": "HDFCBSE500",
+      "trade_id": "PINE-20260810-3AD59BA6"
+    },
+    {
+      "date": "2026-08-10",
+      "event": "ENTRY",
+      "state": "OPEN",
+      "symbol": "HDFCNIF100",
+      "trade_id": "PINE-20260810-AC66A2D6"
+    },
+    {
+      "date": "2026-08-10",
+      "event": "ENTRY",
+      "state": "OPEN",
+      "symbol": "NIF100IETF",
+      "trade_id": "PINE-20260810-89917C59"
+    }
+  ],
+  "last_run": "2026-08-10",
+  "positions": [
+    {
+      "daily_hull_bullish": true,
+      "entry": 38.24,
+      "entry_date": "2026-08-10",
+      "htf_weekly_bullish": true,
+      "initial_stop": 37.21,
+      "last_price": 38.24,
+      "prior_hma21": 38.3,
+      "quantity": 1569,
+      "realised_pnl": 0.0,
+      "state": "OPEN",
+      "stop": 37.21,
+      "symbol": "HDFCBSE500",
+      "t1_hit": false,
+      "t2_hit": false,
+      "target1": 39.44,
+      "target2": 39.52,
+      "trade_id": "PINE-20260810-3AD59BA6"
+    },
+    {
+      "daily_hull_bullish": true,
+      "entry": 26.74,
+      "entry_date": "2026-08-10",
+      "htf_weekly_bullish": true,
+      "initial_stop": 25.11,
+      "last_price": 26.74,
+      "prior_hma21": 26.58,
+      "quantity": 1840,
+      "realised_pnl": 0.0,
+      "state": "OPEN",
+      "stop": 25.11,
+      "symbol": "HDFCNIF100",
+      "t1_hit": false,
+      "t2_hit": false,
+      "target1": 27.64,
+      "target2": 28.19,
+      "trade_id": "PINE-20260810-AC66A2D6"
+    },
+    {
+      "daily_hull_bullish": true,
+      "entry": 28.71,
+      "entry_date": "2026-08-10",
+      "htf_weekly_bullish": true,
+      "initial_stop": 26.83,
+      "last_price": 28.71,
+      "prior_hma21": 28.73,
+      "quantity": 1595,
+      "realised_pnl": 0.0,
+      "state": "OPEN",
+      "stop": 26.83,
+      "symbol": "NIF100IETF",
+      "t1_hit": false,
+      "t2_hit": false,
+      "target1": 29.6,
+      "target2": 29.66,
+      "trade_id": "PINE-20260810-89917C59"
+    }
+  ],
+  "version": 1
+}
