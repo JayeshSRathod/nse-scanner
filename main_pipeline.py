@@ -322,6 +322,20 @@ def run_pipeline():
         write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"), failed_step="STEP 2.5", reason=str(e))
         return False
 
+    # NSE corporate universe/cap/surveillance layer. Collector failures retain
+    # the last valid normalized snapshot and are surfaced in the health report.
+    try:
+        from nse_corporate_collector import run_collection
+        from nse_corporate_store import export_snapshots, restore_snapshots
+        from v2.database import V2Database
+        V2Database("nse_scanner.db").ensure_v3_schema()
+        restored = restore_snapshots("nse_scanner.db")
+        corporate_health = run_collection("nse_scanner.db", today.isoformat())
+        exported = export_snapshots("nse_scanner.db")
+        print(f"[STEP 2.6] Corporate data: {corporate_health['status']} (restored={restored}, exported={exported})")
+    except Exception as e:
+        print(f"[STEP 2.6] Corporate collection degraded: {e}")
+
     # ── STEP 3: Scan ──────────────────────────────────────────
     # Compare against the runner's date, not the previous completed EOD date:
     # the 04-Aug-2026 morning report correctly uses the 03-Aug market close.

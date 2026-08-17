@@ -23,6 +23,13 @@ class V2Database:
         """Apply additive V3 fields/tables idempotently before a daily run."""
         with self.connect() as conn:
             names = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if "symbol_master_v2" not in names:
+                conn.execute("""CREATE TABLE symbol_master_v2 (
+                    symbol TEXT PRIMARY KEY, isin TEXT, company_name TEXT, series TEXT,
+                    sector TEXT, industry TEXT, listing_date TEXT, delisting_date TEXT,
+                    active INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    market_cap_cr REAL, market_cap_as_of TEXT, market_cap_source TEXT)""")
+                names.add("symbol_master_v2")
             if "symbol_master_v2" in names:
                 columns = {row[1] for row in conn.execute("PRAGMA table_info(symbol_master_v2)")}
                 if "market_cap_cr" not in columns:

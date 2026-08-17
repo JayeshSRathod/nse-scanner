@@ -92,3 +92,19 @@ Before production V3 signals are enabled:
 Use `scripts/import_nse_corporate_data.py` for normalized controlled imports.
 Archive the original NSE CSV/XBRL payload before parsing so every derived row
 can be reproduced and audited.
+
+## Universe and market-cap collector operations
+
+- `scripts/run_nse_corporate_collection.py --date YYYY-MM-DD` refreshes the
+  EQ security master, surveillance restrictions and available market caps,
+  then exports normalized snapshots for the next disposable runner.
+- Set repository variable `NSE_MARKET_CAP_URL` to the current official NSE
+  all-company report download. If NSE changes or removes the URL, the collector
+  retains the last valid snapshot and reports `REUSED_LAST_VALID`.
+- `scripts/backfill_nse_index_history.py` downloads official daily NSE index
+  snapshots for the retained 420 market sessions. The resulting
+  `market_data/index_history.csv` is restored automatically on future runs.
+- Quarterly shares are imported point-in-time into `shares_outstanding_v3`;
+  each daily run then calculates market cap using that session's close.
+- `output/nse_corporate_health.json` reports freshness, reuse and missing
+  dependencies without silently converting missing data into a pass.

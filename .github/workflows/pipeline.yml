@@ -42,6 +42,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}
           GITHUB_BRANCH: main
+          NSE_MARKET_CAP_URL: ${{ vars.NSE_MARKET_CAP_URL }}
         run: python main_pipeline.py
 
       - name: Persist market history and reports
@@ -50,6 +51,8 @@ jobs:
           git config user.name "nse-scanner-bot"
           git config user.email "nse-scanner-bot@users.noreply.github.com"
           git add market_data telegram_last_scan.json scan_history.json scan_health.json
+          git add corporate_data/normalized 2>/dev/null || true
+          git add -f output/nse_corporate_health.json 2>/dev/null || true
           git add scan_lifecycle.json 2>/dev/null || true
           git add -f output/news_latest.json output/news_*.json 2>/dev/null || true
           git add portfolio.json 2>/dev/null || true
