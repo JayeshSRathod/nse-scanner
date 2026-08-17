@@ -63,6 +63,7 @@ def render_portfolio_message(positions: Iterable[Position], trade_date: str) -> 
             f"Trade ID: {position.trade_id}",
             f"Symbol: {position.symbol}",
             f"Horizon: {HORIZON_LABELS.get(position.horizon, position.horizon)}",
+            f"Progression: {position.progression_stage}",
             f"State: {position.state.value}",
             "",
             f"Entry: {_price(position.entry)} | Current Close: {_price(position.last_price)}",

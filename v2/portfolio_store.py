@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS v2_positions (
     last_price REAL,
     exit_price REAL,
     reason TEXT NOT NULL
+    ,progression_stage TEXT NOT NULL DEFAULT 'ENTRY_PENDING'
 );
 CREATE INDEX IF NOT EXISTS idx_v2_positions_symbol_state
 ON v2_positions(symbol, state);
@@ -76,6 +77,28 @@ CREATE TABLE IF NOT EXISTS v2_watchlist_memory (
     reason TEXT NOT NULL,
     PRIMARY KEY(symbol, horizon)
 );
+
+CREATE TABLE IF NOT EXISTS v2_opportunity_state (
+    symbol TEXT PRIMARY KEY,
+    progression_stage TEXT NOT NULL,
+    opportunity_classification TEXT NOT NULL,
+    first_seen_date TEXT NOT NULL,
+    last_seen_date TEXT NOT NULL,
+    last_score REAL NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1,
+    previously_exited INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS v2_candidate_history (
+    symbol TEXT NOT NULL,
+    trade_date TEXT NOT NULL,
+    progression_stage TEXT NOT NULL,
+    opportunity_classification TEXT NOT NULL,
+    scanner_rank INTEGER,
+    score REAL NOT NULL,
+    payload_json TEXT NOT NULL,
+    PRIMARY KEY(symbol, trade_date)
+);
 """
 
 
@@ -98,6 +121,8 @@ class PortfolioStore:
                 conn.execute("UPDATE v2_positions SET initial_stop=stop WHERE initial_stop IS NULL")
             if "realised_pnl" not in columns:
                 conn.execute("ALTER TABLE v2_positions ADD COLUMN realised_pnl REAL NOT NULL DEFAULT 0")
+            if "progression_stage" not in columns:
+                conn.execute("ALTER TABLE v2_positions ADD COLUMN progression_stage TEXT NOT NULL DEFAULT 'ENTRY_PENDING'")
 
     def save_position(self, position: Position, event_type: str,
                       previous_state: TradeState | None = None,
@@ -109,11 +134,11 @@ class PortfolioStore:
                 """INSERT INTO v2_positions (
                     trade_id,symbol,horizon,state,created_date,updated_date,
                     entry,initial_stop,stop,target1,target2,quantity,remaining_quantity,
-                    realised_quantity,realised_pnl,last_price,exit_price,reason
+                    realised_quantity,realised_pnl,last_price,exit_price,reason,progression_stage
                 ) VALUES (
                     :trade_id,:symbol,:horizon,:state,:created_date,:updated_date,
                     :entry,:initial_stop,:stop,:target1,:target2,:quantity,:remaining_quantity,
-                    :realised_quantity,:realised_pnl,:last_price,:exit_price,:reason)
+                    :realised_quantity,:realised_pnl,:last_price,:exit_price,:reason,:progression_stage)
                    ON CONFLICT(trade_id) DO UPDATE SET
                     horizon=excluded.horizon, state=excluded.state,
                     updated_date=excluded.updated_date,
@@ -122,7 +147,7 @@ class PortfolioStore:
                     realised_quantity=excluded.realised_quantity,
                     realised_pnl=excluded.realised_pnl,
                     last_price=excluded.last_price, exit_price=excluded.exit_price,
-                    reason=excluded.reason""", payload)
+                    reason=excluded.reason, progression_stage=excluded.progression_stage""", payload)
             conn.execute(
                 """INSERT INTO v2_position_events
                    (trade_id,event_date,event_type,from_state,to_state,price,reason,payload_json)
@@ -232,4 +257,42 @@ class PortfolioStore:
             conn.execute(
                 "UPDATE v2_watchlist_memory SET active=0, reason=? WHERE symbol=? AND horizon=?",
                 (reason, symbol, horizon),
+            )
+
+    def opportunity_state(self, symbol: str) -> sqlite3.Row | None:
+        with self.connect() as conn:
+            return conn.execute("SELECT * FROM v2_opportunity_state WHERE symbol=?", (symbol,)).fetchone()
+
+    def remember_opportunity(self, candidate: object, scanner_rank: int | None = None) -> None:
+        payload = candidate.to_dict()
+        symbol = str(payload["symbol"])
+        trade_date = str(payload["trade_date"])
+        stage = str(payload["progression_stage"])
+        classification = str(payload["opportunity_classification"])
+        score = float(payload["score"])
+        active = int(stage != "EXITED")
+        with self.connect() as conn:
+            prior = conn.execute("SELECT * FROM v2_opportunity_state WHERE symbol=?", (symbol,)).fetchone()
+            first_seen = prior["first_seen_date"] if prior else trade_date
+            previously_exited = int((prior and (prior["previously_exited"] or not prior["active"])) or stage == "EXITED")
+            conn.execute(
+                """INSERT INTO v2_opportunity_state
+                   (symbol,progression_stage,opportunity_classification,first_seen_date,last_seen_date,last_score,active,previously_exited)
+                   VALUES (?,?,?,?,?,?,?,?)
+                   ON CONFLICT(symbol) DO UPDATE SET
+                    progression_stage=excluded.progression_stage,
+                    opportunity_classification=excluded.opportunity_classification,
+                    last_seen_date=excluded.last_seen_date,last_score=excluded.last_score,
+                    active=excluded.active,previously_exited=excluded.previously_exited""",
+                (symbol, stage, classification, first_seen, trade_date, score, active, previously_exited),
+            )
+            conn.execute(
+                """INSERT INTO v2_candidate_history
+                   (symbol,trade_date,progression_stage,opportunity_classification,scanner_rank,score,payload_json)
+                   VALUES (?,?,?,?,?,?,?)
+                   ON CONFLICT(symbol,trade_date) DO UPDATE SET
+                    progression_stage=excluded.progression_stage,
+                    opportunity_classification=excluded.opportunity_classification,
+                    scanner_rank=excluded.scanner_rank,score=excluded.score,payload_json=excluded.payload_json""",
+                (symbol, trade_date, stage, classification, scanner_rank, score, json.dumps(payload, default=str)),
             )

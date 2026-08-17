@@ -10,6 +10,7 @@ from .horizon_scoring import HorizonScore, score_horizons
 from .opportunity_lifecycle import compute_htf_transition, entry_horizon, entry_route, timing_state
 from .pullback import PullbackResult, evaluate_pullback
 from .trade_plan import TradePlan, build_trigger_trade_plan
+from .progression import ProgressionStage, classify_opportunity, weekly_discovery
 
 
 _HORIZON_ORDER = {"1M": 1, "3M": 2, "6M": 3, "12M": 4}
@@ -57,6 +58,8 @@ class Candidate:
     quality_horizon: str = ""
     entry_horizon: str = ""
     entry_route: str = "DEVELOPING"
+    opportunity_classification: str = "UNQUALIFIED"
+    progression_stage: str = ProgressionStage.EXITED.value
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -114,8 +117,9 @@ def evaluate_candidate(
     stale_data: bool = False,
     minimum_score: float = 70.0,
     benchmark_close: pd.Series | None = None,
+    previous_stage: str | None = None,
+    previously_exited: bool = False,
 ) -> Candidate:
-    del minimum_score
     data = frame.sort_values("trade_date").copy()
     trade_date = pd.Timestamp(data.iloc[-1]["trade_date"]).date().isoformat() if not data.empty else ""
     horizons = score_horizons(data, regime, benchmark_close=benchmark_close)
@@ -139,6 +143,16 @@ def evaluate_candidate(
     focused = focus_horizons(horizons)
     research = tuple(h for h in ("1M", "3M", "6M", "12M") if horizons[h].state in {"QUALIFIED", "WATCH"})
     primary_score = float(horizons[primary_horizon].score)
+    if primary_score < minimum_score:
+        classification = "REJECT"
+    discovery = weekly_discovery(metrics)
+    opportunity_classification, progression_stage = classify_opportunity(
+        previous_stage,
+        weekly_stage=discovery.stage,
+        actionable_trigger=primary_trigger.actionable,
+        trade_plan_ready=plan.state == "READY" and classification == "ACTION",
+        previously_exited=previously_exited,
+    )
 
     reasons_for: list[str] = list(horizons[primary_horizon].reasons_for)
     if primary_trigger.actionable:
@@ -185,6 +199,8 @@ def evaluate_candidate(
         stop_basis=plan.stop_basis, risk_percent=plan.risk_percent, valid_for_sessions=plan.valid_for_sessions,
         pullback_state=pullback.state, timing_state=opportunity_state, htf_state=htf_state,
         quality_horizon=primary_horizon, entry_horizon=execution_horizon, entry_route=route,
+        opportunity_classification=opportunity_classification,
+        progression_stage=progression_stage.value,
     )
 
 

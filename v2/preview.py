@@ -154,6 +154,7 @@ def _watch_card(candidate: Candidate, rank: int) -> str:
     timing = _timing(candidate)
     lines = [
         "━━━━━━━━━━━━━━━━━━", f"{rank}. {candidate.symbol} | {candidate.primary_horizon} | Score {candidate.score:.0f}",
+        f"Opportunity: {candidate.opportunity_classification} | Stage: {candidate.progression_stage}",
         f"{TIMING_ICON.get(timing, '⚪')} Timing: {timing.replace('_', ' ')} | Weekly HTF: {candidate.htf_state or 'NEUTRAL'}",
         f"Entry Horizon: {candidate.entry_horizon or candidate.primary_horizon} | Quality Horizon: {candidate.quality_horizon or candidate.primary_horizon}",
         f"Status: {_watch_reason(candidate)}",
