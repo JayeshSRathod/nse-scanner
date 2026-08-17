@@ -2,11 +2,35 @@
 from __future__ import annotations
 
 from .portfolio_performance import PortfolioSnapshot
+from .lifecycle import Position, TradeState
 
 
-def render_portfolio_summary(snapshot: PortfolioSnapshot, previous_total_pnl: float | None = None) -> str:
+def render_portfolio_summary(
+    snapshot: PortfolioSnapshot,
+    previous_total_pnl: float | None = None,
+    positions: list[Position] | None = None,
+) -> str:
     daily_change = snapshot.total_pnl - previous_total_pnl if previous_total_pnl is not None else 0.0
-    return "\n".join([
+    rows = positions or []
+    live = [row for row in rows if row.state in {TradeState.OPEN, TradeState.PARTIAL, TradeState.TRAILING}]
+    returns = {
+        row.symbol: ((row.last_price or row.entry) - row.entry) / row.entry * 100.0
+        for row in live if row.entry > 0
+    }
+    r_values = [
+        ((row.last_price or row.entry) - row.entry) / (row.entry - row.initial_stop)
+        for row in live if row.entry > row.initial_stop
+    ]
+    winners = sum(value > 0.05 for value in returns.values())
+    losers = sum(value < -0.05 for value in returns.values())
+    flat = len(returns) - winners - losers
+    best = max(returns.items(), key=lambda item: item[1]) if returns else ("-", 0.0)
+    worst = min(returns.items(), key=lambda item: item[1]) if returns else ("-", 0.0)
+    horizon_pnl: dict[str, float] = {}
+    for row in rows:
+        pnl = row.realised_pnl + row.remaining_quantity * ((row.last_price or row.entry) - row.entry)
+        horizon_pnl[row.progression_stage] = horizon_pnl.get(row.progression_stage, 0.0) + pnl
+    lines = [
         "💰 KJ PORTFOLIO P&L",
         f"Trade Date: {snapshot.portfolio_date}",
         "",
@@ -23,4 +47,11 @@ def render_portfolio_summary(snapshot: PortfolioSnapshot, previous_total_pnl: fl
         f"Pending Setups: {snapshot.pending_setups}",
         f"Initial Risk: ₹{snapshot.initial_risk:,.2f}",
         f"Open Risk to Stops: ₹{snapshot.open_risk_to_stops:,.2f}",
-    ])
+        f"Total / Average R: {sum(r_values):+.2f}R / {(sum(r_values) / len(r_values) if r_values else 0):+.2f}R",
+        f"Winners / Losers / Flat: {winners} / {losers} / {flat}",
+        f"Best: {best[0]} {best[1]:+.2f}% | Worst: {worst[0]} {worst[1]:+.2f}%",
+    ]
+    if horizon_pnl:
+        lines.extend(["", "Horizon P&L"])
+        lines.extend(f"{stage}: ₹{pnl:,.2f}" for stage, pnl in sorted(horizon_pnl.items()))
+    return "\n".join(lines)

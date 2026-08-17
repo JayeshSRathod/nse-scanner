@@ -85,11 +85,14 @@ def focus_horizons(scores: dict[str, HorizonScore]) -> tuple[str, ...]:
     )
 
 
-def _classification(scores: dict[str, HorizonScore], trigger: EntryTrigger, plan: TradePlan, *, stale_data: bool) -> str:
+def _classification(
+    scores: dict[str, HorizonScore], trigger: EntryTrigger, plan: TradePlan, *,
+    stale_data: bool, action_permitted: bool = True,
+) -> str:
     if stale_data:
         return "REJECT"
     focused = focus_horizons(scores)
-    if focused and trigger.actionable and plan.state == "READY":
+    if focused and trigger.actionable and plan.state == "READY" and action_permitted:
         return "ACTION"
     if focused:
         return "WATCH"
@@ -119,6 +122,7 @@ def evaluate_candidate(
     benchmark_close: pd.Series | None = None,
     previous_stage: str | None = None,
     previously_exited: bool = False,
+    action_permitted: bool = True,
 ) -> Candidate:
     data = frame.sort_values("trade_date").copy()
     trade_date = pd.Timestamp(data.iloc[-1]["trade_date"]).date().isoformat() if not data.empty else ""
@@ -134,7 +138,10 @@ def evaluate_candidate(
     htf_state, htf_metrics = compute_htf_transition(data)
     metrics.update(htf_metrics)
 
-    classification = _classification(horizons, primary_trigger, plan, stale_data=stale_data)
+    classification = _classification(
+        horizons, primary_trigger, plan,
+        stale_data=stale_data, action_permitted=action_permitted,
+    )
     if classification == "REJECT" and _can_surface_early(horizons[primary_horizon], metrics, htf_state, stale_data=stale_data, regime=regime):
         classification = "WATCH"
 
@@ -166,6 +173,8 @@ def evaluate_candidate(
         reasons_against.append("bear_market_hard_override")
     if stale_data:
         reasons_against.append("stale_data_hard_override")
+    if not action_permitted:
+        reasons_against.append("fresh_entry_permission_blocked")
     if not primary_trigger.actionable:
         reasons_against.append("no_actionable_entry_trigger")
     if plan.state != "READY":

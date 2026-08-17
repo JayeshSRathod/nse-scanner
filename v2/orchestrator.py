@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from collections import Counter
 from datetime import date
 from pathlib import Path
 
@@ -49,6 +50,7 @@ class DailyRunResult:
     diagnostics_json_path: str = ""
     diagnostics_text_path: str = ""
     admin_delivery: DeliveryResult = DeliveryResult(False, 0, "not_attempted")
+    eligibility_funnel: dict | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -85,6 +87,7 @@ def run_daily(
 ) -> DailyRunResult:
     run_date = pd.Timestamp(as_of or date.today()).date()
     database = V2Database(db_path)
+    database.ensure_v3_schema()
     prices = database.load_prices(end_date=run_date.isoformat(), min_sessions=260)
     if prices.empty:
         raise RuntimeError("No usable V2 price history")
@@ -118,7 +121,8 @@ def run_daily(
     for symbol, frame in prices.groupby("symbol"):
         symbol = str(symbol)
         eligibility = evaluate_eligibility(
-            symbol, frame, metadata=metadata.get(symbol), restricted_reason=restricted.get(symbol)
+            symbol, frame, metadata=metadata.get(symbol), restricted_reason=restricted.get(symbol),
+            as_of_date=run_date.isoformat(),
         )
         eligibility_results[symbol] = eligibility
         if not eligibility.eligible:
@@ -129,7 +133,18 @@ def run_daily(
             minimum_score=minimum_score, benchmark_close=benchmark_close,
             previous_stage=previous["progression_stage"] if previous else None,
             previously_exited=bool(previous["previously_exited"]) if previous else False,
+            action_permitted=benchmark_source == "OFFICIAL_INDEX_HISTORY" and not freshness.degraded,
         ))
+    database.save_eligibility_audit(run_date.isoformat(), eligibility_results)
+    rejection_counts = Counter(
+        result.reason_code for result in eligibility_results.values() if not result.eligible
+    )
+    eligibility_funnel = {
+        "universe": len(eligibility_results),
+        "eligible": sum(result.eligible for result in eligibility_results.values()),
+        "rejected": sum(not result.eligible for result in eligibility_results.values()),
+        "rejection_reasons": dict(sorted(rejection_counts.items())),
+    }
 
     ranked = rank_candidates(candidates, top_n=None)
     selected = [candidate for rows in ranked.values() for candidate in rows]
@@ -144,7 +159,14 @@ def run_daily(
         benchmark_sessions=int(benchmark["trade_date"].nunique()),
     )
     diagnostics_json, diagnostics_text = save_scanner_diagnostics(diagnostics, output_dir=diagnostics_output_dir)
-    admin_message = render_admin_diagnostics(diagnostics)
+    funnel_lines = [
+        "V3 ELIGIBILITY FUNNEL",
+        f"Universe: {eligibility_funnel['universe']}",
+        f"Eligible: {eligibility_funnel['eligible']}",
+        f"Rejected: {eligibility_funnel['rejected']}",
+    ]
+    funnel_lines.extend(f"{reason}: {count}" for reason, count in rejection_counts.most_common())
+    admin_message = "\n".join(funnel_lines) + "\n\n" + render_admin_diagnostics(diagnostics)
 
     persisted_candidates = sorted(
         [candidate for candidate in candidates if candidate.opportunity_classification != "UNQUALIFIED"],
@@ -219,11 +241,13 @@ def run_daily(
     portfolio_positions = store.open_positions()
     report_positions = store.positions_for_daily_report(run_date.isoformat())
     previous_snapshot = store.latest_portfolio_snapshot()
-    portfolio_snapshot = build_portfolio_snapshot(store.all_positions(), run_date.isoformat(), portfolio_config.capital_base)
+    all_positions = store.all_positions()
+    portfolio_snapshot = build_portfolio_snapshot(all_positions, run_date.isoformat(), portfolio_config.capital_base)
     store.save_portfolio_snapshot(portfolio_snapshot)
     portfolio_summary_message = render_portfolio_summary(
         portfolio_snapshot,
         float(previous_snapshot["total_pnl"]) if previous_snapshot and previous_snapshot["portfolio_date"] != run_date.isoformat() else None,
+        all_positions,
     )
 
     candidate_messages = render_candidate_messages(
@@ -262,4 +286,5 @@ def run_daily(
         watch_count=len(watches), candidate_message_count=len(candidate_messages), diagnostics=diagnostics.to_dict(),
         admin_message=admin_message, diagnostics_json_path=str(diagnostics_json),
         diagnostics_text_path=str(diagnostics_text), admin_delivery=admin_delivery,
+        eligibility_funnel=eligibility_funnel,
     )

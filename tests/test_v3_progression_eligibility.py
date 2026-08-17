@@ -26,7 +26,10 @@ def _history(rows=300):
 
 
 def test_strict_eligibility_passes_liquid_valid_eq_stock():
-    result = evaluate_eligibility("ABC", _history(), metadata={"series": "EQ", "active": 1, "market_cap_cr": 5000})
+    result = evaluate_eligibility(
+        "ABC", _history(), as_of_date="2026-02-28",
+        metadata={"series": "EQ", "active": 1, "market_cap_cr": 5000, "market_cap_as_of": "2026-02-15"},
+    )
     assert result.eligible
     assert result.reason_code == "ELIGIBLE"
 
