@@ -65,10 +65,30 @@ completed-session age and a WATCH/QUALIFIED score for the next horizon.
 
 Before production V3 signals are enabled:
 
-1. Apply migrations `001_data_foundation.sql` and `002_v3_eligibility.sql`.
+1. Apply migrations `001_data_foundation.sql`, `002_v3_eligibility.sql` and
+   `003_nse_corporate_data.sql`.
 2. Populate `symbol_master_v2` with a dated market-cap file using
    `scripts/import_v3_symbol_metadata.py`.
 3. Import point-in-time quarterly fundamentals with `scripts/import_v3_fundamentals.py`.
 4. Populate dated regulatory restrictions.
 5. Maintain at least 260 valid sessions per admitted stock and official NIFTY history.
 6. Run tests, a historical walk-forward evaluation and parallel paper validation.
+
+## NSE corporate-data policy
+
+- Direct NSE market-cap snapshots use a 45-day live tolerance by default.
+- Market cap calculated from quarterly shares outstanding and daily close is
+  valid for at most 120 days.
+- Annual all-company market-cap reports are classification/backfill evidence
+  only; they are not accepted as live daily market cap.
+- Every financial, shareholding, pledge and governance record retains its
+  `available_date` (submission/broadcast date). A historical replay may select
+  only records available on the simulated date.
+- Banks, NBFCs and insurers require sector-specific fundamental treatment;
+  ordinary debt/equity hard limits are not applied to them.
+- Governance events marked `REVIEW` require admin review. Only deterministic
+  events marked `SEVERE` are automatic blocks.
+
+Use `scripts/import_nse_corporate_data.py` for normalized controlled imports.
+Archive the original NSE CSV/XBRL payload before parsing so every derived row
+can be reproduced and audited.

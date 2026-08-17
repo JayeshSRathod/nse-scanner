@@ -15,6 +15,7 @@ class FundamentalSnapshot:
     operating_cash_flow_positive: bool
     promoter_pledge_pct: float
     governance_flag: bool = False
+    sector_type: str = "NON_FINANCIAL"
 
 
 @dataclass(frozen=True)
@@ -33,16 +34,18 @@ def evaluate_fundamentals(snapshot: FundamentalSnapshot) -> FundamentalGate:
         "revenue_growth_positive": snapshot.revenue_growth_pct > 0,
         "profit_growth_positive": snapshot.profit_growth_pct > 0,
         "roe_at_least_12": snapshot.roe_pct >= 12,
-        "debt_to_equity_at_most_1": snapshot.debt_to_equity <= 1,
         "operating_cash_flow_positive": snapshot.operating_cash_flow_positive,
         "promoter_pledge_at_most_10": snapshot.promoter_pledge_pct <= 10,
     }
+    financial = snapshot.sector_type.upper() in {"BANK", "NBFC", "INSURANCE", "FINANCIAL"}
+    if not financial:
+        checks["debt_to_equity_at_most_1"] = snapshot.debt_to_equity <= 1
     critical = []
     if snapshot.governance_flag:
         critical.append("governance_risk_flag")
     if snapshot.promoter_pledge_pct > 25:
         critical.append("critical_promoter_pledge")
-    if snapshot.debt_to_equity > 2:
+    if not financial and snapshot.debt_to_equity > 2:
         critical.append("critical_leverage")
     score = sum(checks.values())
     reasons_for = tuple(name for name, passed in checks.items() if passed)

@@ -6,6 +6,8 @@ from typing import Mapping
 
 import pandas as pd
 
+from .corporate_data import market_cap_max_age_days
+
 
 @dataclass(frozen=True)
 class EligibilityResult:
@@ -36,7 +38,7 @@ def evaluate_eligibility(
     min_market_cap_cr: float = 1_000.0,
     require_market_cap: bool = True,
     as_of_date: str | None = None,
-    max_market_cap_age_days: int = 45,
+    max_market_cap_age_days: int | None = None,
 ) -> EligibilityResult:
     ordered = frame.sort_values("trade_date").copy()
     metadata = metadata or {}
@@ -97,12 +99,14 @@ def evaluate_eligibility(
     if market_cap is not None and pd.notna(market_cap) and float(market_cap) < min_market_cap_cr:
         return reject("SIZE", "LOW_MARKET_CAP", float(market_cap), min_market_cap_cr)
     cap_date = metadata.get("market_cap_as_of")
+    cap_source = str(metadata.get("market_cap_source", "DIRECT_SNAPSHOT") or "DIRECT_SNAPSHOT")
     if require_market_cap and (cap_date is None or pd.isna(cap_date)):
         return reject("SIZE", "MARKET_CAP_DATE_MISSING", None, max_market_cap_age_days)
     if require_market_cap and as_of_date:
         age = (pd.Timestamp(as_of_date).normalize() - pd.Timestamp(cap_date).normalize()).days
-        if age < 0 or age > max_market_cap_age_days:
-            return reject("SIZE", "STALE_MARKET_CAP", age, max_market_cap_age_days)
+        allowed_age = max_market_cap_age_days or market_cap_max_age_days(cap_source)
+        if age < 0 or age > allowed_age:
+            return reject("SIZE", "STALE_MARKET_CAP", age, allowed_age)
 
     return EligibilityResult(symbol, True, "ELIGIBLE", "COMPLETE", metrics={
         "close": close,
@@ -112,4 +116,5 @@ def evaluate_eligibility(
         "delivery_20": delivery_20,
         "market_cap_verified": market_cap is not None and pd.notna(market_cap),
         "market_cap_as_of": str(cap_date) if cap_date is not None else "",
+        "market_cap_source": cap_source,
     })

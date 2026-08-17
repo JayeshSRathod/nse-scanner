@@ -29,6 +29,8 @@ class V2Database:
                     conn.execute("ALTER TABLE symbol_master_v2 ADD COLUMN market_cap_cr REAL")
                 if "market_cap_as_of" not in columns:
                     conn.execute("ALTER TABLE symbol_master_v2 ADD COLUMN market_cap_as_of DATE")
+                if "market_cap_source" not in columns:
+                    conn.execute("ALTER TABLE symbol_master_v2 ADD COLUMN market_cap_source TEXT")
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS regulatory_restrictions_v2 (
                     symbol TEXT NOT NULL, trade_date TEXT NOT NULL,
@@ -50,6 +52,37 @@ class V2Database:
                     source TEXT NOT NULL DEFAULT 'CONTROLLED_IMPORT',
                     loaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY(symbol, as_of_date));
+                CREATE TABLE IF NOT EXISTS corporate_filings_v3 (
+                    filing_id TEXT PRIMARY KEY, symbol TEXT NOT NULL,
+                    filing_type TEXT NOT NULL, period_end_date TEXT,
+                    available_date TEXT NOT NULL, source_url TEXT, raw_path TEXT,
+                    parser_version TEXT, loaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+                CREATE TABLE IF NOT EXISTS shares_outstanding_v3 (
+                    symbol TEXT NOT NULL, as_of_date TEXT NOT NULL,
+                    available_date TEXT NOT NULL, shares_outstanding REAL NOT NULL,
+                    source TEXT NOT NULL DEFAULT 'NSE_SHAREHOLDING', filing_id TEXT,
+                    loaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(symbol, as_of_date, available_date));
+                CREATE TABLE IF NOT EXISTS market_cap_snapshots_v3 (
+                    symbol TEXT NOT NULL, as_of_date TEXT NOT NULL,
+                    available_date TEXT NOT NULL, market_cap_cr REAL NOT NULL,
+                    source TEXT NOT NULL, filing_id TEXT,
+                    loaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(symbol, as_of_date, source));
+                CREATE TABLE IF NOT EXISTS promoter_pledge_v3 (
+                    symbol TEXT NOT NULL, as_of_date TEXT NOT NULL,
+                    available_date TEXT NOT NULL, pledge_pct REAL NOT NULL,
+                    event_type TEXT NOT NULL DEFAULT 'SNAPSHOT', source TEXT NOT NULL,
+                    filing_id TEXT, loaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(symbol, as_of_date, event_type));
+                CREATE TABLE IF NOT EXISTS governance_events_v3 (
+                    symbol TEXT NOT NULL, event_date TEXT NOT NULL,
+                    available_date TEXT NOT NULL, event_type TEXT NOT NULL,
+                    severity TEXT NOT NULL CHECK(severity IN ('REVIEW','SEVERE')),
+                    summary TEXT, source TEXT NOT NULL, filing_id TEXT,
+                    resolved INTEGER NOT NULL DEFAULT 0,
+                    loaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(symbol, event_date, event_type));
             """)
 
     def load_fundamental_gates(self, trade_date: str, max_age_days: int = 120) -> dict[str, bool]:
@@ -112,9 +145,9 @@ class V2Database:
         with self.connect() as conn:
             names = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             if "symbol_master_v2" not in names:
-                return pd.DataFrame(columns=["symbol", "series", "active", "market_cap_cr", "market_cap_as_of"])
+                return pd.DataFrame(columns=["symbol", "series", "active", "market_cap_cr", "market_cap_as_of", "market_cap_source"])
             available = {row[1] for row in conn.execute("PRAGMA table_info(symbol_master_v2)")}
-            columns = [column for column in ("symbol", "series", "active", "market_cap_cr", "market_cap_as_of") if column in available]
+            columns = [column for column in ("symbol", "series", "active", "market_cap_cr", "market_cap_as_of", "market_cap_source") if column in available]
             return pd.read_sql_query(f"SELECT {', '.join(columns)} FROM symbol_master_v2", conn)
 
     def load_restricted_symbols(self, trade_date: str) -> dict[str, str]:
