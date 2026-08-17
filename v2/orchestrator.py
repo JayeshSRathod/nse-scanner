@@ -116,6 +116,7 @@ def run_daily(
     master = database.load_symbol_master()
     metadata = {str(row["symbol"]): row.to_dict() for _, row in master.iterrows()} if not master.empty else {}
     restricted = database.load_restricted_symbols(run_date.isoformat())
+    fundamental_gates = database.load_fundamental_gates(run_date.isoformat())
     eligibility_results = {}
     candidates = []
     for symbol, frame in prices.groupby("symbol"):
@@ -230,7 +231,7 @@ def run_daily(
             {key: value["state"] for key, value in candidate.horizon_scores.items()},
             sessions,
             trend_intact=bool(candidate.metrics.get("weekly_bullish")),
-            fundamentals_passed=None,
+            fundamentals_passed=fundamental_gates.get(position.symbol),
         )
         if decision.changed:
             promoted = transition(

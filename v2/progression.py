@@ -85,8 +85,8 @@ def next_holding_stage(
 
     if current == ProgressionStage.QUALIFIED_3M:
         if sessions_held >= 60 and _STATE_RANK.get(horizon_states.get("6M", "REJECTED"), 0) >= 2:
-            if fundamentals_passed is False:
-                return ProgressionDecision(current, False, "six_month_fundamental_gate_failed")
+            if fundamentals_passed is not True:
+                return ProgressionDecision(current, False, "six_month_fundamental_confirmation_required")
             return ProgressionDecision(ProgressionStage.QUALIFIED_6M, True, "three_months_survived_and_6m_requalified")
         return ProgressionDecision(current, False, "three_month_stage_continues")
 

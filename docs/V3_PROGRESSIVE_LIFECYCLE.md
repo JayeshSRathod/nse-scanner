@@ -68,6 +68,7 @@ Before production V3 signals are enabled:
 1. Apply migrations `001_data_foundation.sql` and `002_v3_eligibility.sql`.
 2. Populate `symbol_master_v2` with a dated market-cap file using
    `scripts/import_v3_symbol_metadata.py`.
-3. Populate dated regulatory restrictions.
-4. Maintain at least 260 valid sessions per admitted stock and official NIFTY history.
-5. Run tests, a historical walk-forward evaluation and parallel paper validation.
+3. Import point-in-time quarterly fundamentals with `scripts/import_v3_fundamentals.py`.
+4. Populate dated regulatory restrictions.
+5. Maintain at least 260 valid sessions per admitted stock and official NIFTY history.
+6. Run tests, a historical walk-forward evaluation and parallel paper validation.

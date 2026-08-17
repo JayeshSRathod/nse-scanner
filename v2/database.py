@@ -41,7 +41,40 @@ class V2Database:
                     required_value TEXT, metrics_json TEXT NOT NULL,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY(symbol, trade_date));
+                CREATE TABLE IF NOT EXISTS fundamental_snapshots_v3 (
+                    symbol TEXT NOT NULL, as_of_date TEXT NOT NULL,
+                    revenue_growth_pct REAL NOT NULL, profit_growth_pct REAL NOT NULL,
+                    roe_pct REAL NOT NULL, debt_to_equity REAL NOT NULL,
+                    operating_cash_flow_positive INTEGER NOT NULL,
+                    promoter_pledge_pct REAL NOT NULL, governance_flag INTEGER NOT NULL,
+                    source TEXT NOT NULL DEFAULT 'CONTROLLED_IMPORT',
+                    loaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(symbol, as_of_date));
             """)
+
+    def load_fundamental_gates(self, trade_date: str, max_age_days: int = 120) -> dict[str, bool]:
+        from .fundamentals import FundamentalSnapshot, evaluate_fundamentals
+        with self.connect() as conn:
+            names = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if "fundamental_snapshots_v3" not in names:
+                return {}
+            rows = conn.execute("""SELECT f.* FROM fundamental_snapshots_v3 f
+                JOIN (SELECT symbol, MAX(as_of_date) AS latest FROM fundamental_snapshots_v3
+                      WHERE as_of_date<=? GROUP BY symbol) latest
+                ON f.symbol=latest.symbol AND f.as_of_date=latest.latest""", (trade_date,)).fetchall()
+        gates = {}
+        for row in rows:
+            if (pd.Timestamp(trade_date) - pd.Timestamp(row["as_of_date"])).days > max_age_days:
+                continue
+            snapshot = FundamentalSnapshot(
+                symbol=row["symbol"], as_of_date=row["as_of_date"],
+                revenue_growth_pct=row["revenue_growth_pct"], profit_growth_pct=row["profit_growth_pct"],
+                roe_pct=row["roe_pct"], debt_to_equity=row["debt_to_equity"],
+                operating_cash_flow_positive=bool(row["operating_cash_flow_positive"]),
+                promoter_pledge_pct=row["promoter_pledge_pct"], governance_flag=bool(row["governance_flag"]),
+            )
+            gates[str(row["symbol"])] = evaluate_fundamentals(snapshot).passed
+        return gates
 
     def price_table(self, conn: sqlite3.Connection) -> str:
         names = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
