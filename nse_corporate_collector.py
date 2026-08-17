@@ -105,12 +105,14 @@ def ingest_market_caps(conn: sqlite3.Connection, frame: pd.DataFrame, available_
 def calculate_caps_from_shares(conn: sqlite3.Connection, trade_date: str) -> int:
     price_table = "daily_prices_v2" if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='daily_prices_v2'").fetchone() else "daily_prices"
     date_col = "trade_date" if price_table == "daily_prices_v2" else "date"
-    rows = conn.execute(f"""SELECT p.symbol,p.close,s.shares_outstanding,s.as_of_date,s.available_date
+    rows = conn.execute(f"""SELECT p.symbol,p.close,s.shares_outstanding,s.as_of_date,s.available_date,p.{date_col}
       FROM {price_table} p JOIN shares_outstanding_v3 s ON s.symbol=p.symbol
-      WHERE p.{date_col}=? AND s.available_date<=? AND s.available_date=(
+      WHERE p.{date_col}=(SELECT MAX(p2.{date_col}) FROM {price_table} p2
+                         WHERE p2.symbol=p.symbol AND p2.{date_col}<=?)
+      AND s.available_date<=? AND s.available_date=(
        SELECT MAX(s2.available_date) FROM shares_outstanding_v3 s2
        WHERE s2.symbol=s.symbol AND s2.available_date<=?)""", (trade_date, trade_date, trade_date)).fetchall()
-    values = [(r[0], trade_date, trade_date, calculated_market_cap_cr(float(r[1]), float(r[2])), "CALCULATED_QUARTERLY_SHARES") for r in rows]
+    values = [(r[0], str(r[5]), str(r[5]), calculated_market_cap_cr(float(r[1]), float(r[2])), "CALCULATED_QUARTERLY_SHARES") for r in rows]
     conn.executemany("""INSERT INTO market_cap_snapshots_v3
       (symbol,as_of_date,available_date,market_cap_cr,source) VALUES (?,?,?,?,?)
       ON CONFLICT(symbol,as_of_date,source) DO UPDATE SET market_cap_cr=excluded.market_cap_cr""", values)

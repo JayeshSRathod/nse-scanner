@@ -90,6 +90,20 @@ class V2Database:
                     resolved INTEGER NOT NULL DEFAULT 0,
                     loaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY(symbol, event_date, event_type));
+                CREATE TABLE IF NOT EXISTS shareholding_patterns_v3 (
+                    symbol TEXT NOT NULL, as_of_date TEXT NOT NULL,
+                    available_date TEXT NOT NULL, shares_outstanding REAL NOT NULL,
+                    promoter_holding_pct REAL, public_holding_pct REAL,
+                    source TEXT NOT NULL, filing_id TEXT,
+                    loaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(symbol, as_of_date));
+                CREATE TABLE IF NOT EXISTS corporate_actions_v3 (
+                    symbol TEXT NOT NULL, ex_date TEXT NOT NULL,
+                    available_date TEXT NOT NULL, action_type TEXT NOT NULL,
+                    ratio_from REAL, ratio_to REAL, description TEXT,
+                    source TEXT NOT NULL, filing_id TEXT,
+                    loaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(symbol, ex_date, action_type));
             """)
 
     def load_fundamental_gates(self, trade_date: str, max_age_days: int = 120) -> dict[str, bool]:

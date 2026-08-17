@@ -8,6 +8,7 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   V2_GO_LIVE_DATE: '2026-08-04'
+  V3_ACTIVATION_DATE: '2026-08-19'
 
 permissions:
   contents: write
@@ -53,6 +54,7 @@ jobs:
           git add market_data telegram_last_scan.json scan_history.json scan_health.json
           git add corporate_data/normalized 2>/dev/null || true
           git add -f output/nse_corporate_health.json 2>/dev/null || true
+          git add -f output/v3_operational_readiness.json output/v3_bootstrap_result.json 2>/dev/null || true
           git add scan_lifecycle.json 2>/dev/null || true
           git add -f output/news_latest.json output/news_*.json 2>/dev/null || true
           git add portfolio.json 2>/dev/null || true

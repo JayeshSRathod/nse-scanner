@@ -108,3 +108,14 @@ can be reproduced and audited.
   each daily run then calculates market cap using that session's close.
 - `output/nse_corporate_health.json` reports freshness, reuse and missing
   dependencies without silently converting missing data into a pass.
+
+### 18-Aug-2026 local bootstrap and 19-Aug activation
+
+1. Populate the normalized CSV templates in `manual_import/`.
+2. Run `scripts\bootstrap_v3_18aug.ps1` from PowerShell to download official
+   index history, import the files, collect the current EQ master and audit.
+3. Inspect `output\v3_bootstrap_result.json`.
+4. Re-run `scripts\bootstrap_v3_18aug.ps1 -Upload` only after readiness passes.
+5. The production pipeline activates strict V3 from 19-Aug-2026 only when the
+   operational audit passes. Otherwise it automatically runs V2-compatible
+   eligibility and records the V3 blockers.

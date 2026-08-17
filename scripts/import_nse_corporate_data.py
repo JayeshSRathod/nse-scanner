@@ -14,6 +14,8 @@ SPECS = {
     "shares": ("shares_outstanding_v3", {"symbol", "as_of_date", "available_date", "shares_outstanding", "source"}),
     "pledge": ("promoter_pledge_v3", {"symbol", "as_of_date", "available_date", "pledge_pct", "event_type", "source"}),
     "governance": ("governance_events_v3", {"symbol", "event_date", "available_date", "event_type", "severity", "source"}),
+    "shareholding": ("shareholding_patterns_v3", {"symbol", "as_of_date", "available_date", "shares_outstanding", "promoter_holding_pct", "source"}),
+    "corporate-actions": ("corporate_actions_v3", {"symbol", "ex_date", "available_date", "action_type", "source"}),
 }
 
 
@@ -28,7 +30,7 @@ def import_rows(db_path: str, kind: str, csv_path: str) -> int:
     with sqlite3.connect(db_path) as conn:
         allowed = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         columns = [c for c in frame.columns if c in allowed and c != "loaded_at"]
-        conflict = {"market-cap": "symbol,as_of_date,source", "shares": "symbol,as_of_date,available_date", "pledge": "symbol,as_of_date,event_type", "governance": "symbol,event_date,event_type"}[kind]
+        conflict = {"market-cap": "symbol,as_of_date,source", "shares": "symbol,as_of_date,available_date", "pledge": "symbol,as_of_date,event_type", "governance": "symbol,event_date,event_type", "shareholding": "symbol,as_of_date", "corporate-actions": "symbol,ex_date,action_type"}[kind]
         updates = ",".join(f"{c}=excluded.{c}" for c in columns if c not in conflict.split(","))
         conn.executemany(
             f"INSERT INTO {table} ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)}) ON CONFLICT({conflict}) DO UPDATE SET {updates}",
@@ -40,6 +42,14 @@ def import_rows(db_path: str, kind: str, csv_path: str) -> int:
               market_cap_as_of=(SELECT m.as_of_date FROM market_cap_snapshots_v3 m WHERE m.symbol=symbol_master_v2.symbol ORDER BY m.available_date DESC LIMIT 1),
               market_cap_source=(SELECT m.source FROM market_cap_snapshots_v3 m WHERE m.symbol=symbol_master_v2.symbol ORDER BY m.available_date DESC LIMIT 1)
               WHERE EXISTS (SELECT 1 FROM market_cap_snapshots_v3 m WHERE m.symbol=symbol_master_v2.symbol)""")
+        if kind == "shareholding":
+            conn.execute("""INSERT INTO shares_outstanding_v3
+              (symbol,as_of_date,available_date,shares_outstanding,source,filing_id)
+              SELECT symbol,as_of_date,available_date,shares_outstanding,source,filing_id
+              FROM shareholding_patterns_v3 WHERE 1
+              ON CONFLICT(symbol,as_of_date,available_date) DO UPDATE SET
+              shares_outstanding=excluded.shares_outstanding,source=excluded.source,
+              filing_id=excluded.filing_id""")
     return len(frame)
 
 

@@ -13,6 +13,8 @@ TABLES = {
     "market_cap_snapshots_v3": "market_cap_snapshots.csv",
     "promoter_pledge_v3": "promoter_pledge.csv",
     "governance_events_v3": "governance_events.csv",
+    "shareholding_patterns_v3": "shareholding_patterns.csv",
+    "corporate_actions_v3": "corporate_actions.csv",
 }
 
 

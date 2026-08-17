@@ -84,6 +84,7 @@ def run_daily(
     send_admin_telegram: bool | None = None,
     portfolio_config: PortfolioConfig = PortfolioConfig(),
     diagnostics_output_dir: str | Path = "output",
+    strict_v3_eligibility: bool = True,
 ) -> DailyRunResult:
     run_date = pd.Timestamp(as_of or date.today()).date()
     database = V2Database(db_path)
@@ -124,6 +125,7 @@ def run_daily(
         eligibility = evaluate_eligibility(
             symbol, frame, metadata=metadata.get(symbol), restricted_reason=restricted.get(symbol),
             as_of_date=run_date.isoformat(),
+            require_market_cap=strict_v3_eligibility,
         )
         eligibility_results[symbol] = eligibility
         if not eligibility.eligible:
@@ -141,6 +143,7 @@ def run_daily(
         result.reason_code for result in eligibility_results.values() if not result.eligible
     )
     eligibility_funnel = {
+        "mode": "V3_STRICT" if strict_v3_eligibility else "V2_COMPATIBLE",
         "universe": len(eligibility_results),
         "eligible": sum(result.eligible for result in eligibility_results.values()),
         "rejected": sum(not result.eligible for result in eligibility_results.values()),
@@ -161,7 +164,7 @@ def run_daily(
     )
     diagnostics_json, diagnostics_text = save_scanner_diagnostics(diagnostics, output_dir=diagnostics_output_dir)
     funnel_lines = [
-        "V3 ELIGIBILITY FUNNEL",
+        f"ELIGIBILITY FUNNEL — {eligibility_funnel['mode']}",
         f"Universe: {eligibility_funnel['universe']}",
         f"Eligible: {eligibility_funnel['eligible']}",
         f"Rejected: {eligibility_funnel['rejected']}",

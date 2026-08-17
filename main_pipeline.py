@@ -64,6 +64,7 @@ MIN_SCAN_HISTORY_DAYS = int(os.environ.get("MIN_SCAN_HISTORY_DAYS", "400"))
 # then make later GitHub Actions runs incremental.
 BOOTSTRAP_HISTORY_DAYS = int(os.environ.get("BOOTSTRAP_HISTORY_DAYS", "420"))
 V2_GO_LIVE_DATE = date.fromisoformat(os.environ.get("V2_GO_LIVE_DATE", "2026-08-04"))
+V3_ACTIVATION_DATE = date.fromisoformat(os.environ.get("V3_ACTIVATION_DATE", "2026-08-19"))
 
 missing = []
 if not TOKEN:   missing.append("TELEGRAM_TOKEN")
@@ -347,16 +348,23 @@ def run_pipeline():
 
             restored_state = restore_state_file("nse_scanner.db", "v2_portfolio_state.json")
             print(f"[V2] Portfolio state restored: {'yes' if restored_state else 'first run'}")
+            strict_v3 = False
+            if date.today() >= V3_ACTIVATION_DATE:
+                from scripts.v3_operational_readiness import audit as audit_v3_operations
+                readiness = audit_v3_operations("nse_scanner.db", as_of=today.isoformat())
+                strict_v3 = readiness.status == "READY"
+                print(f"[V3] Activation gate: {readiness.status}; blockers={list(readiness.blockers)}")
             result = run_v2_daily("nse_scanner.db", as_of=today, top_n=10,
                                   minimum_score=70.0, send_telegram=True,
-                                  send_admin_telegram=False)
+                                  send_admin_telegram=False,
+                                  strict_v3_eligibility=strict_v3)
             export_state_file("nse_scanner.db", "v2_portfolio_state.json")
             Path("output").mkdir(exist_ok=True)
             Path("output/v2_daily_run.json").write_text(
                 json.dumps(result.to_dict(), indent=2, default=str), encoding="utf-8"
             )
             write_health(status="SUCCESS", scan_date=today.strftime("%Y-%m-%d"),
-                         scanner_version="V2", selected=result.selected,
+                         scanner_version="V3" if strict_v3 else "V2_COMPATIBLE", selected=result.selected,
                          portfolio_positions=result.portfolio_positions)
             print(f"[V2] {result.delivery.message_count} user Telegram message(s) sent and portfolio state saved.")
             return True
