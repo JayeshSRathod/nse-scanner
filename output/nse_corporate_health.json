@@ -1,5 +1,5 @@
 {
-  "run_at": "2026-08-18T18:17:24.997816+00:00",
+  "run_at": "2026-08-18T18:30:59.739252+00:00",
   "trade_date": "2026-08-17",
   "status": "READY",
   "datasets": [
@@ -7,7 +7,7 @@
       "dataset": "equity_master",
       "status": "FRESH",
       "rows": 2553,
-      "source": "corporate_data/raw/equity_master/20260818T181721Z_638908ce25f9.csv",
+      "source": "corporate_data/raw/equity_master/20260818T183056Z_638908ce25f9.csv",
       "error": ""
     },
     {
