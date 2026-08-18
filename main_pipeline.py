@@ -15,6 +15,7 @@ import sqlite3
 import requests
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from nse_market_store import export_all_price_snapshots, restore_prices
 
@@ -349,10 +350,11 @@ def run_pipeline():
             restored_state = restore_state_file("nse_scanner.db", "v2_portfolio_state.json")
             print(f"[V2] Portfolio state restored: {'yes' if restored_state else 'first run'}")
             strict_v3 = os.environ.get("V3_STRICT_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
-            # `today` is the IST scan date.  GitHub-hosted runners use UTC,
-            # so date.today() can still be the prior calendar day at the
-            # beginning of an NSE session.
-            if strict_v3 and today >= V3_ACTIVATION_DATE:
+            # `today` is the last completed NSE session, which can be older
+            # than the calendar date over a weekend or holiday. Activation is
+            # a calendar policy and must use IST rather than runner UTC.
+            ist_calendar_date = datetime.now(ZoneInfo("Asia/Kolkata")).date()
+            if strict_v3 and ist_calendar_date >= V3_ACTIVATION_DATE:
                 from scripts.v3_operational_readiness import audit as audit_v3_operations
                 readiness = audit_v3_operations("nse_scanner.db", as_of=today.isoformat())
                 strict_v3 = readiness.status == "READY"
