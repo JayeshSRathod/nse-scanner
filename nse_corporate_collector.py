@@ -171,6 +171,16 @@ def run_collection(db_path: str, trade_date: str, market_cap_url: str | None = N
             health.append(DatasetHealth("market_cap", "REUSED_LAST_VALID", error=str(exc)))
     else:
         health.append(DatasetHealth("market_cap", "NOT_CONFIGURED", error="NSE_MARKET_CAP_URL is not set"))
+    # Incremental shareholding collection has its own Git-backed filing history.
+    # A listing failure intentionally leaves the restored normalized snapshot intact.
+    try:
+        from nse_shareholding_collector import collect as collect_shareholding
+        shareholding = collect_shareholding(db_path=db_path, as_of=date.fromisoformat(trade_date), days=int(os.getenv("NSE_SHAREHOLDING_WINDOW_DAYS", "7")),
+                                            csv_fallback=Path(os.getenv("NSE_SHAREHOLDING_CSV_FALLBACK", "manual_import/raw/nse_shareholding_20260401_20260817.csv")))
+        health.append(DatasetHealth("shareholding", shareholding.status, shareholding.normalized,
+                                    error=shareholding.error or (f"rejected={shareholding.rejected}" if shareholding.rejected else "")))
+    except Exception as exc:
+        health.append(DatasetHealth("shareholding", "REUSED_LAST_VALID", error=str(exc)))
     with sqlite3.connect(db_path) as conn:
         calculated = calculate_caps_from_shares(conn, trade_date)
         restricted = ingest_surveillance(conn, trade_date)

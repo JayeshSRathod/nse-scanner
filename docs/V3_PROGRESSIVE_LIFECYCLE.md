@@ -109,6 +109,26 @@ can be reproduced and audited.
 - `output/nse_corporate_health.json` reports freshness, reuse and missing
   dependencies without silently converting missing data into a pass.
 
+### Incremental shareholding operation
+
+Step 2.6 queries NSE's official shareholding listing for the previous seven
+calendar days by default (`NSE_SHAREHOLDING_WINDOW_DAYS` overrides this).  It
+stores a versioned normalized filing history, so GitHub Actions downloads only
+unseen filing IDs/source URLs (including new revision links), while raw XBRL
+remains ignored.  A failed NSE request retains the last valid normalized data
+and reports `REUSED_LAST_VALID`; routine outcomes are `FRESH`,
+`NO_NEW_FILINGS`, `REUSED_LAST_VALID`, or `DEGRADED`.
+
+The local bootstrap/fallback command is:
+
+```powershell
+python -m scripts.collect_nse_shareholding_xbrl --csv manual_import/raw/nse_shareholding_20260401_20260817.csv --as-of 2026-08-17 --limit 20
+```
+
+Use `--db nse_scanner.db` after inspecting the smoke report to import the
+validated snapshot.  The CSV is a fallback only; normal Actions runs do not
+require a manual download.
+
 ### 18-Aug-2026 local bootstrap and 19-Aug activation
 
 1. Populate the normalized CSV templates in `manual_import/`.
