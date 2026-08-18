@@ -23,7 +23,7 @@ import requests
 from nse_historical_downloader import HEADERS
 
 
-LISTING_URL = "https://www.nseindia.com/api/corporate-shareholding?index=equities&from_date={from_date}&to_date={to_date}"
+LISTING_URL = "https://www.nseindia.com/api/corporate-share-holdings-master?index=equities&from_date={from_date}&to_date={to_date}"
 RAW_ROOT = Path("corporate_data/raw/shareholding")
 NORMALIZED_PATH = Path("corporate_data/normalized/shareholding_patterns.csv")
 HISTORY_PATH = Path("corporate_data/normalized/shareholding_filing_history.csv")
@@ -137,7 +137,27 @@ def fetch_listing(start: date, end: date, session: requests.Session | None = Non
     rows = payload.get("data", payload) if isinstance(payload, dict) else payload
     if not isinstance(rows, list):
         raise ValueError("unexpected NSE shareholding listing schema")
-    return [dict(row) for row in rows if isinstance(row, dict) and row.get("ACTION")]
+    return [_normalize_listing_row(row) for row in rows if isinstance(row, dict) and (row.get("ACTION") or row.get("xbrl"))]
+
+
+def _normalize_listing_row(row: dict) -> dict:
+    """Map NSE's current API schema to the archived CSV contract."""
+    if "ACTION" in row:
+        return dict(row)
+    return {
+        "COMPANY": row.get("name", ""),
+        "PROMOTER & PROMOTER GROUP (A)": row.get("pr_and_prgrp", ""),
+        "PUBLIC (B)": row.get("public_val", ""),
+        "SHARES HELD BY EMPLOYEE TRUSTS (C2)": row.get("employeeTrusts", ""),
+        "STATUS": row.get("revisedStatus") or row.get("desc", ""),
+        "AS ON DATE": row.get("date", ""),
+        "SUBMISSION DATE": row.get("submissionDate", ""),
+        "REVISION DATE": row.get("revisionDate") or row.get("revisedDate", ""),
+        "ACTION": row.get("xbrl", ""),
+        "BROADCAST DATE/TIME": row.get("broadcastDate", ""),
+        # NSE's list response calls its exchange-time field systemDate.
+        "EXCHANGE DISSEMINATION TIME": row.get("systemDate", "") or row.get("cgTimeStamp", ""),
+    }
 
 
 def _fact_values(root: ET.Element, contexts: dict[str, str], terms: tuple[str, ...], context_hint: str) -> list[float]:
@@ -207,14 +227,15 @@ def parse_xbrl(content: bytes, listing: dict) -> dict:
 
 def collect(*, db_path: str | None = None, as_of: date | None = None, days: int = 7,
             csv_fallback: Path | None = None, limit: int | None = None,
-            session: requests.Session | None = None, output_path: Path | None = None) -> CollectionResult:
+            session: requests.Session | None = None, output_path: Path | None = None,
+            start_date: date | None = None) -> CollectionResult:
     as_of = as_of or date.today()
     output_path = output_path or NORMALIZED_PATH
     history = _read_csv(HISTORY_PATH) if HISTORY_PATH.exists() else []
     known = {(row["filing_id"], row["source_url"], row.get("listing_signature", "")) for row in history if row.get("status") == "VALID"}
     fallback_used = False
     try:
-        listing = fetch_listing(as_of - timedelta(days=days), as_of, session)
+        listing = fetch_listing(start_date or as_of - timedelta(days=days), as_of, session)
     except Exception as exc:
         if not csv_fallback or not csv_fallback.exists():
             return CollectionResult("REUSED_LAST_VALID" if output_path.exists() else "DEGRADED", error=str(exc))

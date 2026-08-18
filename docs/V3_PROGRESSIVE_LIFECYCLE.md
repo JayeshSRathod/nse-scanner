@@ -138,6 +138,13 @@ Use `--db nse_scanner.db` after inspecting the smoke report to import the
 validated snapshot.  The CSV is a fallback only; normal Actions runs do not
 require a manual download.
 
+For a local historical backfill, use bounded, resumable listing windows (the
+history manifest prevents overlap redownloads):
+
+```powershell
+python -m scripts.collect_nse_shareholding_xbrl --from-date 2025-01-01 --as-of 2026-08-17 --batch-days 31
+```
+
 ### 18-Aug-2026 local bootstrap and 19-Aug activation
 
 1. Populate the normalized CSV templates in `manual_import/`.

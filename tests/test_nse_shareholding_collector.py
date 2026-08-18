@@ -26,6 +26,14 @@ def test_parse_fraction_and_percent_scale():
     assert parsed["promoter_holding_pct"] == 37.23
 
 
+def test_current_nse_api_schema_is_normalized_to_listing_contract():
+    row = collector._normalize_listing_row({"name": "Krishival", "pr_and_prgrp": "37.23", "public_val": "62.77",
+        "date": "05-AUG-2026", "submissionDate": "14-AUG-2026", "broadcastDate": "14-AUG-2026 10:33:07",
+        "systemDate": "14-AUG-2026 10:33:12", "xbrl": "https://nsearchives.nseindia.com/corporate/xbrl/SHP_1_WEB.xml"})
+    assert row["ACTION"].endswith("SHP_1_WEB.xml")
+    assert row["EXCHANGE DISSEMINATION TIME"] == "14-AUG-2026 10:33:12"
+
+
 def test_parse_public_fallback_and_inconsistent_context_rejected():
     parsed = collector.parse_xbrl(_xml("0", "62.77", "0", "16086186"), _listing("https://nsearchives.nseindia.com/corporate/xbrl/SHP_2_WEB.xml", "0", "62.77"))
     assert parsed["shares_outstanding"] == 25627188
