@@ -37,8 +37,12 @@ def evaluate_eligibility(
     min_delivery_20: float = 30.0,
     min_market_cap_cr: float = 1_000.0,
     require_market_cap: bool = True,
+    min_promoter_holding_pct: float = 30.0,
+    require_promoter_holding: bool = False,
+    require_corporate_action_safety: bool = False,
     as_of_date: str | None = None,
     max_market_cap_age_days: int | None = None,
+    max_promoter_holding_age_days: int = 120,
 ) -> EligibilityResult:
     ordered = frame.sort_values("trade_date").copy()
     metadata = metadata or {}
@@ -108,6 +112,28 @@ def evaluate_eligibility(
         if age < 0 or age > allowed_age:
             return reject("SIZE", "STALE_MARKET_CAP", age, allowed_age)
 
+    promoter_holding = metadata.get("promoter_holding_pct")
+    promoter_available_date = metadata.get("promoter_holding_available_date")
+    if require_promoter_holding:
+        if promoter_holding is None or pd.isna(promoter_holding):
+            return reject("OWNERSHIP", "PROMOTER_HOLDING_DATA_MISSING", None, min_promoter_holding_pct)
+        if promoter_available_date is None or pd.isna(promoter_available_date):
+            return reject("OWNERSHIP", "PROMOTER_HOLDING_DATE_MISSING", None, max_promoter_holding_age_days)
+        if as_of_date:
+            promoter_age = (
+                pd.Timestamp(as_of_date).normalize()
+                - pd.Timestamp(promoter_available_date).normalize()
+            ).days
+            if promoter_age < 0 or promoter_age > max_promoter_holding_age_days:
+                return reject("OWNERSHIP", "STALE_PROMOTER_HOLDING", promoter_age, max_promoter_holding_age_days)
+        if float(promoter_holding) < min_promoter_holding_pct:
+            return reject("OWNERSHIP", "LOW_PROMOTER_HOLDING", float(promoter_holding), min_promoter_holding_pct)
+
+    pending_action = metadata.get("corporate_action_type")
+    if require_corporate_action_safety and pending_action:
+        return reject("CORPORATE_ACTION", "MATERIAL_CORPORATE_ACTION_REVIEW", str(pending_action),
+                      "NO_MATERIAL_ACTION_IN_SAFETY_WINDOW")
+
     return EligibilityResult(symbol, True, "ELIGIBLE", "COMPLETE", metrics={
         "close": close,
         "median_volume_20": median_volume,
@@ -117,4 +143,10 @@ def evaluate_eligibility(
         "market_cap_verified": market_cap is not None and pd.notna(market_cap),
         "market_cap_as_of": str(cap_date) if cap_date is not None else "",
         "market_cap_source": cap_source,
+        "promoter_holding_pct": float(promoter_holding) if promoter_holding is not None and pd.notna(promoter_holding) else "",
+        "promoter_holding_as_of": str(metadata.get("promoter_holding_as_of") or ""),
+        "promoter_holding_available_date": str(promoter_available_date or ""),
+        "promoter_holding_filing_id": str(metadata.get("promoter_holding_filing_id") or ""),
+        "corporate_action_type": str(pending_action or ""),
+        "corporate_action_ex_date": str(metadata.get("corporate_action_ex_date") or ""),
     })

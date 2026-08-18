@@ -114,7 +114,7 @@ def run_daily(
     benchmark_close = benchmark["close"].reset_index(drop=True)
     store = PortfolioStore(db_path)
     store.initialize()
-    master = database.load_symbol_master()
+    master = database.load_symbol_master(run_date.isoformat())
     metadata = {str(row["symbol"]): row.to_dict() for _, row in master.iterrows()} if not master.empty else {}
     restricted = database.load_restricted_symbols(run_date.isoformat())
     fundamental_gates = database.load_fundamental_gates(run_date.isoformat())
@@ -126,6 +126,8 @@ def run_daily(
             symbol, frame, metadata=metadata.get(symbol), restricted_reason=restricted.get(symbol),
             as_of_date=run_date.isoformat(),
             require_market_cap=strict_v3_eligibility,
+            require_promoter_holding=strict_v3_eligibility,
+            require_corporate_action_safety=strict_v3_eligibility,
         )
         eligibility_results[symbol] = eligibility
         if not eligibility.eligible:

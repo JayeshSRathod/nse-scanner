@@ -9,6 +9,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   V2_GO_LIVE_DATE: '2026-08-04'
   V3_ACTIVATION_DATE: '2026-08-19'
+  V3_STRICT_ENABLED: 'false'
 
 permissions:
   contents: write
@@ -42,7 +43,7 @@ jobs:
           TELEGRAM_PORTFOLIO_TOPIC_ID: ${{ secrets.TELEGRAM_PORTFOLIO_TOPIC_ID }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}
-          GITHUB_BRANCH: agent/v3-progressive-lifecycle
+          GITHUB_BRANCH: ${{ github.ref_name }}
           NSE_MARKET_CAP_URL: ${{ vars.NSE_MARKET_CAP_URL }}
         run: python main_pipeline.py
 
@@ -54,7 +55,7 @@ jobs:
           git add market_data telegram_last_scan.json scan_history.json scan_health.json
           git add corporate_data/normalized 2>/dev/null || true
           git add -f output/nse_corporate_health.json 2>/dev/null || true
-          git add -f output/v3_operational_readiness.json output/v3_bootstrap_result.json 2>/dev/null || true
+          git add -f output/v3_operational_readiness.json output/v3_bootstrap_result.json output/v2_v3_eligibility_comparison.json 2>/dev/null || true
           git add scan_lifecycle.json 2>/dev/null || true
           git add -f output/news_latest.json output/news_*.json 2>/dev/null || true
           git add portfolio.json 2>/dev/null || true

@@ -1,0 +1,16 @@
+{
+  "status": "READY",
+  "price_sessions": 436,
+  "index_sessions": 407,
+  "eq_symbols": 2295,
+  "market_cap_symbols": 2036,
+  "market_cap_coverage_pct": 88.71,
+  "promoter_coverage_pct": 88.37,
+  "shareholding_fresh": true,
+  "corporate_actions_fresh": true,
+  "fundamental_symbols": 0,
+  "blockers": [],
+  "warnings": [
+    "fundamentals_below_50_percent_6m_12m_promotion_limited"
+  ]
+}

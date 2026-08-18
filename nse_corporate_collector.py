@@ -210,10 +210,23 @@ def run_collection(db_path: str, trade_date: str, market_cap_url: str | None = N
                                     error=shareholding.error or (f"rejected={shareholding.rejected}" if shareholding.rejected else "")))
     except Exception as exc:
         health.append(DatasetHealth("shareholding", "REUSED_LAST_VALID", error=str(exc)))
+    try:
+        from nse_corporate_actions_collector import collect as collect_actions
+        actions = collect_actions(db_path, date.fromisoformat(trade_date),
+                                  days=int(os.getenv("NSE_CORPORATE_ACTION_WINDOW_DAYS", "7")))
+        health.append(DatasetHealth("corporate_actions", actions.status, actions.normalized, error=actions.error))
+    except Exception as exc:
+        health.append(DatasetHealth("corporate_actions", "REUSED_LAST_VALID", error=str(exc)))
     with sqlite3.connect(db_path) as conn:
         calculated = calculate_caps_from_shares(conn, trade_date)
         restricted = ingest_surveillance(conn, trade_date)
         current = refresh_current_market_cap(conn, trade_date)
+        conn.executemany("""INSERT INTO corporate_dataset_health_v3
+          (dataset,as_of_date,status,row_count,detail) VALUES (?,?,?,?,?)
+          ON CONFLICT(dataset,as_of_date) DO UPDATE SET status=excluded.status,
+          row_count=excluded.row_count,detail=excluded.detail,checked_at=CURRENT_TIMESTAMP""", [
+            (item.dataset, trade_date, item.status, item.rows, item.error) for item in health
+        ])
     health.extend([DatasetHealth("calculated_market_cap", "FRESH" if calculated else "NO_SHARES_AVAILABLE", calculated),
                    DatasetHealth("surveillance", "FRESH" if restricted else "NO_FILE", restricted),
                    DatasetHealth("current_market_cap", "FRESH" if current else "NO_VALID_SNAPSHOT", current)])

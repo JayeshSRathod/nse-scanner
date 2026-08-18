@@ -51,4 +51,18 @@ def restore_snapshots(db_path: str) -> dict[str, int]:
                 [tuple(row[column] for column in usable) for _, row in frame.iterrows()],
             )
             counts[table] = len(frame)
+        # Shares-outstanding is mechanically derived from the normalized
+        # shareholding snapshot.  Recreate it on every disposable runner so
+        # calculated market-cap coverage does not depend on a second CSV.
+        if counts.get("shareholding_patterns_v3"):
+            conn.execute("""INSERT INTO shares_outstanding_v3
+                (symbol,as_of_date,available_date,shares_outstanding,source,filing_id)
+                SELECT symbol,as_of_date,available_date,shares_outstanding,source,filing_id
+                FROM shareholding_patterns_v3 WHERE 1
+                ON CONFLICT(symbol,as_of_date,available_date) DO UPDATE SET
+                  shares_outstanding=excluded.shares_outstanding,
+                  source=excluded.source,filing_id=excluded.filing_id""")
+            counts["shares_outstanding_v3"] = conn.execute(
+                "SELECT COUNT(*) FROM shares_outstanding_v3"
+            ).fetchone()[0]
     return counts

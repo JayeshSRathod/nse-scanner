@@ -104,6 +104,11 @@ class V2Database:
                     source TEXT NOT NULL, filing_id TEXT,
                     loaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY(symbol, ex_date, action_type));
+                CREATE TABLE IF NOT EXISTS corporate_dataset_health_v3 (
+                    dataset TEXT NOT NULL, as_of_date TEXT NOT NULL,
+                    status TEXT NOT NULL, row_count INTEGER NOT NULL DEFAULT 0,
+                    detail TEXT, checked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(dataset, as_of_date));
             """)
 
     def load_fundamental_gates(self, trade_date: str, max_age_days: int = 120) -> dict[str, bool]:
@@ -161,15 +166,53 @@ class V2Database:
             frame = frame[frame["symbol"].isin(counts[counts >= min_sessions].index)]
         return frame
 
-    def load_symbol_master(self) -> pd.DataFrame:
-        """Return V2 symbol metadata used by the universe eligibility gate."""
+    def load_symbol_master(self, as_of_date: str | None = None) -> pd.DataFrame:
+        """Return V2 metadata plus the latest point-in-time NSE ownership record."""
         with self.connect() as conn:
             names = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             if "symbol_master_v2" not in names:
                 return pd.DataFrame(columns=["symbol", "series", "active", "market_cap_cr", "market_cap_as_of", "market_cap_source"])
             available = {row[1] for row in conn.execute("PRAGMA table_info(symbol_master_v2)")}
             columns = [column for column in ("symbol", "series", "active", "market_cap_cr", "market_cap_as_of", "market_cap_source") if column in available]
-            return pd.read_sql_query(f"SELECT {', '.join(columns)} FROM symbol_master_v2", conn)
+            if "shareholding_patterns_v3" not in names:
+                return pd.read_sql_query(f"SELECT {', '.join(columns)} FROM symbol_master_v2", conn)
+            cutoff = as_of_date or "9999-12-31"
+            return pd.read_sql_query(f"""
+                SELECT m.{', m.'.join(columns)},
+                       s.promoter_holding_pct,
+                       s.as_of_date AS promoter_holding_as_of,
+                       s.available_date AS promoter_holding_available_date,
+                       s.source AS promoter_holding_source,
+                       s.filing_id AS promoter_holding_filing_id,
+                       a.action_type AS corporate_action_type,
+                       a.ex_date AS corporate_action_ex_date,
+                       a.available_date AS corporate_action_available_date,
+                       a.filing_id AS corporate_action_filing_id
+                FROM symbol_master_v2 m
+                LEFT JOIN shareholding_patterns_v3 s ON s.rowid = (
+                    SELECT candidate.rowid FROM shareholding_patterns_v3 candidate
+                    WHERE candidate.symbol=m.symbol AND candidate.available_date<=?
+                    ORDER BY candidate.available_date DESC, candidate.as_of_date DESC,
+                             candidate.filing_id DESC
+                    LIMIT 1
+                )
+                LEFT JOIN corporate_actions_v3 a ON a.rowid = (
+                    SELECT candidate.rowid FROM corporate_actions_v3 candidate
+                    WHERE candidate.symbol=m.symbol AND candidate.available_date<=?
+                      AND candidate.ex_date BETWEEN date(?, '-5 days') AND date(?, '+14 days')
+                      AND (upper(candidate.action_type) LIKE '%BONUS%'
+                           OR upper(candidate.action_type) LIKE '%SPLIT%'
+                           OR upper(candidate.action_type) LIKE '%RIGHT%'
+                           OR upper(candidate.action_type) LIKE '%MERGER%'
+                           OR upper(candidate.action_type) LIKE '%AMALGAMATION%'
+                           OR upper(candidate.action_type) LIKE '%DEMERGER%'
+                           OR upper(candidate.action_type) LIKE '%BUYBACK%'
+                           OR upper(candidate.action_type) LIKE '%DELIST%'
+                           OR upper(candidate.action_type) LIKE '%REDUCTION%')
+                    ORDER BY candidate.ex_date ASC, candidate.available_date DESC
+                    LIMIT 1
+                )
+            """, conn, params=[cutoff, cutoff, cutoff, cutoff])
 
     def load_restricted_symbols(self, trade_date: str) -> dict[str, str]:
         """Load dated regulatory exclusions when a compatible table is available."""

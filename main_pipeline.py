@@ -348,20 +348,32 @@ def run_pipeline():
 
             restored_state = restore_state_file("nse_scanner.db", "v2_portfolio_state.json")
             print(f"[V2] Portfolio state restored: {'yes' if restored_state else 'first run'}")
-            strict_v3 = False
-            if date.today() >= V3_ACTIVATION_DATE:
+            strict_v3 = os.environ.get("V3_STRICT_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+            if strict_v3 and date.today() >= V3_ACTIVATION_DATE:
                 from scripts.v3_operational_readiness import audit as audit_v3_operations
                 readiness = audit_v3_operations("nse_scanner.db", as_of=today.isoformat())
                 strict_v3 = readiness.status == "READY"
                 print(f"[V3] Activation gate: {readiness.status}; blockers={list(readiness.blockers)}")
+            elif strict_v3:
+                strict_v3 = False
+                print(f"[V3] Strict mode requested but activation date is {V3_ACTIVATION_DATE.isoformat()}; using V2-compatible mode.")
+            else:
+                print("[V3] Strict mode disabled (set V3_STRICT_ENABLED=true after readiness is READY); using V2-compatible mode.")
             result = run_v2_daily("nse_scanner.db", as_of=today, top_n=10,
                                   minimum_score=70.0, send_telegram=True,
                                   send_admin_telegram=False,
                                   strict_v3_eligibility=strict_v3)
+            # Diagnostic only: this evaluates both policies without changing the
+            # scanner universe, database, or portfolio state.
+            from scripts.compare_v2_v3_eligibility import compare as compare_v2_v3
+            comparison = compare_v2_v3("nse_scanner.db", today.isoformat())
             export_state_file("nse_scanner.db", "v2_portfolio_state.json")
             Path("output").mkdir(exist_ok=True)
             Path("output/v2_daily_run.json").write_text(
                 json.dumps(result.to_dict(), indent=2, default=str), encoding="utf-8"
+            )
+            Path("output/v2_v3_eligibility_comparison.json").write_text(
+                json.dumps(comparison, indent=2, default=str), encoding="utf-8"
             )
             write_health(status="SUCCESS", scan_date=today.strftime("%Y-%m-%d"),
                          scanner_version="V3" if strict_v3 else "V2_COMPATIBLE", selected=result.selected,

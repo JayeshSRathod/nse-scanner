@@ -40,6 +40,40 @@ def test_missing_delivery_fails_closed():
     assert result.reason_code == "DELIVERY_DATA_MISSING"
 
 
+def test_strict_v3_requires_current_promoter_holding():
+    result = evaluate_eligibility(
+        "ABC", _history(), as_of_date="2026-02-28", require_promoter_holding=True,
+        metadata={"series": "EQ", "active": 1, "market_cap_cr": 5000,
+                  "market_cap_as_of": "2026-02-15"},
+    )
+    assert not result.eligible
+    assert result.stage == "OWNERSHIP"
+    assert result.reason_code == "PROMOTER_HOLDING_DATA_MISSING"
+
+
+def test_strict_v3_rejects_low_or_stale_promoter_holding():
+    metadata = {"series": "EQ", "active": 1, "market_cap_cr": 5000,
+                "market_cap_as_of": "2026-02-15", "promoter_holding_pct": 29.9,
+                "promoter_holding_available_date": "2026-02-15"}
+    low = evaluate_eligibility("ABC", _history(), as_of_date="2026-02-28",
+                               require_promoter_holding=True, metadata=metadata)
+    assert low.reason_code == "LOW_PROMOTER_HOLDING"
+    metadata["promoter_holding_pct"] = 40.0
+    metadata["promoter_holding_available_date"] = "2025-10-01"
+    stale = evaluate_eligibility("ABC", _history(), as_of_date="2026-02-28",
+                                 require_promoter_holding=True, metadata=metadata)
+    assert stale.reason_code == "STALE_PROMOTER_HOLDING"
+
+
+def test_strict_v3_requires_review_for_material_corporate_action():
+    result = evaluate_eligibility(
+        "ABC", _history(), as_of_date="2026-02-28", require_corporate_action_safety=True,
+        metadata={"series": "EQ", "active": 1, "market_cap_cr": 5000,
+                  "market_cap_as_of": "2026-02-15", "corporate_action_type": "Bonus issue 1:1"},
+    )
+    assert result.reason_code == "MATERIAL_CORPORATE_ACTION_REVIEW"
+
+
 def test_weekly_discovery_then_fresh_entry():
     discovery = weekly_discovery({
         "weekly_bullish": True, "weekly_rising": True, "daily_bullish": True, "rs63": 0.08,
