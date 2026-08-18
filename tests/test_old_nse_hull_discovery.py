@@ -1,5 +1,7 @@
 import pandas as pd
+from unittest.mock import Mock, patch
 
+from old_nse_hull.delivery import send_radar
 from old_nse_hull.discovery import discover
 from old_nse_hull.engine import render_radar
 
@@ -22,3 +24,15 @@ def test_paper_radar_identifies_the_active_python_hull_rules():
     assert "PYTHON EOD ACTIVE" in text
     assert "live-trading instruction" in text
     assert "Hull READY: 0" in text
+
+
+def test_old_hull_delivery_uses_its_own_optional_topic(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_TOKEN", "token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "group-123")
+    monkeypatch.setenv("TELEGRAM_OLD_HULL_DAILY_TOPIC_ID", "88")
+    response = Mock()
+    response.raise_for_status.return_value = None
+    with patch("old_nse_hull.delivery.requests.post", return_value=response) as post:
+        result = send_radar("<b>PAPER SYSTEM</b>")
+    assert result.sent
+    assert post.call_args.kwargs["json"]["message_thread_id"] == 88
