@@ -258,7 +258,7 @@ def run_daily(
 
     candidate_messages = render_candidate_messages(
         selected, watches, regime, run_date.isoformat(), freshness=freshness,
-        evaluated=len(candidates), tradable=len(candidates), quality_qualified=quality_qualified,
+        evaluated=int(prices["symbol"].nunique()), tradable=len(candidates), quality_qualified=quality_qualified,
         benchmark_source=benchmark_source, allocations=allocations,
     )
     candidate_message = "\n\n".join(candidate_messages)

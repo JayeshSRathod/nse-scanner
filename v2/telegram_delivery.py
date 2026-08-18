@@ -185,11 +185,7 @@ def _send_one(plain_endpoint: str, rich_endpoint: str, *, chat_id: str, message:
             return True, "sent_plain_text_fallback"
         reason = f"{reason}; plain_fallback={fallback_reason}"
     if message_thread_id is not None and "HTTP 400" in reason:
-        retry_payload = _plain_payload(chat_id, message, None, keyboard)
-        ok, retry_reason = _post_message(plain_endpoint, retry_payload, timeout=timeout)
-        if ok:
-            return True, "sent_plain_general_topic_fallback"
-        reason = f"{reason}; topic_fallback={retry_reason}"
+        return False, f"topic_delivery_failed: {reason}"
     if keyboard and ("HTTP 400" in reason or "HTTP 403" in reason):
         retry_payload = _plain_payload(chat_id, message, None, None)
         ok, retry_reason = _post_message(plain_endpoint, retry_payload, timeout=timeout)
