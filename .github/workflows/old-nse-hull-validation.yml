@@ -22,6 +22,8 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install -r requirements.txt
+      - name: Initialise disposable database schema
+        run: python -c "import config; from nse_loader import init_database; init_database(config.DB_PATH)"
       - name: Restore shared market snapshots
         run: python -c "import config; from nse_market_store import restore_prices; print(restore_prices(config.DB_PATH, min_days=1))"
       - name: Generate Old NSE plus Hull PAPER dry run
