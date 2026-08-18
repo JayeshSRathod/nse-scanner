@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from .portfolio_performance import PortfolioSnapshot
 from .lifecycle import Position, TradeState
+from .v3_telegram import currency, percent, text, ticker
 
 
 def render_portfolio_summary(
@@ -31,10 +32,10 @@ def render_portfolio_summary(
         pnl = row.realised_pnl + row.remaining_quantity * ((row.last_price or row.entry) - row.entry)
         horizon_pnl[row.progression_stage] = horizon_pnl.get(row.progression_stage, 0.0) + pnl
     lines = [
-        "💰 KJ PORTFOLIO P&L",
-        f"Trade Date: {snapshot.portfolio_date}",
+        "💼 <b>NSE V3 — DAILY PORTFOLIO SUMMARY</b>",
+        f"<b>Data:</b> {text(snapshot.portfolio_date)} EOD",
         "",
-        f"Capital Base: ₹{snapshot.capital_base:,.2f}",
+        f"Capital Base: {currency(snapshot.capital_base)}",
         f"Committed Capital: ₹{snapshot.committed_capital:,.2f}",
         f"Current Market Value: ₹{snapshot.market_value:,.2f}",
         f"Realised P&L: ₹{snapshot.realised_pnl:,.2f}",
@@ -49,7 +50,7 @@ def render_portfolio_summary(
         f"Open Risk to Stops: ₹{snapshot.open_risk_to_stops:,.2f}",
         f"Total / Average R: {sum(r_values):+.2f}R / {(sum(r_values) / len(r_values) if r_values else 0):+.2f}R",
         f"Winners / Losers / Flat: {winners} / {losers} / {flat}",
-        f"Best: {best[0]} {best[1]:+.2f}% | Worst: {worst[0]} {worst[1]:+.2f}%",
+        f"Best: {ticker(best[0])} {percent(best[1])} | Worst: {ticker(worst[0])} {percent(worst[1])}",
     ]
     if horizon_pnl:
         lines.extend(["", "Horizon P&L"])

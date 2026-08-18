@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from .candidates import Candidate
 from .freshness import FreshnessStatus
 from .portfolio_risk import Allocation
+from .v3_telegram import currency, paginate_cards, text, ticker
 
 
 HORIZON_LABELS = {"1M": "1 month", "3M": "3 months", "6M": "6 months", "12M": "12 months"}
@@ -25,7 +26,7 @@ TIMING_ICON = {"EARLY": "🟠", "READY": "🟢", "HOLD_TREND": "🔵", "PULLBACK
 
 
 def _price(value: float) -> str:
-    return f"₹{value:,.2f}"
+    return currency(value)
 
 
 def _status(freshness: FreshnessStatus | None) -> str:
@@ -80,8 +81,8 @@ def _action_card(candidate: Candidate, rank: int, allocations: dict[tuple[str, s
     route = candidate.entry_route or "FRESH ENTRY"
     htf = candidate.htf_state or "NEUTRAL"
     lines = [
-        "━━━━━━━━━━━━━━━━━━", f"{_rank_badge(rank)} {candidate.symbol}",
-        f"{candidate.primary_horizon} • {trigger}", f"Score: {candidate.score:.0f}/100", "",
+        "━━━━━━━━━━━━━━━━━━", f"🆕 {ticker(candidate.symbol)} — <b>NEW {text(candidate.primary_horizon)}</b>",
+        f"<b>Score:</b> {candidate.score:.0f}/100  |  <b>Confidence:</b> {'HIGH' if candidate.score >= 85 else 'MEDIUM'}", "",
         f"{TIMING_ICON.get(timing, '⚪')} Timing      {timing.replace('_', ' ')}",
         f"Entry Horizon  {execution_horizon}", f"Quality Horizon {quality_horizon}",
         f"Entry Route    {route}", f"Weekly HTF     {htf}", "",
@@ -94,7 +95,7 @@ def _action_card(candidate: Candidate, rank: int, allocations: dict[tuple[str, s
     reasons = _reason_lines(candidate)
     if reasons:
         lines.append("")
-        lines.extend(f"✓ {reason}" for reason in reasons)
+        lines.extend(f"• {text(reason)}" for reason in reasons)
     return "\n".join(lines)
 
 
@@ -102,7 +103,8 @@ def _action_messages(action_rows: list[Candidate], allocations: dict[tuple[str, 
     if not action_rows:
         return []
     cards = [_action_card(candidate, rank, allocations) for rank, candidate in enumerate(action_rows, 1)]
-    return _chunk_cards(cards, f"🚀 ACTION CANDIDATES\n{len(action_rows)} Fresh Actionable Stocks")
+    return paginate_cards("📊 <b>NSE V3 — FRESH OPPORTUNITIES</b>", cards,
+                          "⚠️ Screening output—not an automatic buy order.")
 
 
 def _watch_reason(candidate: Candidate) -> str:
@@ -184,7 +186,7 @@ def render_candidate_messages(
     timing_counts = Counter(_timing(row) for row in all_rows)
     benchmark = "Official NIFTY index history" if benchmark_source == "OFFICIAL_INDEX_HISTORY" else "Equal-weight NSE universe (official index history unavailable)"
     summary = [
-        "📊 V2 DAILY OPPORTUNITY MAP", f"Trade Date: {trade_date}", f"Market Regime: {regime.upper()}",
+        "📊 <b>NSE V3 — FRESH OPPORTUNITIES</b>", f"<b>Data:</b> {text(trade_date)} EOD", f"<b>Market regime:</b> {text(regime.upper())}",
         f"Data Status: {_status(freshness)}", f"Benchmark: {benchmark}", "", "Scanner Funnel",
         f"Universe Loaded: {evaluated if evaluated is not None else '-'}",
         f"Tradable/Evaluated: {tradable if tradable is not None else (evaluated if evaluated is not None else '-')}",
@@ -196,12 +198,12 @@ def render_candidate_messages(
         f"⚫ WEAK: {timing_counts.get('WEAK', 0)}",
     ]
     if not action_rows:
-        summary.extend(["", "No new candidates met the qualified-quality, actionable-trigger and READY trade-plan criteria today."])
+        summary.extend(["", "No new candidates qualified today.", "", "<b>Reason</b>", "• No candidate crossed the qualification threshold", "• Existing leaders remain under lifecycle monitoring"])
     messages = ["\n".join(summary)]
     messages.extend(_action_messages(action_rows, allocations))
     if watch_rows:
         cards = [_watch_card(candidate, rank) for rank, candidate in enumerate(watch_rows, 1)]
-        messages.extend(_chunk_cards(cards, "🟡 V2 WATCHLIST — EARLY / RE-ENTRY / EXTENDED OPPORTUNITIES"))
+        messages.extend(paginate_cards("🟡 <b>NSE V3 — WATCHLIST</b>", cards))
     return messages
 
 

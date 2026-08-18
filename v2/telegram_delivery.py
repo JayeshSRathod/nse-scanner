@@ -3,10 +3,18 @@ from __future__ import annotations
 
 import os
 import re
+import json
+import time
 from dataclasses import dataclass
+from html import unescape
+from pathlib import Path
 from urllib.parse import quote
 
 import requests
+
+from .v3_telegram import fingerprint
+
+STATE_PATH = Path("telegram_delivery_state.json")
 
 
 @dataclass(frozen=True)
@@ -17,7 +25,7 @@ class DeliveryResult:
 
 
 def _token() -> str | None:
-    value = os.getenv("V2_TELEGRAM_TOKEN") or os.getenv("TELEGRAM_TOKEN")
+    value = os.getenv("V2_TELEGRAM_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("TELEGRAM_TOKEN")
     return value.strip() if value else None
 
 
@@ -126,7 +134,7 @@ def _post_message(endpoint: str, payload: dict, *, timeout: int) -> tuple[bool, 
 
 
 def _plain_payload(chat_id: str, message: str, thread_id: int | None, keyboard: dict | None) -> dict:
-    payload: dict = {"chat_id": chat_id, "text": message, "disable_web_page_preview": True}
+    payload: dict = {"chat_id": chat_id, "text": message, "parse_mode": "HTML", "disable_web_page_preview": True}
     if thread_id is not None:
         payload["message_thread_id"] = thread_id
     if keyboard:
@@ -145,7 +153,10 @@ def _rich_payload(chat_id: str, message: str, thread_id: int | None, keyboard: d
 
 def _send_one(plain_endpoint: str, rich_endpoint: str, *, chat_id: str, message: str, timeout: int,
               message_thread_id: int | None, prefer_rich: bool) -> tuple[bool, str]:
-    keyboard = _action_link_keyboard(message)
+    # Scheduled GitHub Actions has no callback receiver. V3 reports use
+    # hyperlinks in HTML and optional URL-only report buttons supplied by a
+    # caller; never generate callback/copy controls here.
+    keyboard = None
     if prefer_rich:
         rich_payload = _rich_payload(chat_id, message, message_thread_id, keyboard)
         ok, reason = _post_message(rich_endpoint, rich_payload, timeout=timeout)
@@ -164,6 +175,15 @@ def _send_one(plain_endpoint: str, rich_endpoint: str, *, chat_id: str, message:
     ok, reason = _post_message(plain_endpoint, plain_payload, timeout=timeout)
     if ok:
         return True, f"sent_plain_fallback({rich_failure})" if prefer_rich else "sent_plain"
+    # HTML rejection is retried exactly once with tags removed; no dynamic
+    # values are reinterpreted as markup in the fallback.
+    if "HTTP 400" in reason:
+        fallback_payload = _plain_payload(chat_id, unescape(re.sub(r"<[^>]+>", "", message)), message_thread_id, None)
+        fallback_payload.pop("parse_mode", None)
+        ok, fallback_reason = _post_message(plain_endpoint, fallback_payload, timeout=timeout)
+        if ok:
+            return True, "sent_plain_text_fallback"
+        reason = f"{reason}; plain_fallback={fallback_reason}"
     if message_thread_id is not None and "HTTP 400" in reason:
         retry_payload = _plain_payload(chat_id, message, None, keyboard)
         ok, retry_reason = _post_message(plain_endpoint, retry_payload, timeout=timeout)
@@ -179,9 +199,16 @@ def _send_one(plain_endpoint: str, rich_endpoint: str, *, chat_id: str, message:
     return False, f"{reason}; rich_attempt={rich_failure}" if prefer_rich else reason
 
 
+def _state() -> dict:
+    try: return json.loads(STATE_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError): return {}
+
+def _save_state(state: dict) -> None:
+    STATE_PATH.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+
 def _send_to_chat(messages: list[str], *, chat_id: str | None, enabled: bool, timeout: int,
                   missing_reason: str, message_thread_id: int | None = None,
-                  prefer_rich: bool = True) -> DeliveryResult:
+                  prefer_rich: bool = True, message_type: str = "report", scan_date: str = "") -> DeliveryResult:
     clean = [message.strip() for message in messages if message and message.strip()]
     if not enabled:
         return DeliveryResult(False, 0, "dry_run")
@@ -195,11 +222,21 @@ def _send_to_chat(messages: list[str], *, chat_id: str | None, enabled: bool, ti
     sent = 0
     errors: list[str] = []
     routes: list[str] = []
+    state = _state()
     for index, message in enumerate(clean, start=1):
-        ok, reason = _send_one(plain_endpoint, rich_endpoint, chat_id=chat_id, message=message, timeout=timeout,
-                               message_thread_id=message_thread_id, prefer_rich=prefer_rich and _rich_enabled())
+        key = fingerprint(scan_date, message_type, message_thread_id, index, message) if scan_date else ""
+        if key and state.get(key, {}).get("status") == "sent":
+            sent += 1; routes.append("skipped_idempotent"); continue
+        ok = False; reason = "not_attempted"
+        for attempt, delay in enumerate((0, 2, 5), start=1):
+            if delay: time.sleep(delay)
+            ok, reason = _send_one(plain_endpoint, rich_endpoint, chat_id=chat_id, message=message, timeout=timeout,
+                                   message_thread_id=message_thread_id, prefer_rich=False)
+            if ok or not any(code in reason for code in ("network_error", "HTTP 429", "HTTP 5")): break
         if ok:
             sent += 1
+            if key:
+                state[key] = {"status": "sent"}; _save_state(state)
             routes.append(reason)
         else:
             errors.append(f"message_{index}: {reason}")
@@ -213,9 +250,9 @@ def _send_to_chat(messages: list[str], *, chat_id: str | None, enabled: bool, ti
 
 
 def send_messages(messages: list[str], enabled: bool = False, timeout: int = 20,
-                  message_thread_id: int | None = None) -> DeliveryResult:
+                  message_thread_id: int | None = None, message_type: str = "report", scan_date: str = "") -> DeliveryResult:
     return _send_to_chat(messages, chat_id=_user_chat_id(), enabled=enabled, timeout=timeout,
-                         missing_reason="telegram_credentials_missing", message_thread_id=message_thread_id,
+                         missing_reason="telegram_credentials_missing", message_thread_id=message_thread_id, message_type=message_type, scan_date=scan_date,
                          prefer_rich=True)
 
 

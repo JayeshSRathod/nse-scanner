@@ -29,7 +29,7 @@ def test_admin_delivery_uses_admin_chat_id(monkeypatch) -> None:
     assert result.sent is True
     assert result.message_count == 1
     assert post.call_args.kwargs["json"]["chat_id"] == "admin-456"
-    assert post.call_args.args[0].endswith("/sendRichMessage")
+    assert post.call_args.args[0].endswith("/sendMessage")
 
 
 def test_user_delivery_remains_on_user_chat_id(monkeypatch) -> None:
@@ -100,7 +100,7 @@ def test_topic_failure_falls_back_to_rich_general(monkeypatch) -> None:
     assert post.call_count == 2
     assert post.call_args_list[0].kwargs["json"]["message_thread_id"] == 999
     assert "message_thread_id" not in post.call_args_list[1].kwargs["json"]
-    assert "sent_rich_general_topic_fallback" in result.reason
+    assert "sent_plain_general_topic_fallback" in result.reason
 
 
 def test_missing_admin_chat_id_does_not_raise(monkeypatch) -> None:

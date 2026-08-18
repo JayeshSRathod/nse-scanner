@@ -8,10 +8,11 @@ import pandas as pd
 
 from .lifecycle import Position, TradeState
 from .preview import HORIZON_LABELS
+from .v3_telegram import currency, text, ticker
 
 
 def _price(value: float | None) -> str:
-    return "-" if value is None else f"₹{value:,.2f}"
+    return currency(value)
 
 
 def _sessions_held(position: Position, trade_date: str) -> int:
@@ -48,8 +49,8 @@ def render_portfolio_message(positions: Iterable[Position], trade_date: str) -> 
     active = [p for p in rows if p.state not in {TradeState.CLOSED, TradeState.CANCELLED}]
     pending = [p for p in active if p.state in {TradeState.WATCH, TradeState.READY}]
     lines = [
-        "📌 KJ PORTFOLIO LIFECYCLE",
-        f"Trade Date: {trade_date}",
+        "🧭 <b>NSE V3 — PORTFOLIO LIFECYCLE</b>",
+        f"<b>Data:</b> {text(trade_date)} EOD",
         f"Open Positions: {len(active)} | Pending Setups: {len(pending)}",
         "", "━━━━━━━━━━━━━━━━━━",
     ]
@@ -61,7 +62,7 @@ def render_portfolio_message(positions: Iterable[Position], trade_date: str) -> 
         realised, unrealised = _pnl(position)
         lines.extend([
             f"Trade ID: {position.trade_id}",
-            f"Symbol: {position.symbol}",
+            f"Symbol: {ticker(position.symbol)}",
             f"Horizon: {HORIZON_LABELS.get(position.horizon, position.horizon)}",
             f"Progression: {position.progression_stage}",
             f"State: {position.state.value}",

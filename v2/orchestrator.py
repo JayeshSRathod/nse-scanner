@@ -265,15 +265,15 @@ def run_daily(
     portfolio_message = _warning_header(freshness, benchmark_source) + render_portfolio_message(report_positions, run_date.isoformat())
     candidate_delivery = send_messages(
         candidate_messages, enabled=send_telegram,
-        message_thread_id=topic_id("CANDIDATES"),
+        message_thread_id=topic_id("DAILY") or topic_id("CANDIDATES"), message_type="fresh_candidates", scan_date=run_date.isoformat(),
     )
     portfolio_delivery = send_messages(
         [portfolio_message], enabled=send_telegram,
-        message_thread_id=topic_id("PORTFOLIO"),
+        message_thread_id=topic_id("PORTFOLIO"), message_type="lifecycle", scan_date=run_date.isoformat(),
     )
     summary_delivery = send_messages(
         [portfolio_summary_message], enabled=send_telegram,
-        message_thread_id=topic_id("PNL"),
+        message_thread_id=topic_id("PORTFOLIO"), message_type="portfolio_pnl", scan_date=run_date.isoformat(),
     )
     delivery = DeliveryResult(
         sent=candidate_delivery.sent or portfolio_delivery.sent or summary_delivery.sent,
