@@ -1,0 +1,38 @@
+name: Old NSE Hull Local Validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'old_nse_hull/**'
+      - 'scripts/run_old_nse_hull_local.py'
+      - 'tests/test_old_nse_hull_discovery.py'
+      - '.github/workflows/old-nse-hull-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt pytest
+      - name: Initialise disposable database schema
+        run: python -c "import config; from nse_loader import init_database; init_database(config.DB_PATH)"
+      - name: Restore shared market snapshots
+        run: python -c "import config; from nse_market_store import restore_prices; print(restore_prices(config.DB_PATH, min_days=1))"
+      - name: Generate Old NSE plus Hull PAPER dry run
+        run: python -m scripts.run_old_nse_hull_local --db nse_scanner.db
+      - name: Test isolated implementation
+        run: python -m pytest tests/test_old_nse_hull_discovery.py -q
+      - uses: actions/upload-artifact@v4
+        with:
+          name: old-nse-hull-local-dry-run
+          path: |
+            output/old_nse_hull_daily.json
+            output/old_nse_hull_daily.html
