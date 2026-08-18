@@ -1,11 +1,6 @@
-name: Pine Hull EOD Paper System
+name: Deprecated Pine Hull EOD Paper System
 
-on:
-  workflow_run:
-    workflows: ["NSE Pipeline Daily Run"]
-    types: [completed]
-    branches: [main]
-  workflow_dispatch:
+on: workflow_dispatch
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -19,8 +14,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  pine-hull-daily:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+  retired:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
 

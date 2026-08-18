@@ -77,6 +77,40 @@ def render_radar(report: dict) -> str:
     return "\n".join(lines)
 
 
+def render_paper_trades(report: dict) -> str:
+    """Separate Paper Trades topic; READY is explicitly not an entry."""
+    ready = [row for row in report["shortlist"] if row.get("hull_state") == "READY"]
+    lines = ["🧭 <b>OLD+HULL — PAPER TRADE LIFECYCLE</b>",
+             f"<b>Data:</b> {report.get('as_of_date') or 'N/A'} EOD", "",
+             f"Ready setups: {len(ready)}", "Triggered today: 0", "Active paper trades: 0", "Exited today: 0", ""]
+    if not ready:
+        lines.append("No READY setups today. No paper entry was created.")
+    for row in ready[:5]:
+        symbol = row["symbol"]
+        url = f"https://www.tradingview.com/chart/?symbol=NSE%3A{symbol}"
+        lines.extend(["━━━━━━━━━━━━━━━━━━", f"🟢 <a href=\"{url}\">{symbol}</a> — READY — NOT ENTERED",
+                      f"Discovery: {row['discovery_score']:.1f}/100 | Rank: {row['discovery_rank']}",
+                      "Hull: Daily, Weekly, Monthly, 3M and 6M aligned", "",
+                      "Next step: Wait for the next-session mechanical trigger.",
+                      "⚠️ READY is not a paper entry and never uses the same closing price."])
+    lines.extend(["", "💼 <b>OLD+HULL — PAPER PORTFOLIO</b>",
+                  "⚠️ SIMULATED RESULTS — NO LIVE ORDERS", "Open paper trades: 0 | Deployed: ₹0.00 | Total P&L: ₹0.00",
+                  "Health: ✅ Radar data current · No lifecycle state created yet"])
+    return "\n".join(lines)
+
+
+def render_period_report(report: dict, period: str) -> str:
+    title = "WEEKLY REVIEW" if period == "weekly" else "MONTHLY VALIDATION"
+    lines = [f"📅 <b>OLD NSE + HULL — {title}</b>", "🧪 <b>PAPER SYSTEM</b>",
+             f"Latest data: {report.get('as_of_date') or 'N/A'} EOD", "",
+             f"Old NSE discovery qualified: {report['discovery_qualified']}",
+             f"Hull READY: {report['ready']} | Hull WATCH: {report['watch']}",
+             "Triggered entries: 0 | Closed paper trades: 0", "",
+             "System comparison: N/A — equivalent closed-lifecycle baseline unavailable.",
+             "Status: Continue PAPER observation; no live orders."]
+    return "\n".join(lines)
+
+
 def save_report(report: dict, output: str | Path) -> None:
     Path(output).parent.mkdir(parents=True, exist_ok=True)
     Path(output).write_text(json.dumps(report, indent=2), encoding="utf-8")

@@ -1,4 +1,4 @@
-name: Pine Hull Monthly Review
+name: Old NSE Hull Monthly Review
 
 on:
   schedule:
@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 jobs:
-  pine-hull-monthly:
+  old-nse-hull-monthly:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -21,9 +21,11 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install -r requirements.txt
-      - name: Send Pine Hull monthly review
+      - name: Initialise and restore shared market data
+        run: python -c "import config; from nse_loader import init_database; from nse_market_store import restore_prices; init_database(config.DB_PATH); print(restore_prices(config.DB_PATH, min_days=1))"
+      - name: Send Old NSE Hull monthly PAPER review
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_PINE_MONTHLY_TOPIC_ID: ${{ secrets.TELEGRAM_PINE_MONTHLY_TOPIC_ID }}
-        run: python scripts/run_pine_hull_period.py monthly --send-telegram
+        run: python scripts/run_old_nse_hull_period.py monthly --send-telegram

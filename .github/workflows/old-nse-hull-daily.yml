@@ -36,7 +36,10 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_PINE_SIGNALS_TOPIC_ID: ${{ secrets.TELEGRAM_PINE_SIGNALS_TOPIC_ID }}
+          TELEGRAM_PINE_PORTFOLIO_TOPIC_ID: ${{ secrets.TELEGRAM_PINE_PORTFOLIO_TOPIC_ID }}
           TELEGRAM_OLD_HULL_DAILY_TOPIC_ID: ${{ secrets.TELEGRAM_OLD_HULL_DAILY_TOPIC_ID }}
+          TELEGRAM_OLD_HULL_TRADES_TOPIC_ID: ${{ secrets.TELEGRAM_OLD_HULL_TRADES_TOPIC_ID }}
         run: python -m scripts.run_old_nse_hull_local --db nse_scanner.db --send-telegram
       - uses: actions/upload-artifact@v4
         with:
