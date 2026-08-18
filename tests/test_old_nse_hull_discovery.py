@@ -14,10 +14,11 @@ def test_discovery_uses_momentum_shortlist_without_paper_entry():
     assert result.shortlist.iloc[0]["symbol"] == "AAA"
 
 
-def test_parity_blocked_radar_never_claims_ready():
+def test_paper_radar_identifies_the_active_python_hull_rules():
     report = {"generated_at": "2026-08-19T06:00:00+05:30", "as_of_date": "2026-08-18", "eligible": 2,
               "discovery_qualified": 1, "ready": 0, "watch": 1, "shortlist": [{"symbol": "AAA", "discovery_score": 90.0}]}
     text = render_radar(report)
-    assert "PAPER / VALIDATION SYSTEM" in text
-    assert "NOT VERIFIED" in text
+    assert "PAPER SYSTEM" in text
+    assert "PYTHON EOD ACTIVE" in text
+    assert "live-trading instruction" in text
     assert "Hull READY: 0" in text

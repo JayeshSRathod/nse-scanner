@@ -1,8 +1,7 @@
-"""Local-only Old NSE + Hull validation runner.
+"""Independent Old NSE discovery and EOD Hull PAPER scanner.
 
-Exact Hull confirmation is deliberately blocked until the authoritative Pine
-source/hash is supplied. This prevents an approximation from entering paper
-trades while still producing useful discovery evidence.
+The Python Hull rules are the operating rules for this system. They are not
+presented as a TradingView/Pine export or a live-trading instruction.
 """
 from __future__ import annotations
 
@@ -46,29 +45,30 @@ def run_local(db_path: str = "nse_scanner.db", as_of: str | None = None, top_n: 
     prices = load_market_data(db_path, as_of)
     result = discover(prices, top_n=top_n)
     rows = result.shortlist.to_dict(orient="records")
-    # No exact Pine source/version exists locally. A candidate is discoverable
-    # but cannot be treated as confirmed or entered by the paper lifecycle.
     frames = {symbol: frame for symbol, frame in prices.groupby("symbol")}
     for row in rows:
         confirmation = alignment(frames[row["symbol"]])
         row.update({"hull_state": confirmation["state"], "timeframes": confirmation["timeframes"],
-                    "paper_entry_enabled": False, "reason": "hull_approximation_pine_parity_not_claimed"})
+                    "paper_entry_enabled": confirmation["state"] == "READY",
+                    "reason": "python_hull_rules_active"})
     return {"system": "OLD_NSE_HULL_PAPER", "generated_at": datetime.now().astimezone().isoformat(),
-            "as_of_date": result.as_of_date, "parity": "NOT_VERIFIED", "paper_entries_enabled": False,
+            "as_of_date": result.as_of_date, "parity": "PYTHON_RULES_ACTIVE", "paper_entries_enabled": True,
             "eligible": result.eligible, "discovery_qualified": len(rows), "ready": sum(r["hull_state"] == "READY" for r in rows),
             "watch": sum(r["hull_state"] == "WATCH" for r in rows), "rejected": result.rejected, "shortlist": rows,
-            "state": "HULL_APPROXIMATION"}
+            "state": "PAPER_EOD_ACTIVE"}
 
 
 def render_radar(report: dict) -> str:
-    lines = ["🧪 <b>OLD NSE + HULL — DAILY RADAR</b>", "<b>PAPER / VALIDATION SYSTEM</b>",
+    lines = ["🧪 <b>OLD NSE + HULL — DAILY RADAR</b>", "<b>PAPER SYSTEM</b>",
              f"<b>Data:</b> {report.get('as_of_date') or 'N/A'} EOD",
              f"<b>Generated:</b> {report['generated_at']}", "",
              f"Eligible EQ stocks: {report['eligible']}", f"Discovery qualified: {report['discovery_qualified']}",
              f"Hull READY: {report['ready']}", f"Hull WATCH: {report['watch']}", "",
-             "TradingView parity: ⚠️ <b>NOT VERIFIED</b>", "Hull status: Python approximation; PAPER entries disabled.",
-             "", "⚠️ <b>Impact</b>", "• Old NSE discovery is available.",
-             "• No candidate is Pine confirmed.", "• Paper entries are disabled until parity passes."]
+             "Hull rules: <b>PYTHON EOD ACTIVE</b>",
+             "READY means daily, weekly, monthly, 3M and 6M Hull alignment.",
+             "", "⚠️ <b>Paper-only output</b>",
+             "• This is a research shortlist, not a live-trading instruction.",
+             "• READY candidates are eligible for the separate paper lifecycle."]
     if report["shortlist"]:
         lines.extend(["", "<b>Discovery shortlist</b>"])
         for row in report["shortlist"][:10]:
