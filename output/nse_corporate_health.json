@@ -1,0 +1,42 @@
+{
+  "run_at": "2026-08-18T15:16:49.602693+00:00",
+  "trade_date": "2026-08-17",
+  "status": "DEGRADED",
+  "datasets": [
+    {
+      "dataset": "equity_master",
+      "status": "FRESH",
+      "rows": 2553,
+      "source": "corporate_data/raw/equity_master/20260818T151649Z_638908ce25f9.csv",
+      "error": ""
+    },
+    {
+      "dataset": "market_cap",
+      "status": "NOT_CONFIGURED",
+      "rows": 0,
+      "source": "",
+      "error": "NSE_MARKET_CAP_URL is not set"
+    },
+    {
+      "dataset": "calculated_market_cap",
+      "status": "NO_SHARES_AVAILABLE",
+      "rows": 0,
+      "source": "",
+      "error": ""
+    },
+    {
+      "dataset": "surveillance",
+      "status": "FRESH",
+      "rows": 3128,
+      "source": "",
+      "error": ""
+    },
+    {
+      "dataset": "current_market_cap",
+      "status": "NO_VALID_SNAPSHOT",
+      "rows": 0,
+      "source": "",
+      "error": ""
+    }
+  ]
+}
