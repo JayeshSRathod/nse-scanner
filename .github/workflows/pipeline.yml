@@ -4,10 +4,18 @@ on:
   schedule:
     - cron: '30 0 * * 1-5'
   workflow_dispatch:
+    inputs:
+      strict_v3:
+        description: 'Run the strict-V3 eligibility policy after readiness passes'
+        required: false
+        type: boolean
+        default: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   V2_GO_LIVE_DATE: '2026-08-04'
+  V3_ACTIVATION_DATE: '2026-08-19'
+  V3_STRICT_ENABLED: ${{ inputs.strict_v3 || 'false' }}
 
 permissions:
   contents: write
@@ -36,12 +44,15 @@ jobs:
       - name: Run NSE Pipeline
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_DAILY_TOPIC_ID: ${{ secrets.TELEGRAM_DAILY_TOPIC_ID }}
           TELEGRAM_CANDIDATES_TOPIC_ID: ${{ secrets.TELEGRAM_CANDIDATES_TOPIC_ID }}
           TELEGRAM_PORTFOLIO_TOPIC_ID: ${{ secrets.TELEGRAM_PORTFOLIO_TOPIC_ID }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}
-          GITHUB_BRANCH: main
+          GITHUB_BRANCH: ${{ github.ref_name }}
+          NSE_MARKET_CAP_URL: ${{ vars.NSE_MARKET_CAP_URL }}
         run: python main_pipeline.py
 
       - name: Persist market history and reports
@@ -50,6 +61,9 @@ jobs:
           git config user.name "nse-scanner-bot"
           git config user.email "nse-scanner-bot@users.noreply.github.com"
           git add market_data telegram_last_scan.json scan_history.json scan_health.json
+          git add corporate_data/normalized 2>/dev/null || true
+          git add -f output/nse_corporate_health.json 2>/dev/null || true
+          git add -f output/v3_operational_readiness.json output/v3_bootstrap_result.json output/v2_v3_eligibility_comparison.json 2>/dev/null || true
           git add scan_lifecycle.json 2>/dev/null || true
           git add -f output/news_latest.json output/news_*.json 2>/dev/null || true
           git add portfolio.json 2>/dev/null || true

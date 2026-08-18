@@ -43,6 +43,15 @@ def _nearest_resistance(data: pd.DataFrame, entry: float, lookback: int = 120) -
     return float(candidates.min())
 
 
+def _resistance_levels(data: pd.DataFrame, entry: float, lookback: int = 120) -> list[float]:
+    values = sorted(float(value) for value in data.iloc[:-1].tail(lookback).loc[data.iloc[:-1].tail(lookback)["high"] > entry, "high"])
+    levels: list[float] = []
+    for value in values:
+        if not levels or value > levels[-1] * 1.005:
+            levels.append(value)
+    return levels
+
+
 def _expiry_for_horizon(primary_horizon: str) -> int:
     return {"1M": 3, "3M": 5, "6M": 10, "12M": 15}.get(primary_horizon, 3)
 
@@ -136,6 +145,8 @@ def build_trigger_trade_plan(
     target1_r: float = 1.5,
     target2_r: float = 3.0,
     minimum_rr_t1: float = 1.25,
+    minimum_rr_t2: float = 2.0,
+    min_risk_percent: float = 3.0,
     max_risk_percent: float = 8.0,
 ) -> TradePlan:
     data = frame.sort_values("trade_date").copy()
@@ -162,18 +173,21 @@ def build_trigger_trade_plan(
             valid_for_sessions=_expiry_for_horizon(primary_horizon),
         )
 
-    resistance = _nearest_resistance(data, entry)
+    resistance_levels = _resistance_levels(data, entry)
+    resistance = resistance_levels[0] if resistance_levels else None
     raw_t1 = entry + target1_r * risk
     raw_t2 = entry + target2_r * risk
     target1 = min(raw_t1, resistance) if resistance is not None else raw_t1
-    target2 = raw_t2
+    target2_resistance = resistance_levels[1] if len(resistance_levels) > 1 else None
+    target2 = min(raw_t2, target2_resistance) if target2_resistance is not None else raw_t2
     rr1 = (target1 - entry) / risk
     rr2 = (target2 - entry) / risk
     risk_percent = 100.0 * risk / entry
 
     resistance_clear = resistance is None or resistance > entry
     rr_ok = rr1 >= minimum_rr_t1
-    risk_ok = risk_percent <= max_risk_percent
+    risk_ok = min_risk_percent <= risk_percent <= max_risk_percent
+    rr2_ok = rr2 >= minimum_rr_t2
     close_extension = (entry - float(data.iloc[-1]["close"])) / current_atr
     extension_ok = close_extension <= 1.5
 
@@ -186,7 +200,7 @@ def build_trigger_trade_plan(
 
     if not resistance_clear or risk <= 0:
         state = "INVALID"
-    elif not rr_ok or not extension_ok:
+    elif not rr_ok or not rr2_ok or not extension_ok:
         state = "WAIT"
     elif not risk_ok or score < 65:
         state = "RISKY"
@@ -196,7 +210,8 @@ def build_trigger_trade_plan(
     reasons = (
         "trigger_specific_entry",
         "t1_reward_risk_ok" if rr_ok else "near_resistance_limits_reward",
-        "risk_percent_ok" if risk_ok else "stop_distance_too_large",
+        "t2_reward_risk_ok" if rr2_ok else "target2_resistance_limits_reward",
+        "risk_percent_ok" if risk_ok else "stop_distance_outside_3_to_8_percent",
         "entry_extension_ok" if extension_ok else "entry_too_extended",
         "resistance_clear" if resistance_clear else "entry_above_resistance_invalid",
     )

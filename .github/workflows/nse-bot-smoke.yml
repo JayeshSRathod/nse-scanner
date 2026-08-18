@@ -32,6 +32,4 @@ jobs:
           pip install -r requirements.txt
 
       - name: Validate bot startup
-        run: |
-          timeout 90s python main.py || true
-          echo "Bot smoke test completed (startup validation only)."
+        run: python scripts/startup_check.py

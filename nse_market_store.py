@@ -17,6 +17,7 @@ import pandas as pd
 STORE_ROOT = Path("market_data")
 DAILY_DIR = STORE_ROOT / "daily"
 MANIFEST_PATH = STORE_ROOT / "manifest.json"
+INDEX_HISTORY_PATH = STORE_ROOT / "index_history.csv"
 # Retain a fixed rolling window: each successful run adds the newest completed
 # session and removes the oldest snapshot only after the window exceeds 420.
 KEEP_DAYS = 420
@@ -68,6 +69,16 @@ def restore_prices(db_path: str | Path, min_days: int = 1) -> int:
                 (day, datetime.utcnow().isoformat(), len(frame), "Restored from market_data snapshot"),
             )
             restored += 1
+        if INDEX_HISTORY_PATH.exists():
+            indices = pd.read_csv(INDEX_HISTORY_PATH)
+            required = ["index_name", "date", "open", "high", "low", "close"]
+            if not indices.empty and all(column in indices for column in required):
+                optional = [column for column in ("change_pct", "volume", "pe", "pb", "div_yield") if column in indices]
+                columns = [*required, *optional]
+                conn.executemany(
+                    f"INSERT OR REPLACE INTO index_perf ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})",
+                    [tuple(row[column] for column in columns) for _, row in indices.iterrows()],
+                )
         conn.commit()
     finally:
         conn.close()
@@ -117,7 +128,24 @@ def export_all_price_snapshots(db_path: str | Path, keep_days: int = KEEP_DAYS) 
     for path in paths[:-keep_days]:
         path.unlink()
     write_manifest()
+    export_index_history(db_path)
     return written
+
+
+def export_index_history(db_path: str | Path, keep_sessions: int = KEEP_DAYS) -> int:
+    """Persist official NSE index rows for regime and relative-strength replay."""
+    with sqlite3.connect(str(db_path)) as conn:
+        exists = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='index_perf'").fetchone()
+        if not exists:
+            return 0
+        frame = pd.read_sql_query("SELECT * FROM index_perf ORDER BY date,index_name", conn)
+    if frame.empty:
+        return 0
+    dates = sorted(frame["date"].astype(str).unique())[-keep_sessions:]
+    frame = frame[frame["date"].astype(str).isin(dates)]
+    STORE_ROOT.mkdir(parents=True, exist_ok=True)
+    frame.to_csv(INDEX_HISTORY_PATH, index=False, lineterminator="\n")
+    return len(frame)
 
 
 def write_manifest() -> None:

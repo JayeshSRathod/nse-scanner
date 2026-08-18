@@ -36,6 +36,7 @@ class Position:
     last_price: float | None = None
     exit_price: float | None = None
     reason: str = "created"
+    progression_stage: str = "ENTRY_PENDING"
 
 
 def new_position(symbol: str, horizon: str, trade_date: str, entry: float, stop: float,
@@ -63,7 +64,13 @@ def transition(position: Position, event: str, trade_date: str, price: float | N
                        last_price=price, reason=reason or "qualification_confirmed")
     if event == "ENTER" and state == TradeState.READY:
         return replace(position, state=TradeState.OPEN, updated_date=trade_date,
-                       last_price=price or position.entry, reason=reason or "entry_triggered")
+                       last_price=price or position.entry, reason=reason or "entry_triggered",
+                       progression_stage="ACTIVE_1M")
+    if event == "PROMOTE" and state in {TradeState.OPEN, TradeState.PARTIAL, TradeState.TRAILING}:
+        if not reason:
+            raise ValueError("promotion requires a progression stage")
+        return replace(position, updated_date=trade_date, last_price=price,
+                       progression_stage=reason)
     if event == "T1_HIT" and state == TradeState.OPEN:
         if not 0 < partial_fraction < 1:
             raise ValueError("partial_fraction must be between 0 and 1")
@@ -88,7 +95,7 @@ def transition(position: Position, event: str, trade_date: str, price: float | N
                        realised_quantity=position.quantity, remaining_quantity=0.0,
                        realised_pnl=position.realised_pnl + sold * (exit_price - position.entry),
                        last_price=exit_price, exit_price=exit_price,
-                       reason=reason or event.lower())
+                       reason=reason or event.lower(), progression_stage="EXITED")
     if event == "CANCEL" and state in {TradeState.WATCH, TradeState.READY}:
         return replace(position, state=TradeState.CANCELLED, updated_date=trade_date,
                        last_price=price, reason=reason or "setup_invalidated_before_entry")

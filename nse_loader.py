@@ -339,21 +339,51 @@ def load_blacklist(conn, symbols, trade_date):
 
 def load_index(conn, df, trade_date):
     df = df.copy()
+
     if "date" not in df.columns or df["date"].isna().all():
         df["date"] = trade_date.isoformat()
     else:
-        df["date"] = pd.to_datetime(df["date"]).dt.date.astype(str)
-    cols = [c for c in [
-        "index_name", "date", "open", "high", "low", "close",
-        "change_pct", "volume", "pe", "pb", "div_yield"
-    ] if c in df.columns]
-    before = conn.execute("SELECT COUNT(*) FROM index_perf").fetchone()[0]
-    df[cols].to_sql("index_perf", conn, if_exists="append",
-                    index=False, chunksize=500)
-    _dedup(conn, "index_perf", ["index_name", "date"])
-    after = conn.execute("SELECT COUNT(*) FROM index_perf").fetchone()[0]
-    return after - before
+        df["date"] = pd.to_datetime(
+            df["date"], errors="coerce"
+        ).dt.date.astype(str)
 
+    cols = [
+        c for c in [
+            "index_name", "date", "open", "high", "low", "close",
+            "change_pct", "volume", "pe", "pb", "div_yield"
+        ]
+        if c in df.columns
+    ]
+
+    if not cols or "index_name" not in cols or "date" not in cols:
+        return 0
+
+    # Remove duplicates contained inside the CSV itself.
+    data = df[cols].drop_duplicates(
+        subset=["index_name", "date"],
+        keep="last"
+    )
+
+    # SQLite requires None instead of pandas NaN/NaT.
+    data = data.astype(object).where(pd.notna(data), None)
+
+    quoted_cols = ", ".join(f'"{col}"' for col in cols)
+    placeholders = ", ".join("?" for _ in cols)
+
+    sql = (
+        f'INSERT OR IGNORE INTO index_perf '
+        f'({quoted_cols}) VALUES ({placeholders})'
+    )
+
+    before = conn.total_changes
+
+    conn.executemany(
+        sql,
+        data.itertuples(index=False, name=None)
+    )
+    conn.commit()
+
+    return conn.total_changes - before
 
 def load_vol(conn, df, trade_date):
     df = df.copy()

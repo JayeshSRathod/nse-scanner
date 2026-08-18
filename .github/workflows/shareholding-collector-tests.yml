@@ -1,0 +1,25 @@
+name: Shareholding collector tests
+
+on:
+  pull_request:
+    paths:
+      - 'nse_shareholding_collector.py'
+      - 'scripts/collect_nse_shareholding_xbrl.py'
+      - 'tests/test_nse_shareholding_collector.py'
+  push:
+    branches: [agent/v3-progressive-lifecycle]
+    paths:
+      - 'nse_shareholding_collector.py'
+      - 'scripts/collect_nse_shareholding_xbrl.py'
+      - 'tests/test_nse_shareholding_collector.py'
+
+jobs:
+  mocked-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt pytest
+      - run: python -m pytest tests/test_nse_shareholding_collector.py -q

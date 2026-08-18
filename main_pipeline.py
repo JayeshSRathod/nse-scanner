@@ -15,6 +15,7 @@ import sqlite3
 import requests
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from nse_market_store import export_all_price_snapshots, restore_prices
 
@@ -64,6 +65,7 @@ MIN_SCAN_HISTORY_DAYS = int(os.environ.get("MIN_SCAN_HISTORY_DAYS", "400"))
 # then make later GitHub Actions runs incremental.
 BOOTSTRAP_HISTORY_DAYS = int(os.environ.get("BOOTSTRAP_HISTORY_DAYS", "420"))
 V2_GO_LIVE_DATE = date.fromisoformat(os.environ.get("V2_GO_LIVE_DATE", "2026-08-04"))
+V3_ACTIVATION_DATE = date.fromisoformat(os.environ.get("V3_ACTIVATION_DATE", "2026-08-19"))
 
 missing = []
 if not TOKEN:   missing.append("TELEGRAM_TOKEN")
@@ -322,6 +324,20 @@ def run_pipeline():
         write_health(status="FAILED", scan_date=today.strftime("%Y-%m-%d"), failed_step="STEP 2.5", reason=str(e))
         return False
 
+    # NSE corporate universe/cap/surveillance layer. Collector failures retain
+    # the last valid normalized snapshot and are surfaced in the health report.
+    try:
+        from nse_corporate_collector import run_collection
+        from nse_corporate_store import export_snapshots, restore_snapshots
+        from v2.database import V2Database
+        V2Database("nse_scanner.db").ensure_v3_schema()
+        restored = restore_snapshots("nse_scanner.db")
+        corporate_health = run_collection("nse_scanner.db", today.isoformat())
+        exported = export_snapshots("nse_scanner.db")
+        print(f"[STEP 2.6] Corporate data: {corporate_health['status']} (restored={restored}, exported={exported})")
+    except Exception as e:
+        print(f"[STEP 2.6] Corporate collection degraded: {e}")
+
     # ── STEP 3: Scan ──────────────────────────────────────────
     # Compare against the runner's date, not the previous completed EOD date:
     # the 04-Aug-2026 morning report correctly uses the 03-Aug market close.
@@ -333,16 +349,39 @@ def run_pipeline():
 
             restored_state = restore_state_file("nse_scanner.db", "v2_portfolio_state.json")
             print(f"[V2] Portfolio state restored: {'yes' if restored_state else 'first run'}")
+            strict_v3 = os.environ.get("V3_STRICT_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+            # `today` is the last completed NSE session, which can be older
+            # than the calendar date over a weekend or holiday. Activation is
+            # a calendar policy and must use IST rather than runner UTC.
+            ist_calendar_date = datetime.now(ZoneInfo("Asia/Kolkata")).date()
+            if strict_v3 and ist_calendar_date >= V3_ACTIVATION_DATE:
+                from scripts.v3_operational_readiness import audit as audit_v3_operations
+                readiness = audit_v3_operations("nse_scanner.db", as_of=today.isoformat())
+                strict_v3 = readiness.status == "READY"
+                print(f"[V3] Activation gate: {readiness.status}; blockers={list(readiness.blockers)}")
+            elif strict_v3:
+                strict_v3 = False
+                print(f"[V3] Strict mode requested but activation date is {V3_ACTIVATION_DATE.isoformat()}; using V2-compatible mode.")
+            else:
+                print("[V3] Strict mode disabled (set V3_STRICT_ENABLED=true after readiness is READY); using V2-compatible mode.")
             result = run_v2_daily("nse_scanner.db", as_of=today, top_n=10,
                                   minimum_score=70.0, send_telegram=True,
-                                  send_admin_telegram=False)
+                                  send_admin_telegram=False,
+                                  strict_v3_eligibility=strict_v3)
+            # Diagnostic only: this evaluates both policies without changing the
+            # scanner universe, database, or portfolio state.
+            from scripts.compare_v2_v3_eligibility import compare as compare_v2_v3
+            comparison = compare_v2_v3("nse_scanner.db", today.isoformat())
             export_state_file("nse_scanner.db", "v2_portfolio_state.json")
             Path("output").mkdir(exist_ok=True)
             Path("output/v2_daily_run.json").write_text(
                 json.dumps(result.to_dict(), indent=2, default=str), encoding="utf-8"
             )
+            Path("output/v2_v3_eligibility_comparison.json").write_text(
+                json.dumps(comparison, indent=2, default=str), encoding="utf-8"
+            )
             write_health(status="SUCCESS", scan_date=today.strftime("%Y-%m-%d"),
-                         scanner_version="V2", selected=result.selected,
+                         scanner_version="V3" if strict_v3 else "V2_COMPATIBLE", selected=result.selected,
                          portfolio_positions=result.portfolio_positions)
             print(f"[V2] {result.delivery.message_count} user Telegram message(s) sent and portfolio state saved.")
             return True

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from collections import Counter
 from datetime import date
 from pathlib import Path
 
@@ -11,15 +12,20 @@ from .candidate_diagnostics import build_scanner_diagnostics, render_admin_diagn
 from .candidates import evaluate_candidate, rank_candidates, watch_candidates
 from .daily_portfolio import process_portfolio_day
 from .database import V2Database
+from .eligibility import evaluate_eligibility
 from .freshness import FreshnessStatus, assess_freshness
 from .lifecycle import new_position
 from .portfolio_message import render_portfolio_message
 from .portfolio_performance import build_portfolio_snapshot
+from .portfolio_summary_message import render_portfolio_summary
 from .portfolio_risk import PortfolioConfig, allocate_long_position
 from .portfolio_store import PortfolioStore
 from .preview import render_candidate_messages
 from .snapshots import build_market_snapshot
 from .telegram_delivery import DeliveryResult, send_admin_messages, send_messages, topic_id
+from .indicators import atr
+from .progression import next_holding_stage
+from .lifecycle import TradeState, transition
 
 
 @dataclass(frozen=True)
@@ -34,6 +40,7 @@ class DailyRunResult:
     portfolio_positions: int
     candidate_message: str
     portfolio_message: str
+    portfolio_summary_message: str
     delivery: DeliveryResult
     portfolio_snapshot: dict
     watch_count: int = 0
@@ -43,6 +50,7 @@ class DailyRunResult:
     diagnostics_json_path: str = ""
     diagnostics_text_path: str = ""
     admin_delivery: DeliveryResult = DeliveryResult(False, 0, "not_attempted")
+    eligibility_funnel: dict | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -76,11 +84,12 @@ def run_daily(
     send_admin_telegram: bool | None = None,
     portfolio_config: PortfolioConfig = PortfolioConfig(),
     diagnostics_output_dir: str | Path = "output",
+    strict_v3_eligibility: bool = True,
 ) -> DailyRunResult:
-    del top_n
     run_date = pd.Timestamp(as_of or date.today()).date()
     database = V2Database(db_path)
-    prices = database.load_prices(end_date=run_date.isoformat(), min_sessions=60)
+    database.ensure_v3_schema()
+    prices = database.load_prices(end_date=run_date.isoformat(), min_sessions=260)
     if prices.empty:
         raise RuntimeError("No usable V2 price history")
     indices = database.load_indices(end_date=run_date.isoformat())
@@ -103,20 +112,51 @@ def run_daily(
     regime = snapshot["regime"]
     benchmark = benchmark.sort_values("trade_date").reset_index(drop=True)
     benchmark_close = benchmark["close"].reset_index(drop=True)
-    candidates = [
-        evaluate_candidate(
-            str(symbol), frame, regime,
-            stale_data=freshness.prices_stale,
-            minimum_score=minimum_score,
-            benchmark_close=benchmark_close,
+    store = PortfolioStore(db_path)
+    store.initialize()
+    master = database.load_symbol_master(run_date.isoformat())
+    metadata = {str(row["symbol"]): row.to_dict() for _, row in master.iterrows()} if not master.empty else {}
+    restricted = database.load_restricted_symbols(run_date.isoformat())
+    fundamental_gates = database.load_fundamental_gates(run_date.isoformat())
+    eligibility_results = {}
+    candidates = []
+    for symbol, frame in prices.groupby("symbol"):
+        symbol = str(symbol)
+        eligibility = evaluate_eligibility(
+            symbol, frame, metadata=metadata.get(symbol), restricted_reason=restricted.get(symbol),
+            as_of_date=run_date.isoformat(),
+            require_market_cap=strict_v3_eligibility,
+            require_promoter_holding=strict_v3_eligibility,
+            require_corporate_action_safety=strict_v3_eligibility,
         )
-        for symbol, frame in prices.groupby("symbol")
-    ]
+        eligibility_results[symbol] = eligibility
+        if not eligibility.eligible:
+            continue
+        previous = store.opportunity_state(symbol)
+        candidates.append(evaluate_candidate(
+            symbol, frame, regime, stale_data=freshness.prices_stale,
+            minimum_score=minimum_score, benchmark_close=benchmark_close,
+            previous_stage=previous["progression_stage"] if previous else None,
+            previously_exited=bool(previous["previously_exited"]) if previous else False,
+            action_permitted=benchmark_source == "OFFICIAL_INDEX_HISTORY" and not freshness.degraded,
+        ))
+    database.save_eligibility_audit(run_date.isoformat(), eligibility_results)
+    rejection_counts = Counter(
+        result.reason_code for result in eligibility_results.values() if not result.eligible
+    )
+    eligibility_funnel = {
+        "mode": "V3_STRICT" if strict_v3_eligibility else "V2_COMPATIBLE",
+        "universe": len(eligibility_results),
+        "eligible": sum(result.eligible for result in eligibility_results.values()),
+        "rejected": sum(not result.eligible for result in eligibility_results.values()),
+        "rejection_reasons": dict(sorted(rejection_counts.items())),
+    }
 
     ranked = rank_candidates(candidates, top_n=None)
     selected = [candidate for rows in ranked.values() for candidate in rows]
     selected.sort(key=lambda candidate: (-candidate.score, -candidate.trade_plan_score, candidate.symbol))
-    selected = selected[:3]
+    if top_n is not None and top_n > 0:
+        selected = selected[:top_n]
     watches = watch_candidates(candidates)[:12]
     quality_qualified = sum(1 for candidate in candidates if candidate.metrics.get("focus_horizons"))
 
@@ -125,10 +165,21 @@ def run_daily(
         benchmark_sessions=int(benchmark["trade_date"].nunique()),
     )
     diagnostics_json, diagnostics_text = save_scanner_diagnostics(diagnostics, output_dir=diagnostics_output_dir)
-    admin_message = render_admin_diagnostics(diagnostics)
+    funnel_lines = [
+        f"ELIGIBILITY FUNNEL — {eligibility_funnel['mode']}",
+        f"Universe: {eligibility_funnel['universe']}",
+        f"Eligible: {eligibility_funnel['eligible']}",
+        f"Rejected: {eligibility_funnel['rejected']}",
+    ]
+    funnel_lines.extend(f"{reason}: {count}" for reason, count in rejection_counts.most_common())
+    admin_message = "\n".join(funnel_lines) + "\n\n" + render_admin_diagnostics(diagnostics)
 
-    store = PortfolioStore(db_path)
-    store.initialize()
+    persisted_candidates = sorted(
+        [candidate for candidate in candidates if candidate.opportunity_classification != "UNQUALIFIED"],
+        key=lambda candidate: (-candidate.score, -candidate.trade_plan_score, candidate.symbol),
+    )
+    for rank, candidate in enumerate(persisted_candidates, start=1):
+        store.remember_opportunity(candidate, scanner_rank=rank)
     existing = _existing_keys(store)
     created, allocations = 0, {}
     committed = store.open_positions()
@@ -147,7 +198,7 @@ def run_daily(
             continue
         allocations[key] = allocation
         position = new_position(
-            candidate.symbol, candidate.horizon, candidate.trade_date,
+            candidate.symbol, "SWING_1_3M", candidate.trade_date,
             candidate.entry, candidate.stop, candidate.target1, candidate.target2,
             quantity=allocation.quantity,
         )
@@ -158,32 +209,76 @@ def run_daily(
         committed_risk += allocation.initial_risk
         created += 1
 
-    latest_bars = {str(symbol): frame.sort_values("trade_date").iloc[-1].to_dict() for symbol, frame in prices.groupby("symbol")}
-    process_portfolio_day(store, run_date.isoformat(), latest_bars)
+    latest_bars = {}
+    for symbol, frame in prices.groupby("symbol"):
+        ordered = frame.sort_values("trade_date")
+        bar = ordered.iloc[-1].to_dict()
+        bar["atr14"] = float(atr(ordered, 14).iloc[-1])
+        latest_bars[str(symbol)] = bar
+    candidate_by_symbol = {candidate.symbol: candidate for candidate in candidates}
+    qualification = {symbol: candidate.classification in {"ACTION", "WATCH"} for symbol, candidate in candidate_by_symbol.items()}
+    invalidated = {
+        position.symbol for position in store.open_positions()
+        if position.symbol in candidate_by_symbol and not bool(candidate_by_symbol[position.symbol].metrics.get("weekly_bullish"))
+        and position.state in {TradeState.WATCH, TradeState.READY}
+    }
+    process_portfolio_day(
+        store, run_date.isoformat(), latest_bars,
+        qualification_by_symbol=qualification, invalidated_symbols=invalidated,
+    )
+    for position in store.open_positions():
+        candidate = candidate_by_symbol.get(position.symbol)
+        if candidate is None or position.state not in {TradeState.OPEN, TradeState.PARTIAL, TradeState.TRAILING}:
+            continue
+        sessions = max(0, len(pd.bdate_range(position.created_date, run_date.isoformat())) - 1)
+        decision = next_holding_stage(
+            position.progression_stage,
+            {key: value["state"] for key, value in candidate.horizon_scores.items()},
+            sessions,
+            trend_intact=bool(candidate.metrics.get("weekly_bullish")),
+            fundamentals_passed=fundamental_gates.get(position.symbol),
+        )
+        if decision.changed:
+            promoted = transition(
+                position, "PROMOTE", run_date.isoformat(),
+                price=latest_bars[position.symbol]["close"], reason=decision.stage.value,
+            )
+            store.save_position(promoted, "PROMOTE", previous_state=position.state, price=promoted.last_price)
     portfolio_positions = store.open_positions()
     report_positions = store.positions_for_daily_report(run_date.isoformat())
-    portfolio_snapshot = build_portfolio_snapshot(store.all_positions(), run_date.isoformat(), portfolio_config.capital_base)
+    previous_snapshot = store.latest_portfolio_snapshot()
+    all_positions = store.all_positions()
+    portfolio_snapshot = build_portfolio_snapshot(all_positions, run_date.isoformat(), portfolio_config.capital_base)
     store.save_portfolio_snapshot(portfolio_snapshot)
+    portfolio_summary_message = render_portfolio_summary(
+        portfolio_snapshot,
+        float(previous_snapshot["total_pnl"]) if previous_snapshot and previous_snapshot["portfolio_date"] != run_date.isoformat() else None,
+        all_positions,
+    )
 
     candidate_messages = render_candidate_messages(
         selected, watches, regime, run_date.isoformat(), freshness=freshness,
-        evaluated=len(candidates), tradable=len(candidates), quality_qualified=quality_qualified,
+        evaluated=int(prices["symbol"].nunique()), tradable=len(candidates), quality_qualified=quality_qualified,
         benchmark_source=benchmark_source, allocations=allocations,
     )
     candidate_message = "\n\n".join(candidate_messages)
     portfolio_message = _warning_header(freshness, benchmark_source) + render_portfolio_message(report_positions, run_date.isoformat())
     candidate_delivery = send_messages(
         candidate_messages, enabled=send_telegram,
-        message_thread_id=topic_id("CANDIDATES"),
+        message_thread_id=topic_id("DAILY") or topic_id("CANDIDATES"), message_type="fresh_candidates", scan_date=run_date.isoformat(),
     )
     portfolio_delivery = send_messages(
         [portfolio_message], enabled=send_telegram,
-        message_thread_id=topic_id("PORTFOLIO"),
+        message_thread_id=topic_id("PORTFOLIO"), message_type="lifecycle", scan_date=run_date.isoformat(),
+    )
+    summary_delivery = send_messages(
+        [portfolio_summary_message], enabled=send_telegram,
+        message_thread_id=topic_id("PORTFOLIO"), message_type="portfolio_pnl", scan_date=run_date.isoformat(),
     )
     delivery = DeliveryResult(
-        sent=candidate_delivery.sent or portfolio_delivery.sent,
-        message_count=candidate_delivery.message_count + portfolio_delivery.message_count,
-        reason="sent" if candidate_delivery.sent or portfolio_delivery.sent else candidate_delivery.reason,
+        sent=candidate_delivery.sent or portfolio_delivery.sent or summary_delivery.sent,
+        message_count=candidate_delivery.message_count + portfolio_delivery.message_count + summary_delivery.message_count,
+        reason="sent" if candidate_delivery.sent or portfolio_delivery.sent or summary_delivery.sent else candidate_delivery.reason,
     )
     admin_enabled = send_telegram if send_admin_telegram is None else send_admin_telegram
     admin_delivery = send_admin_messages([admin_message], enabled=admin_enabled)
@@ -192,8 +287,10 @@ def run_daily(
         trade_date=run_date.isoformat(), regime=regime, benchmark_source=benchmark_source,
         freshness=freshness, evaluated=len(candidates), selected=len(selected), created_positions=created,
         portfolio_positions=len(portfolio_positions), candidate_message=candidate_message,
-        portfolio_message=portfolio_message, delivery=delivery, portfolio_snapshot=portfolio_snapshot.to_dict(),
+        portfolio_message=portfolio_message, portfolio_summary_message=portfolio_summary_message,
+        delivery=delivery, portfolio_snapshot=portfolio_snapshot.to_dict(),
         watch_count=len(watches), candidate_message_count=len(candidate_messages), diagnostics=diagnostics.to_dict(),
         admin_message=admin_message, diagnostics_json_path=str(diagnostics_json),
         diagnostics_text_path=str(diagnostics_text), admin_delivery=admin_delivery,
+        eligibility_funnel=eligibility_funnel,
     )
