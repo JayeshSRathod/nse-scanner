@@ -1,5 +1,5 @@
 {
-  "run_at": "2026-08-18T18:00:24.317855+00:00",
+  "run_at": "2026-08-18T18:17:24.997816+00:00",
   "trade_date": "2026-08-17",
   "status": "READY",
   "datasets": [
@@ -7,7 +7,7 @@
       "dataset": "equity_master",
       "status": "FRESH",
       "rows": 2553,
-      "source": "corporate_data\\raw\\equity_master\\20260818T180004Z_638908ce25f9.csv",
+      "source": "corporate_data/raw/equity_master/20260818T181721Z_638908ce25f9.csv",
       "error": ""
     },
     {
@@ -19,8 +19,8 @@
     },
     {
       "dataset": "shareholding",
-      "status": "FRESH",
-      "rows": 11,
+      "status": "NO_NEW_FILINGS",
+      "rows": 0,
       "source": "",
       "error": ""
     },
