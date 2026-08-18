@@ -5,8 +5,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from old_nse_hull.delivery import send_radar
-from old_nse_hull.engine import render_radar, run_local, save_report
+from old_nse_hull.delivery import send_radar, send_trades
+from old_nse_hull.engine import render_paper_trades, render_radar, run_local, save_report
 
 
 def main() -> int:
@@ -26,8 +26,9 @@ def main() -> int:
     print(message)
     if args.send_telegram:
         delivery = send_radar(message)
-        print(f"[OLD_NSE_HULL] Telegram: {delivery.reason}")
-        if not delivery.sent:
+        trades_delivery = send_trades(render_paper_trades(report))
+        print(f"[OLD_NSE_HULL] Radar Telegram: {delivery.reason}; Trades Telegram: {trades_delivery.reason}")
+        if not delivery.sent or not trades_delivery.sent:
             return 2
     return 0
 
