@@ -1,0 +1,38 @@
+name: Old NSE Hull Daily Paper Radar
+
+on:
+  schedule:
+    # 02:30 UTC is 08:00 IST. The report uses the latest completed EOD session.
+    - cron: '30 2 * * 1-5'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'old_nse_hull/**'
+      - 'scripts/run_old_nse_hull_local.py'
+      - '.github/workflows/old-nse-hull-daily.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  radar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Initialise disposable database schema
+        run: python -c "import config; from nse_loader import init_database; init_database(config.DB_PATH)"
+      - name: Restore shared market snapshots
+        run: python -c "import config; from nse_market_store import restore_prices; print(restore_prices(config.DB_PATH, min_days=1))"
+      - name: Generate independent Old NSE plus Hull PAPER radar
+        run: python -m scripts.run_old_nse_hull_local --db nse_scanner.db
+      - uses: actions/upload-artifact@v4
+        with:
+          name: old-nse-hull-daily-radar
+          path: |
+            output/old_nse_hull_daily.json
+            output/old_nse_hull_daily.html
