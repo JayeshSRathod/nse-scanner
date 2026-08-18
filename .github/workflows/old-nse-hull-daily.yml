@@ -28,7 +28,11 @@ jobs:
         run: python -c "import config; from nse_loader import init_database; init_database(config.DB_PATH)"
       - name: Restore shared market snapshots
         run: python -c "import config; from nse_market_store import restore_prices; print(restore_prices(config.DB_PATH, min_days=1))"
-      - name: Generate independent Old NSE plus Hull PAPER radar
+      - name: Generate PAPER radar for pull-request validation
+        if: ${{ github.event_name == 'pull_request' }}
+        run: python -m scripts.run_old_nse_hull_local --db nse_scanner.db
+      - name: Generate and deliver independent Old NSE plus Hull PAPER radar
+        if: ${{ github.event_name != 'pull_request' }}
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
