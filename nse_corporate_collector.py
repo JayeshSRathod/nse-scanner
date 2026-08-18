@@ -105,17 +105,45 @@ def ingest_market_caps(conn: sqlite3.Connection, frame: pd.DataFrame, available_
 def calculate_caps_from_shares(conn: sqlite3.Connection, trade_date: str) -> int:
     price_table = "daily_prices_v2" if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='daily_prices_v2'").fetchone() else "daily_prices"
     date_col = "trade_date" if price_table == "daily_prices_v2" else "date"
-    rows = conn.execute(f"""SELECT p.symbol,p.close,s.shares_outstanding,s.as_of_date,s.available_date,p.{date_col}
+    rows = conn.execute(f"""SELECT p.symbol,p.close,s.shares_outstanding,s.as_of_date,s.available_date,p.{date_col},s.filing_id
       FROM {price_table} p JOIN shares_outstanding_v3 s ON s.symbol=p.symbol
       WHERE p.{date_col}=(SELECT MAX(p2.{date_col}) FROM {price_table} p2
                          WHERE p2.symbol=p.symbol AND p2.{date_col}<=?)
       AND s.available_date<=? AND s.available_date=(
        SELECT MAX(s2.available_date) FROM shares_outstanding_v3 s2
        WHERE s2.symbol=s.symbol AND s2.available_date<=?)""", (trade_date, trade_date, trade_date)).fetchall()
-    values = [(r[0], str(r[5]), str(r[5]), calculated_market_cap_cr(float(r[1]), float(r[2])), "CALCULATED_QUARTERLY_SHARES") for r in rows]
+    values = [(r[0], str(r[5]), str(r[5]), calculated_market_cap_cr(float(r[1]), float(r[2])), "CALCULATED_QUARTERLY_SHARES", r[6]) for r in rows]
     conn.executemany("""INSERT INTO market_cap_snapshots_v3
-      (symbol,as_of_date,available_date,market_cap_cr,source) VALUES (?,?,?,?,?)
-      ON CONFLICT(symbol,as_of_date,source) DO UPDATE SET market_cap_cr=excluded.market_cap_cr""", values)
+      (symbol,as_of_date,available_date,market_cap_cr,source,filing_id) VALUES (?,?,?,?,?,?)
+      ON CONFLICT(symbol,as_of_date,source) DO UPDATE SET market_cap_cr=excluded.market_cap_cr,
+      available_date=excluded.available_date,filing_id=excluded.filing_id""", values)
+    return len(values)
+
+
+def rebuild_caps_from_shares(conn: sqlite3.Connection, start_date: str | None = None,
+                             end_date: str | None = None) -> int:
+    """Build retained-session caps using only shares known by each close date."""
+    price_table = "daily_prices_v2" if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='daily_prices_v2'").fetchone() else "daily_prices"
+    date_col = "trade_date" if price_table == "daily_prices_v2" else "date"
+    conditions = ["s.available_date <= p." + date_col, "p.close > 0", "s.shares_outstanding > 0"]
+    params: list[str] = []
+    if start_date:
+        conditions.append(f"p.{date_col} >= ?")
+        params.append(start_date)
+    if end_date:
+        conditions.append(f"p.{date_col} <= ?")
+        params.append(end_date)
+    rows = conn.execute(f"""SELECT p.symbol,p.{date_col},p.close,s.shares_outstanding,s.filing_id
+      FROM {price_table} p JOIN shares_outstanding_v3 s ON s.symbol=p.symbol
+      WHERE {' AND '.join(conditions)} AND s.available_date=(
+        SELECT MAX(s2.available_date) FROM shares_outstanding_v3 s2
+        WHERE s2.symbol=p.symbol AND s2.available_date<=p.{date_col})""", params).fetchall()
+    values = [(r[0], str(r[1]), str(r[1]), calculated_market_cap_cr(float(r[2]), float(r[3])),
+               "CALCULATED_QUARTERLY_SHARES", r[4]) for r in rows]
+    conn.executemany("""INSERT INTO market_cap_snapshots_v3
+      (symbol,as_of_date,available_date,market_cap_cr,source,filing_id) VALUES (?,?,?,?,?,?)
+      ON CONFLICT(symbol,as_of_date,source) DO UPDATE SET market_cap_cr=excluded.market_cap_cr,
+      available_date=excluded.available_date,filing_id=excluded.filing_id""", values)
     return len(values)
 
 
@@ -141,10 +169,11 @@ def ingest_surveillance(conn: sqlite3.Connection, trade_date: str) -> int:
 
 
 def refresh_current_market_cap(conn: sqlite3.Connection, trade_date: str) -> int:
-    rows = conn.execute("""SELECT m.symbol,m.market_cap_cr,m.as_of_date,m.source FROM market_cap_snapshots_v3 m
-      JOIN (SELECT symbol,MAX(available_date) available FROM market_cap_snapshots_v3
-            WHERE available_date<=? GROUP BY symbol) x
-      ON x.symbol=m.symbol AND x.available=m.available_date""", (trade_date,)).fetchall()
+    rows = conn.execute("""SELECT symbol,market_cap_cr,as_of_date,source FROM (
+      SELECT m.symbol,m.market_cap_cr,m.as_of_date,m.source,
+        ROW_NUMBER() OVER (PARTITION BY m.symbol ORDER BY m.available_date DESC,
+          CASE WHEN m.source='NSE_DIRECT_MARKET_CAP' THEN 0 ELSE 1 END, m.as_of_date DESC) AS ranked
+      FROM market_cap_snapshots_v3 m WHERE m.available_date<=?) WHERE ranked=1""", (trade_date,)).fetchall()
     conn.executemany("""UPDATE symbol_master_v2 SET market_cap_cr=?,market_cap_as_of=?,market_cap_source=?,updated_at=CURRENT_TIMESTAMP WHERE symbol=?""",
                      [(r[1], r[2], r[3], r[0]) for r in rows])
     return len(rows)

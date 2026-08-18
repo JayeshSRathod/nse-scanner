@@ -93,6 +93,15 @@ Use `scripts/import_nse_corporate_data.py` for normalized controlled imports.
 Archive the original NSE CSV/XBRL payload before parsing so every derived row
 can be reproduced and audited.
 
+After a local shareholding bootstrap, build retained-session market caps with:
+
+```powershell
+python -m scripts.rebuild_market_caps_from_shares --db nse_scanner.db
+```
+
+The calculation uses the latest shares whose `available_date` is no later than
+each price date; it never treats a later filing as historical knowledge.
+
 ## Universe and market-cap collector operations
 
 - `scripts/run_nse_corporate_collection.py --date YYYY-MM-DD` refreshes the

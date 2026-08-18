@@ -3,6 +3,7 @@ import sqlite3
 import pandas as pd
 
 from nse_corporate_collector import (
+    rebuild_caps_from_shares,
     calculate_caps_from_shares,
     ingest_equity_master,
     ingest_market_caps,
@@ -46,3 +47,17 @@ def test_calculated_cap_uses_only_available_shares(tmp_path):
         assert calculate_caps_from_shares(conn, "2026-08-17") == 1
         cap = conn.execute("SELECT market_cap_cr FROM market_cap_snapshots_v3 WHERE symbol='ABC'").fetchone()[0]
     assert cap == 1000.0
+
+
+def test_historical_caps_never_use_future_shares(tmp_path):
+    path = _db(tmp_path)
+    with sqlite3.connect(path) as conn:
+        conn.execute("INSERT INTO daily_prices VALUES ('ABC','2026-07-01',100,101,99,100,200000)")
+        conn.execute("INSERT INTO daily_prices VALUES ('ABC','2026-08-01',110,111,109,110,200000)")
+        conn.execute("""INSERT INTO shares_outstanding_v3
+          (symbol,as_of_date,available_date,shares_outstanding,source,filing_id)
+          VALUES ('ABC','2026-06-30','2026-07-15',100000000,'NSE_SHAREHOLDING','OLD'),
+                 ('ABC','2026-07-31','2026-08-02',200000000,'NSE_SHAREHOLDING','FUTURE')""")
+        assert rebuild_caps_from_shares(conn, end_date="2026-08-01") == 1
+        row = conn.execute("SELECT as_of_date,market_cap_cr,filing_id FROM market_cap_snapshots_v3").fetchone()
+    assert row == ("2026-08-01", 1100.0, "OLD")
