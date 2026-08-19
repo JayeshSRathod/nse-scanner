@@ -14,6 +14,7 @@ from old_nse_hull.multi_horizon.market_context import load_context
 from old_nse_hull.multi_horizon.data_health import evaluate as evaluate_data_health
 from old_nse_hull.multi_horizon.walkforward import run as run_walkforward
 from old_nse_hull.multi_horizon.readiness import assess
+from old_nse_hull.multi_horizon.historical_replay import run as run_historical_replay
 
 
 def _prices(days: int = 330) -> pd.DataFrame:
@@ -166,6 +167,14 @@ def test_walkforward_uses_existing_prices_only():
 def test_readiness_blocks_without_real_shadow_window(tmp_path):
     walkforward = tmp_path / "walkforward.json"
     walkforward.write_text(json.dumps({"status": "COMPLETE", "observations": 10}), encoding="utf-8")
-    result = assess(tmp_path / "missing.json", walkforward)
+    result = assess(tmp_path / "missing.json", walkforward, tmp_path / "missing-history.json")
     assert result["status"] == "BLOCKED"
-    assert "shadow_sessions_0_of_20" in result["blockers"]
+    assert "historical_replay_0_of_20" in result["blockers"]
+    assert "live_operational_sessions_0_of_5" in result["blockers"]
+
+
+def test_historical_replay_uses_as_of_history_without_downloads(tmp_path):
+    result = run_historical_replay(_prices(), tmp_path / "replay.db", tmp_path / "replay.json", sessions=2)
+    assert result["mode"] == "HISTORICAL_REPLAY"
+    assert result["sessions_completed"] == 2
+    assert result["comparison_summary"]["sessions_observed"] == 2
