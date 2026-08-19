@@ -12,6 +12,8 @@ from pathlib import Path
 import pandas as pd
 
 from .discovery import discover, load_market_data
+from .multi_horizon.config import shadow_enabled
+from .multi_horizon.engine import run_shadow
 
 
 def _wma(series: pd.Series, length: int) -> pd.Series:
@@ -41,7 +43,9 @@ def alignment(frame: pd.DataFrame) -> dict:
     return {"timeframes": states, "aligned": all(states.values()), "state": "READY" if all(states.values()) else "WATCH"}
 
 
-def run_local(db_path: str = "nse_scanner.db", as_of: str | None = None, top_n: int = 25) -> dict:
+def run_local(db_path: str = "nse_scanner.db", as_of: str | None = None, top_n: int = 25,
+              comparison_state_path: str | Path | None = None, paper_state_path: str | Path | None = None) -> dict:
+    """Run the frozen baseline; optionally attach a non-delivered shadow comparison."""
     prices = load_market_data(db_path, as_of)
     result = discover(prices, top_n=top_n)
     rows = result.shortlist.to_dict(orient="records")
@@ -51,11 +55,16 @@ def run_local(db_path: str = "nse_scanner.db", as_of: str | None = None, top_n: 
         row.update({"hull_state": confirmation["state"], "timeframes": confirmation["timeframes"],
                     "paper_entry_enabled": confirmation["state"] == "READY",
                     "reason": "python_hull_rules_active"})
-    return {"system": "OLD_NSE_HULL_PAPER", "generated_at": datetime.now().astimezone().isoformat(),
+    report = {"system": "OLD_NSE_HULL_PAPER", "generated_at": datetime.now().astimezone().isoformat(),
             "as_of_date": result.as_of_date, "parity": "PYTHON_RULES_ACTIVE", "paper_entries_enabled": True,
             "eligible": result.eligible, "discovery_qualified": len(rows), "ready": sum(r["hull_state"] == "READY" for r in rows),
             "watch": sum(r["hull_state"] == "WATCH" for r in rows), "rejected": result.rejected, "shortlist": rows,
             "state": "PAPER_EOD_ACTIVE"}
+    if shadow_enabled():
+        # The report artifact is the comparison surface during the 20-session
+        # evaluation. It never changes the baseline shortlist or Telegram UX.
+        report["multi_horizon_shadow"] = run_shadow(prices, db_path, [row["symbol"] for row in rows], comparison_state_path, paper_state_path)
+    return report
 
 
 def render_radar(report: dict) -> str:
@@ -99,7 +108,7 @@ def render_paper_trades(report: dict) -> str:
     return "\n".join(lines)
 
 
-def render_period_report(report: dict, period: str) -> str:
+def render_period_report(report: dict, period: str, shadow_summary: dict | None = None) -> str:
     title = "WEEKLY REVIEW" if period == "weekly" else "MONTHLY VALIDATION"
     lines = [f"📅 <b>OLD NSE + HULL — {title}</b>", "🧪 <b>PAPER SYSTEM</b>",
              f"Latest data: {report.get('as_of_date') or 'N/A'} EOD", "",
@@ -108,6 +117,14 @@ def render_period_report(report: dict, period: str) -> str:
              "Triggered entries: 0 | Closed paper trades: 0", "",
              "System comparison: N/A — equivalent closed-lifecycle baseline unavailable.",
              "Status: Continue PAPER observation; no live orders."]
+    if shadow_summary is not None:
+        status = "REVIEW REQUIRED - no automatic promotion" if shadow_summary.get("validation_ready") else "BLOCKED - observation window incomplete"
+        lines.extend(["", "<b>Multi-horizon shadow validation</b>",
+                      f"Sessions: {shadow_summary.get('sessions_observed', 0)}/{shadow_summary.get('target_sessions', 20)} | Remaining: {shadow_summary.get('sessions_remaining', 20)}",
+                      f"Average candidates: baseline {shadow_summary.get('average_baseline_candidates', 0)} | shadow {shadow_summary.get('average_shadow_candidates', 0)} | overlap {shadow_summary.get('average_overlap', 0)}",
+                      f"Promotion gate: <b>{status}</b>"])
+        for item in shadow_summary.get("recent_sessions", [])[-3:]:
+            lines.append(f"- {item['as_of_date']}: baseline {len(item['baseline_symbols'])} | shadow {len(item['shadow_symbols'])} | overlap {len(item['overlap_symbols'])} | new {item.get('newly_qualified', 0)} | upgraded {item.get('upgraded', 0)}")
     return "\n".join(lines)
 
 

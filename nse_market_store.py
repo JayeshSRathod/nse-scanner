@@ -18,6 +18,7 @@ STORE_ROOT = Path("market_data")
 DAILY_DIR = STORE_ROOT / "daily"
 MANIFEST_PATH = STORE_ROOT / "manifest.json"
 INDEX_HISTORY_PATH = STORE_ROOT / "index_history.csv"
+BLACKLIST_PATH = STORE_ROOT / "blacklist.csv"
 # Retain a fixed rolling window: each successful run adds the newest completed
 # session and removes the oldest snapshot only after the window exceeds 420.
 KEEP_DAYS = 420
@@ -79,6 +80,11 @@ def restore_prices(db_path: str | Path, min_days: int = 1) -> int:
                     f"INSERT OR REPLACE INTO index_perf ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})",
                     [tuple(row[column] for column in columns) for _, row in indices.iterrows()],
                 )
+        if BLACKLIST_PATH.exists():
+            blacklist = pd.read_csv(BLACKLIST_PATH)
+            if not blacklist.empty and {"symbol", "date"}.issubset(blacklist.columns):
+                conn.executemany("INSERT OR IGNORE INTO blacklist (symbol, date) VALUES (?, ?)",
+                                 [tuple(row) for row in blacklist[["symbol", "date"]].drop_duplicates().itertuples(index=False, name=None)])
         conn.commit()
     finally:
         conn.close()
@@ -129,6 +135,7 @@ def export_all_price_snapshots(db_path: str | Path, keep_days: int = KEEP_DAYS) 
         path.unlink()
     write_manifest()
     export_index_history(db_path)
+    export_blacklist_snapshot(db_path)
     return written
 
 
@@ -145,6 +152,18 @@ def export_index_history(db_path: str | Path, keep_sessions: int = KEEP_DAYS) ->
     frame = frame[frame["date"].astype(str).isin(dates)]
     STORE_ROOT.mkdir(parents=True, exist_ok=True)
     frame.to_csv(INDEX_HISTORY_PATH, index=False, lineterminator="\n")
+    return len(frame)
+
+
+def export_blacklist_snapshot(db_path: str | Path) -> int:
+    """Persist surveillance exclusions once for all downstream read-only scanners."""
+    with sqlite3.connect(str(db_path)) as conn:
+        exists = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='blacklist'").fetchone()
+        if not exists:
+            return 0
+        frame = pd.read_sql_query("SELECT symbol, date FROM blacklist ORDER BY date, symbol", conn)
+    STORE_ROOT.mkdir(parents=True, exist_ok=True)
+    frame.to_csv(BLACKLIST_PATH, index=False, lineterminator="\n")
     return len(frame)
 
 

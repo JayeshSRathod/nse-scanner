@@ -6,7 +6,9 @@ on:
     paths:
       - 'old_nse_hull/**'
       - 'scripts/run_old_nse_hull_local.py'
+      - 'scripts/run_old_nse_hull_walkforward.py'
       - 'tests/test_old_nse_hull_discovery.py'
+      - 'tests/test_old_nse_hull_multi_horizon.py'
       - '.github/workflows/old-nse-hull-validation.yml'
 
 permissions:
@@ -27,12 +29,16 @@ jobs:
       - name: Restore shared market snapshots
         run: python -c "import config; from nse_market_store import restore_prices; print(restore_prices(config.DB_PATH, min_days=1))"
       - name: Generate Old NSE plus Hull PAPER dry run
-        run: python -m scripts.run_old_nse_hull_local --db nse_scanner.db
+        run: python scripts/run_old_nse_hull_local.py --db nse_scanner.db --multi-horizon-shadow
       - name: Test isolated implementation
-        run: python -m pytest tests/test_old_nse_hull_discovery.py -q
+        run: python -m pytest tests/test_old_nse_hull_discovery.py tests/test_old_nse_hull_multi_horizon.py -q
+      - name: Build read-only multi-horizon walk-forward artifact
+        run: python scripts/run_old_nse_hull_walkforward.py --db nse_scanner.db
       - uses: actions/upload-artifact@v4
         with:
           name: old-nse-hull-local-dry-run
           path: |
             output/old_nse_hull_daily.json
             output/old_nse_hull_daily.html
+            output/old_nse_hull_shadow_preview.html
+            output/old_nse_hull_walkforward.json
