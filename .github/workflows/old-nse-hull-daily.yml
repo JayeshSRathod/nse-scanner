@@ -12,7 +12,7 @@ on:
       - '.github/workflows/old-nse-hull-daily.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   radar:
@@ -30,7 +30,7 @@ jobs:
         run: python -c "import config; from nse_market_store import restore_prices; print(restore_prices(config.DB_PATH, min_days=1))"
       - name: Generate PAPER radar for pull-request validation
         if: ${{ github.event_name == 'pull_request' }}
-        run: python -m scripts.run_old_nse_hull_local --db nse_scanner.db
+        run: python scripts/run_old_nse_hull_local.py --db nse_scanner.db --multi-horizon-shadow
       - name: Generate and deliver independent Old NSE plus Hull PAPER radar
         if: ${{ github.event_name != 'pull_request' }}
         env:
@@ -40,10 +40,24 @@ jobs:
           TELEGRAM_PINE_PORTFOLIO_TOPIC_ID: ${{ secrets.TELEGRAM_PINE_PORTFOLIO_TOPIC_ID }}
           TELEGRAM_OLD_HULL_DAILY_TOPIC_ID: ${{ secrets.TELEGRAM_OLD_HULL_DAILY_TOPIC_ID }}
           TELEGRAM_OLD_HULL_TRADES_TOPIC_ID: ${{ secrets.TELEGRAM_OLD_HULL_TRADES_TOPIC_ID }}
-        run: python -m scripts.run_old_nse_hull_local --db nse_scanner.db --send-telegram
+        run: python scripts/run_old_nse_hull_local.py --db nse_scanner.db --multi-horizon-shadow --send-telegram
       - uses: actions/upload-artifact@v4
         with:
           name: old-nse-hull-daily-radar
           path: |
             output/old_nse_hull_daily.json
             output/old_nse_hull_daily.html
+            output/old_nse_hull_shadow_preview.html
+      - name: Persist multi-horizon shadow comparison ledger
+        if: ${{ github.event_name != 'pull_request' }}
+        shell: bash
+        run: |
+          git config user.name "nse-scanner-bot"
+          git config user.email "nse-scanner-bot@users.noreply.github.com"
+          git add old_nse_hull_shadow_state.json old_nse_hull_paper_state.json
+          if git diff --cached --quiet; then
+            echo "No shadow comparison state changes to commit."
+          else
+            git commit -m "chore: record Old NSE Hull shadow comparison"
+            git push origin HEAD:main
+          fi

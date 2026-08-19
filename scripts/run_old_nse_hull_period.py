@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
 
 from old_nse_hull.delivery import send_period
 from old_nse_hull.engine import render_period_report, run_local
+from old_nse_hull.multi_horizon.comparison import summarize
 
 
 def main() -> int:
@@ -19,9 +20,10 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("period", choices=("weekly", "monthly"))
     parser.add_argument("--db", default="nse_scanner.db")
+    parser.add_argument("--shadow-state", default="old_nse_hull_shadow_state.json")
     parser.add_argument("--send-telegram", action="store_true")
     args = parser.parse_args()
-    message = render_period_report(run_local(args.db), args.period)
+    message = render_period_report(run_local(args.db), args.period, summarize(args.shadow_state))
     print(message)
     if args.send_telegram and not send_period(message, args.period).sent:
         return 2
