@@ -17,8 +17,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--shadow-state", default="old_nse_hull_shadow_state.json")
     parser.add_argument("--walkforward", default="output/old_nse_hull_walkforward.json")
+    parser.add_argument("--historical-state", default="old_nse_hull_historical_replay_state.json")
     args = parser.parse_args()
-    result = assess(args.shadow_state, args.walkforward)
+    result = assess(args.shadow_state, args.walkforward, args.historical_state)
     print(json.dumps(result, indent=2))
     return 0 if result["status"] == "READY_FOR_HUMAN_REVIEW" else 2
 

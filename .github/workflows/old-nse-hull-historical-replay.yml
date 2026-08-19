@@ -1,0 +1,36 @@
+name: Old NSE Hull Historical Shadow Replay
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Restore shared EOD snapshots only
+        run: python -c "import config; from nse_loader import init_database; from nse_market_store import restore_prices; init_database(config.DB_PATH); print(restore_prices(config.DB_PATH, min_days=320))"
+      - name: Replay 20 completed sessions without Telegram or downloads
+        run: python scripts/run_old_nse_hull_historical_replay.py --db nse_scanner.db --sessions 20
+      - uses: actions/upload-artifact@v4
+        with:
+          name: old-nse-hull-historical-replay
+          path: output/old_nse_hull_historical_replay.json
+      - name: Persist historical comparison state
+        shell: bash
+        run: |
+          git config user.name "nse-scanner-bot"
+          git config user.email "nse-scanner-bot@users.noreply.github.com"
+          git add old_nse_hull_historical_replay_state.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: persist Old NSE Hull historical replay"
+            git push
+          fi
