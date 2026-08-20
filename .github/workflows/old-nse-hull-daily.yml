@@ -40,7 +40,7 @@ jobs:
           LADDER_PORTFOLIO_TOPIC_ID: ${{ secrets.LADDER_PORTFOLIO_TOPIC_ID }}
           LADDER_VALIDATION_TOPIC_ID: ${{ secrets.LADDER_VALIDATION_TOPIC_ID }}
           LADDER_SYSTEM_TOPIC_ID: ${{ secrets.LADDER_SYSTEM_TOPIC_ID }}
-        run: python scripts/run_old_nse_hull_local.py --db nse_scanner.db --multi-horizon-shadow --send-telegram
+        run: python scripts/run_old_nse_hull_local.py --db nse_scanner.db --multi-horizon-shadow --send-telegram --send-shadow-preview
       - uses: actions/upload-artifact@v4
         with:
           name: old-nse-hull-daily-radar

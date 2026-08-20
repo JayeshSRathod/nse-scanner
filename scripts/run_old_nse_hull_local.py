@@ -33,7 +33,7 @@ def main() -> int:
                         help="Git-backed simulated watchlist and paper-position state used only in shadow mode.")
     parser.add_argument("--shadow-preview-html", default="output/old_nse_hull_shadow_preview.html")
     parser.add_argument("--send-shadow-preview", action="store_true",
-                        help="Send preview cards only after the 20-session validation threshold is met.")
+                        help="Send clearly labelled PAPER shadow cards to the Ladder validation topic.")
     args = parser.parse_args()
     if args.multi_horizon_shadow:
         import os
@@ -55,10 +55,6 @@ def main() -> int:
         if not delivery.sent or not trades_delivery.sent:
             return 2
     if args.send_shadow_preview:
-        summary = report.get("multi_horizon_shadow", {}).get("comparison_summary", {})
-        if not summary.get("validation_ready"):
-            print("[OLD_NSE_HULL] Shadow preview withheld: 20-session validation is incomplete.")
-            return 2
         for preview in shadow_messages:
             delivery = send_message(preview, "validation")
             if not delivery.sent:

@@ -80,22 +80,27 @@ def _action_card(candidate: Candidate, rank: int, allocations: dict[tuple[str, s
     execution_horizon = candidate.entry_horizon or candidate.primary_horizon
     route = candidate.entry_route or "FRESH ENTRY"
     htf = candidate.htf_state or "NEUTRAL"
+    entry_high = candidate.entry * 1.004
+    try:
+        cmp_value = float(candidate.metrics.get("close") or candidate.entry)
+    except (TypeError, ValueError):
+        cmp_value = candidate.entry
     lines = [
-        "━━━━━━━━━━━━━━━━━━", f"🆕 {ticker(candidate.symbol)} — <b>NEW {text(candidate.primary_horizon)}</b>",
-        f"<b>Score:</b> {candidate.score:.0f}/100  |  <b>Confidence:</b> {'HIGH' if candidate.score >= 85 else 'MEDIUM'}", "",
-        f"{TIMING_ICON.get(timing, '⚪')} Timing      {timing.replace('_', ' ')}",
-        f"Entry Horizon  {execution_horizon}", f"Quality Horizon {quality_horizon}",
-        f"Entry Route    {route}", f"Weekly HTF     {htf}", "",
-        f"Entry       {_price(candidate.entry)}", f"SL          {_price(candidate.stop)}",
-        f"T1          {_price(candidate.target1)}", f"T2          {_price(candidate.target2)}", "",
-        f"Risk        {candidate.risk_percent:.2f}%",
-        f"RR          {candidate.reward_risk_t1:.2f}R / {candidate.reward_risk_t2:.2f}R",
-        f"Validity    {candidate.valid_for_sessions} sessions",
+        "━━━━━━━━━━━━━━", f"🆕 {ticker(candidate.symbol)} • <b>{timing.replace('_', ' ')}</b>",
+        f"{text(candidate.primary_horizon)} {text(trigger.title())} • {candidate.score:.0f}/100", "",
+        f"CMP: {_price(cmp_value)}",
+        f"Entry: {_price(candidate.entry)}–{_price(entry_high)}",
+        f"SL: {_price(candidate.stop)} • Risk: {candidate.risk_percent:.2f}%",
+        f"T1: {_price(candidate.target1)} • T2: {_price(candidate.target2)}",
+        f"R:R: 1:{candidate.reward_risk_t2:.2f}", "",
+        f"Weekly: {text(htf)} • Route: {text(route)}",
+        f"Validity: {candidate.valid_for_sessions} sessions",
     ]
     reasons = _reason_lines(candidate)
     if reasons:
         lines.append("")
-        lines.extend(f"• {text(reason)}" for reason in reasons)
+        lines.extend(f"✅ {text(reason)}" for reason in reasons[:3])
+    lines.extend(["", "Next: Act only after trigger confirmation"])
     return "\n".join(lines)
 
 
@@ -154,23 +159,22 @@ def _watch_entry_guidance(candidate: Candidate) -> tuple[float, float, float, st
 
 def _watch_card(candidate: Candidate, rank: int) -> str:
     timing = _timing(candidate)
-    lines = [
-        "━━━━━━━━━━━━━━━━━━", f"{rank}. {candidate.symbol} | {candidate.primary_horizon} | Score {candidate.score:.0f}",
-        f"Opportunity: {candidate.opportunity_classification} | Stage: {candidate.progression_stage}",
-        f"{TIMING_ICON.get(timing, '⚪')} Timing: {timing.replace('_', ' ')} | Weekly HTF: {candidate.htf_state or 'NEUTRAL'}",
-        f"Entry Horizon: {candidate.entry_horizon or candidate.primary_horizon} | Quality Horizon: {candidate.quality_horizon or candidate.primary_horizon}",
-        f"Status: {_watch_reason(candidate)}",
-    ]
+    readiness = {
+        "READY": "🟢 READY", "PULLBACK_REENTRY": "🟡 NEAR", "EARLY": "🔵 BUILD",
+        "HOLD_TREND": "🟡 NEAR", "EXTENDED": "⚪ WAIT", "WEAK": "🔴 AVOID",
+    }.get(timing, "⚪ WAIT")
+    lines = ["━━━━━━━━━━━━━━", f"{readiness} • {ticker(candidate.symbol)}",
+             f"{text(candidate.primary_horizon)} • Score {candidate.score:.0f}/100"]
     guidance = _watch_entry_guidance(candidate)
     if guidance:
-        preferred, low, high, basis = guidance
+        _preferred, low, high, _basis = guidance
         if low == high:
-            lines.append(f"Preferred Entry: {_price(preferred)} — confirmation required")
+            lines.append(f"Entry: {_price(low)} • confirmation required")
         else:
-            lines.append(f"Preferred Entry: {_price(preferred)} | Zone: {_price(low)}–{_price(high)}")
-        lines.append(f"Entry basis: {basis}")
-    action = "WAIT for pullback/re-entry trigger" if timing in {"EXTENDED", "PULLBACK_REENTRY"} else "WAIT for a fresh trigger; watch closely"
-    lines.append(f"Action: {action}; this is not an active buy signal.")
+            lines.append(f"Entry: {_price(low)}–{_price(high)}")
+    else:
+        lines.append("Entry: Awaiting valid structure")
+    lines.append(text(_watch_reason(candidate)))
     return "\n".join(lines)
 
 
@@ -203,7 +207,11 @@ def render_candidate_messages(
     messages.extend(_action_messages(action_rows, allocations))
     if watch_rows:
         cards = [_watch_card(candidate, rank) for rank, candidate in enumerate(watch_rows, 1)]
-        messages.extend(paginate_cards("🟡 <b>NSE V3 — WATCHLIST</b>", cards))
+        legend = "🟢 Ready • 🟡 Near • 🔵 Build • ⚪ Wait • 🔴 Avoid\nScreening watchlist—not an active buy signal."
+        messages.extend(paginate_cards(
+            f"👀 <b>V3 RADAR WATCHLIST</b>\n{text(trade_date)} EOD • {len(watch_rows)} stocks",
+            cards, legend,
+        ))
     return messages
 
 

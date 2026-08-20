@@ -16,14 +16,26 @@ def _card(row: dict) -> str:
     symbol = escape(str(row["symbol"]))
     url = f"https://www.tradingview.com/chart/?symbol=NSE%3A{symbol}"
     confirmations = ", ".join(row.get("confirming_horizons") or []) or "none"
+    levels = row.get("trade_levels") or {}
+    trigger = levels.get("entry_trigger")
+    atr = float(row.get("atr", 0) or 0)
+    if levels.get("eligible_for_paper") and trigger:
+        entry = f"₹{float(trigger):,.2f}–₹{float(trigger) + 0.15 * atr:,.2f}"
+        readiness = "🟢 READY" if str(row.get("lifecycle_status")) in {"NEW_TRIGGER", "NEWLY_QUALIFIED", "UPGRADED"} else "🟡 NEAR"
+    else:
+        entry = "Awaiting valid structure"
+        readiness = "⚪ WAIT"
+    reason = "Multi-horizon strength • confirmation present" if confirmations != "none" else "Primary horizon qualified • confirmation pending"
     return "\n".join([
-        "──────────────────",
-        f"🧪 <b><a href=\"{url}\">{symbol}</a></b> — {escape(str(row.get('lifecycle_status', 'RADAR')))}",
+        "━━━━━━━━━━━━━━",
+        f"{readiness} • <b><a href=\"{url}\">{symbol}</a></b>",
         f"Primary: <b>{escape(str(row.get('primary_horizon', '—')))}</b> | Score: <b>{float(row.get('primary_score', 0)):.0f}/100</b>",
-        f"Horizon scores: 1M {_score(row, '1M')} | 3M {_score(row, '3M')} | 6M {_score(row, '6M')} | 12M {_score(row, '12M')}",
-        f"Confirmation: {escape(confirmations)} | Confluence: {float(row.get('confluence_score', 0)):.0f}/100",
+        f"1M {_score(row, '1M')} ✅ • 3M {_score(row, '3M')} {'✅' if '3M' in confirmations else '⚪'}",
+        f"6M {_score(row, '6M')} {'✅' if '6M' in confirmations else '⚪'} • 12M {_score(row, '12M')} {'✅' if '12M' in confirmations else '⚪'}",
+        f"Entry: {entry}",
+        escape(reason),
         f"CMP: ₹{float(row.get('close', 0)):,.2f} | ATR: {float(row.get('atr_pct', 0)):.1f}%",
-        "Status: <b>PAPER SHADOW — NOT AN ENTRY</b>",
+        "<b>PAPER SHADOW — NOT AN ENTRY</b>",
     ])
 
 
@@ -32,7 +44,7 @@ def render_messages(report: dict) -> list[str]:
     shadow = report.get("multi_horizon_shadow", {})
     summary = shadow.get("comparison_summary", {})
     title = [
-        "🧪 <b>OLD NSE + HULL — MULTI-HORIZON SHADOW</b>",
+        "🪜 <b>LADDER RADAR WATCHLIST</b>",
         "<b>PAPER RESEARCH • BASELINE TELEGRAM UNCHANGED</b>",
         f"Data: {escape(str(shadow.get('as_of_date', 'N/A')))} EOD",
         f"Data health: {escape(str(shadow.get('data_health', {}).get('status', 'N/A')))} | Market context: {escape(str(shadow.get('market_context', {}).get('regime', 'AWAITING_DATA')))}",
@@ -51,4 +63,4 @@ def render_messages(report: dict) -> list[str]:
             current += "\n" + card
     messages.append(current)
     total = len(messages)
-    return [f"{message}\n\n<i>Shadow preview {index}/{total}. No live-trading instruction.</i>" for index, message in enumerate(messages, 1)]
+    return [f"{message}\n\n🟢 Ready • 🟡 Near • ⚪ Wait\n<i>Shadow preview {index}/{total}. No live-trading instruction.</i>" for index, message in enumerate(messages, 1)]

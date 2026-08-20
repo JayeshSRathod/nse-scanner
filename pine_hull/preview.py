@@ -1,6 +1,9 @@
 """Mobile-first Telegram rendering for the isolated Pine Hull paper system."""
 from __future__ import annotations
 
+from html import escape
+from urllib.parse import quote
+
 
 def _number(value: object, default: float = 0.0) -> float:
     try:
@@ -15,6 +18,20 @@ def _price(value: object) -> str:
 
 def _rank_badge(rank: int) -> str:
     return {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, f"#{rank}")
+
+
+def _ticker(symbol: object) -> str:
+    raw = str(symbol).strip().upper()
+    label = escape(raw)
+    url = f'https://www.tradingview.com/chart/?symbol={quote("NSE:" + raw, safe="")}'
+    return f'<a href="{url}"><b>{label}</b></a>'
+
+
+def _watch_range(item: dict) -> tuple[float, float]:
+    close, atr = _number(item.get("close")), _number(item.get("atr14"))
+    supports = [_number(item.get(name)) for name in ("hybrid_hull", "hma21") if _number(item.get(name)) > 0]
+    center = max(supports) if item.get("overextended") and supports else max(close, max(supports, default=close))
+    return max(0.01, center - 0.15 * atr), center + 0.15 * atr
 
 
 def render_daily_signals(result: dict) -> str:
@@ -37,35 +54,39 @@ def render_daily_signals(result: dict) -> str:
         lines.extend(["", "✅ Scan completed", "Fresh Signals: 0", "No new qualified Pine Hull entry today."])
     for rank, position in enumerate(created, 1):
         weekly = "Confirmed" if position.get("htf_weekly_bullish") else "Pending / weak"
+        entry = _number(position["entry"])
+        entry_high = entry + 0.15 * max(0.0, _number(position.get("target1")) - entry) / 1.5
         lines.extend([
             "",
-            "━━━━━━━━━━━━━━━━━━",
-            f"{_rank_badge(rank)} {position['symbol']}",
-            "PINE HULL • READY LONG",
-            f"Score: {_number(position.get('score')):.0f}/100" if position.get("score") is not None else "Paper Signal: READY",
+            "━━━━━━━━━━━━━━",
+            f"{_rank_badge(rank)} {_ticker(position['symbol'])} • READY LONG",
+            "Hull Pullback Continuation",
             "",
-            f"Entry       {_price(position['entry'])}",
-            f"SL          {_price(position['initial_stop'])}",
-            f"T1          {_price(position['target1'])}",
-            f"T2          {_price(position['target2'])}",
+            f"Entry: {_price(entry)}–{_price(entry_high)}",
+            f"SL: {_price(position['initial_stop'])}",
+            f"T1: {_price(position['target1'])} • T2: {_price(position['target2'])}",
             "",
-            f"Weekly HTF  {weekly}",
-            "✓ Daily Hull bullish",
-            "✓ HMA21 > HMA51",
-            "✓ KAMA30 rising",
-            "✓ Trend commitment confirmed",
+            f"Weekly: {weekly}",
+            "✅ Daily Hull bullish",
+            "✅ HMA21 > HMA51",
+            "✅ KAMA30 rising",
             "",
-            "Paper entry frozen at EOD signal close.",
+            "PAPER — entry requires trigger confirmation.",
         ])
 
     if watch:
-        lines.extend(["", "🟡 PINE WATCH — TREND PRESENT, ENTRY NOT READY"])
+        lines.extend(["", "👀 <b>HULL PINE WATCHLIST</b>", f"{result.get('trade_date', '-')} EOD • {len(watch)} stocks"])
         for item in watch:
-            reason = "wait for commitment"
+            timing = str(item.get("timing_state", "EARLY"))
+            readiness = "⚪ WAIT" if item.get("overextended") else "🔵 BUILD" if timing == "EARLY" else "🟡 NEAR"
+            reason = "Hull rising • commitment pending"
             if item.get("overextended"):
-                reason = "extended; wait for reset"
+                reason = "Extended price • wait for reset"
             elif item.get("chop") or item.get("rotational"):
-                reason = "chop/rotation; wait for expansion"
-            lines.append(f"• {item['symbol']} | Score {_number(item.get('score')):.0f} | {reason}")
+                readiness, reason = "🔴 AVOID", "Chop/rotation • expansion pending"
+            low, high = _watch_range(item)
+            lines.extend(["", "━━━━━━━━━━━━━━", f"{readiness} • {_ticker(item['symbol'])}",
+                          f"Entry: {_price(low)}–{_price(high)}", reason])
+        lines.extend(["", "🟢 Ready • 🟡 Near • 🔵 Build • ⚪ Wait • 🔴 Avoid", "PAPER — enter only after trigger confirmation."])
 
     return "\n".join(lines)
