@@ -1,17 +1,72 @@
-"""Telegram delivery facade for the isolated Pine Hull system."""
+"""Fail-closed Telegram delivery for the isolated Hull Pine bot."""
 from __future__ import annotations
 
-from v2.telegram_delivery import DeliveryResult, send_messages, topic_id
+import os
+import time
+from dataclasses import dataclass
+
+import requests
+
+
+@dataclass(frozen=True)
+class DeliveryResult:
+    sent: bool
+    message_count: int
+    reason: str
+
+
+def _topic_id(kind: str) -> int | None:
+    value = os.getenv(f"HULL_{kind}_TOPIC_ID", "").strip()
+    try:
+        parsed = int(value)
+    except ValueError:
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _send(messages: list[str], *, enabled: bool, topic: str) -> DeliveryResult:
+    if not enabled:
+        return DeliveryResult(False, 0, "dry_run")
+    token = os.getenv("HULL_TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = os.getenv("HULL_TELEGRAM_CHAT_ID", "").strip()
+    if not token or not chat_id:
+        return DeliveryResult(False, 0, "hull_telegram_credentials_missing")
+    clean = [message.strip() for message in messages if message and message.strip()]
+    if not clean:
+        return DeliveryResult(False, 0, "no_messages")
+    thread_id = _topic_id(topic)
+    endpoint = f"https://api.telegram.org/bot{token}/sendMessage"
+    sent, errors = 0, []
+    for index, message in enumerate(clean, start=1):
+        payload: dict[str, object] = {
+            "chat_id": chat_id, "text": message, "parse_mode": "HTML",
+            "disable_web_page_preview": True,
+        }
+        if thread_id is not None:
+            payload["message_thread_id"] = thread_id
+        try:
+            response = requests.post(endpoint, json=payload, timeout=20)
+            response.raise_for_status()
+            if not response.json().get("ok"):
+                raise RuntimeError("telegram_rejected")
+            sent += 1
+        except (requests.RequestException, RuntimeError, ValueError) as exc:
+            errors.append(f"message_{index}:{type(exc).__name__}")
+        if index < len(clean):
+            time.sleep(1)
+    if sent == len(clean):
+        return DeliveryResult(True, sent, "sent")
+    reason = ("partial_delivery:" if sent else "delivery_failed:") + ",".join(errors)
+    return DeliveryResult(sent > 0, sent, reason)
 
 
 def send_signals(messages: list[str], *, enabled: bool) -> DeliveryResult:
-    return send_messages(messages, enabled=enabled, message_thread_id=topic_id("PINE_SIGNALS"))
+    return _send(messages, enabled=enabled, topic="DAILY")
 
 
 def send_portfolio(message: str, *, enabled: bool) -> DeliveryResult:
-    return send_messages([message], enabled=enabled, message_thread_id=topic_id("PINE_PORTFOLIO"))
+    return _send([message], enabled=enabled, topic="PORTFOLIO")
 
 
 def send_period(message: str, *, period: str, enabled: bool) -> DeliveryResult:
-    kind = "PINE_WEEKLY" if period == "weekly" else "PINE_MONTHLY"
-    return send_messages([message], enabled=enabled, message_thread_id=topic_id(kind))
+    return _send([message], enabled=enabled, topic="REVIEW")

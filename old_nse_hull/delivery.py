@@ -15,10 +15,12 @@ class DeliveryResult:
 
 def _topic_id(kind: str) -> int | None:
     names = {
-        "radar": ("TELEGRAM_OLD_HULL_DAILY_TOPIC_ID", "TELEGRAM_PINE_SIGNALS_TOPIC_ID"),
-        "trades": ("TELEGRAM_OLD_HULL_TRADES_TOPIC_ID", "TELEGRAM_PINE_PORTFOLIO_TOPIC_ID"),
-        "weekly": ("TELEGRAM_OLD_HULL_WEEKLY_TOPIC_ID", "TELEGRAM_PINE_WEEKLY_TOPIC_ID"),
-        "monthly": ("TELEGRAM_OLD_HULL_MONTHLY_TOPIC_ID", "TELEGRAM_PINE_MONTHLY_TOPIC_ID"),
+        "radar": ("LADDER_DAILY_TOPIC_ID",),
+        "trades": ("LADDER_PORTFOLIO_TOPIC_ID",),
+        "validation": ("LADDER_VALIDATION_TOPIC_ID",),
+        "weekly": ("LADDER_REVIEW_TOPIC_ID",),
+        "monthly": ("LADDER_REVIEW_TOPIC_ID",),
+        "system": ("LADDER_SYSTEM_TOPIC_ID",),
     }
     value = next((os.getenv(name, "").strip() for name in names[kind] if os.getenv(name, "").strip()), "")
     try:
@@ -29,9 +31,9 @@ def _topic_id(kind: str) -> int | None:
 
 
 def send_message(message: str, kind: str, timeout: int = 20) -> DeliveryResult:
-    """Deliver to a dedicated Old+Hull topic, reusing the retired Pine topic IDs."""
-    token = os.getenv("TELEGRAM_TOKEN", "").strip()
-    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    """Deliver only through the Momentum Ladder bot; never cross-route."""
+    token = os.getenv("LADDER_TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = os.getenv("LADDER_TELEGRAM_CHAT_ID", "").strip()
     if not token or not chat_id:
         return DeliveryResult(False, "telegram_not_configured")
     payload: dict[str, object] = {

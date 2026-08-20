@@ -26,7 +26,11 @@ def send_failure_alert(step, reason, scan_date):
            f"*Step:* {step}\n*Reason:* `{reason}`\n\n⚠️ Action required")
     try:
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        requests.post(url, data={"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown"}, timeout=10)
+        payload = {"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown"}
+        topic = os.environ.get("V3_SYSTEM_TOPIC_ID", "").strip()
+        if topic.isdigit() and int(topic) > 0:
+            payload["message_thread_id"] = int(topic)
+        requests.post(url, data=payload, timeout=10)
     except Exception:
         pass
 
@@ -52,8 +56,8 @@ try:
 except ImportError:
     pass
 
-TOKEN         = os.environ.get("TELEGRAM_TOKEN", "").strip()
-CHAT_ID       = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+TOKEN         = os.environ.get("V3_TELEGRAM_BOT_TOKEN", "").strip()
+CHAT_ID       = os.environ.get("V3_TELEGRAM_CHAT_ID", "").strip()
 GITHUB_TOKEN  = os.environ.get("GITHUB_TOKEN", "").strip()
 GITHUB_REPO   = os.environ.get("GITHUB_REPO", "JayeshSRathod/nse-scanner").strip()
 GITHUB_BRANCH = os.environ.get("GITHUB_BRANCH", "main").strip()
@@ -68,8 +72,8 @@ V2_GO_LIVE_DATE = date.fromisoformat(os.environ.get("V2_GO_LIVE_DATE", "2026-08-
 V3_ACTIVATION_DATE = date.fromisoformat(os.environ.get("V3_ACTIVATION_DATE", "2026-08-19"))
 
 missing = []
-if not TOKEN:   missing.append("TELEGRAM_TOKEN")
-if not CHAT_ID: missing.append("TELEGRAM_CHAT_ID")
+if not TOKEN:   missing.append("V3_TELEGRAM_BOT_TOKEN")
+if not CHAT_ID: missing.append("V3_TELEGRAM_CHAT_ID")
 if missing:
     print(f"[ERROR] Missing vars: {', '.join(missing)}")
     sys.exit(1)

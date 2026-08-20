@@ -60,7 +60,7 @@ def main() -> int:
             print("[OLD_NSE_HULL] Shadow preview withheld: 20-session validation is incomplete.")
             return 2
         for preview in shadow_messages:
-            delivery = send_message(preview, "radar")
+            delivery = send_message(preview, "validation")
             if not delivery.sent:
                 print(f"[OLD_NSE_HULL] Shadow preview Telegram: {delivery.reason}")
                 return 2

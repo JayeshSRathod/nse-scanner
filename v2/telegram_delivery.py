@@ -14,7 +14,7 @@ import requests
 
 from .v3_telegram import fingerprint
 
-STATE_PATH = Path("telegram_delivery_state.json")
+STATE_PATH = Path("v3_telegram_delivery_state.json")
 
 
 @dataclass(frozen=True)
@@ -25,17 +25,17 @@ class DeliveryResult:
 
 
 def _token() -> str | None:
-    value = os.getenv("V2_TELEGRAM_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("TELEGRAM_TOKEN")
+    value = os.getenv("V3_TELEGRAM_BOT_TOKEN")
     return value.strip() if value else None
 
 
 def _user_chat_id() -> str | None:
-    value = os.getenv("V2_TELEGRAM_CHAT_ID") or os.getenv("TELEGRAM_CHAT_ID") or os.getenv("TELEGRAM_CHATID")
+    value = os.getenv("V3_TELEGRAM_CHAT_ID")
     return value.strip() if value else None
 
 
 def _admin_chat_id() -> str | None:
-    value = os.getenv("V2_ADMIN_CHAT_ID") or os.getenv("ADMIN_CHAT_ID")
+    value = os.getenv("V3_ADMIN_CHAT_ID") or os.getenv("V3_TELEGRAM_CHAT_ID")
     return value.strip() if value else None
 
 
@@ -45,7 +45,7 @@ def _rich_enabled() -> bool:
 
 
 def topic_id(kind: str) -> int | None:
-    value = os.getenv(f"V2_TELEGRAM_{kind}_TOPIC_ID") or os.getenv(f"TELEGRAM_{kind}_TOPIC_ID")
+    value = os.getenv(f"V3_{kind}_TOPIC_ID")
     try:
         parsed = int(value) if value else None
         return parsed if parsed and parsed > 0 else None
@@ -254,4 +254,5 @@ def send_messages(messages: list[str], enabled: bool = False, timeout: int = 20,
 
 def send_admin_messages(messages: list[str], enabled: bool = False, timeout: int = 20) -> DeliveryResult:
     return _send_to_chat(messages, chat_id=_admin_chat_id(), enabled=enabled, timeout=timeout,
-                         missing_reason="admin_telegram_credentials_missing", prefer_rich=True)
+                         missing_reason="admin_telegram_credentials_missing",
+                         message_thread_id=topic_id("SYSTEM"), prefer_rich=True)

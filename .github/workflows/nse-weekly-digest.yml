@@ -39,7 +39,7 @@ jobs:
 
       - name: Send weekly model digest
         env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TELEGRAM_WEEKLY_TOPIC_ID: ${{ secrets.TELEGRAM_WEEKLY_TOPIC_ID }}
+          V3_TELEGRAM_BOT_TOKEN: ${{ secrets.V3_TELEGRAM_BOT_TOKEN }}
+          V3_TELEGRAM_CHAT_ID: ${{ secrets.V3_TELEGRAM_CHAT_ID }}
+          V3_WEEKLY_TOPIC_ID: ${{ secrets.V3_WEEKLY_TOPIC_ID }}
         run: python nse_weekly_digest.py

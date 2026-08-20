@@ -56,9 +56,9 @@ jobs:
 
       - name: Send monthly V2 portfolio review
         env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TELEGRAM_MONTHLY_TOPIC_ID: ${{ secrets.TELEGRAM_MONTHLY_TOPIC_ID }}
+          V3_TELEGRAM_BOT_TOKEN: ${{ secrets.V3_TELEGRAM_BOT_TOKEN }}
+          V3_TELEGRAM_CHAT_ID: ${{ secrets.V3_TELEGRAM_CHAT_ID }}
+          V3_MONTHLY_TOPIC_ID: ${{ secrets.V3_MONTHLY_TOPIC_ID }}
         run: python scripts/run_monthly_v2_portfolio_review.py --send-telegram
 
       - name: Run Sprint 8 tests

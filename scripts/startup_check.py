@@ -10,12 +10,11 @@ import requests
 
 def main() -> int:
     errors: list[str] = []
-    token = os.getenv("TELEGRAM_TOKEN", "").strip()
-    chat_id = (os.getenv("TELEGRAM_CHAT_ID") or os.getenv("ADMIN_CHAT_ID") or "").strip()
-    if not token:
-        errors.append("TELEGRAM_TOKEN missing")
-    if not chat_id:
-        errors.append("TELEGRAM_CHAT_ID/ADMIN_CHAT_ID missing")
+    routes = {
+        "V3": ("V3_TELEGRAM_BOT_TOKEN", "V3_TELEGRAM_CHAT_ID"),
+        "LADDER": ("LADDER_TELEGRAM_BOT_TOKEN", "LADDER_TELEGRAM_CHAT_ID"),
+        "HULL": ("HULL_TELEGRAM_BOT_TOKEN", "HULL_TELEGRAM_CHAT_ID"),
+    }
     for filename in ("telegram_last_scan.json", "scan_history.json"):
         path = Path(filename)
         if not path.exists():
@@ -25,13 +24,20 @@ def main() -> int:
             json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             errors.append(f"{filename} invalid: {exc}")
-    if token:
+    for route, (token_name, chat_name) in routes.items():
+        token = os.getenv(token_name, "").strip()
+        chat_id = os.getenv(chat_name, "").strip()
+        if not token:
+            errors.append(f"{token_name} missing")
+            continue
+        if not chat_id:
+            errors.append(f"{chat_name} missing")
         try:
             response = requests.get(f"https://api.telegram.org/bot{token}/getMe", timeout=15)
             if response.status_code != 200 or not response.json().get("ok"):
-                errors.append(f"Telegram getMe failed: HTTP {response.status_code}")
+                errors.append(f"{route} Telegram getMe failed: HTTP {response.status_code}")
         except requests.RequestException as exc:
-            errors.append(f"Telegram getMe unavailable: {exc}")
+            errors.append(f"{route} Telegram getMe unavailable: {exc}")
     if errors:
         print("STARTUP CHECK FAILED")
         for error in errors:

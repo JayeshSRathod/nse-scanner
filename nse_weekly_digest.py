@@ -399,12 +399,12 @@ def generate_weekly_digest(week_ending=None, dry_run=False):
     if dry_run:
         import re; print(re.sub(r'<[^>]+>','',message))
     else:
-        token = getattr(config,'TELEGRAM_TOKEN','')
-        cid = getattr(config,'TELEGRAM_CHATID','')
+        token = os.getenv("V3_TELEGRAM_BOT_TOKEN", "").strip()
+        cid = os.getenv("V3_TELEGRAM_CHAT_ID", "").strip()
         if token and cid:
             try:
                 payload = {'chat_id':cid, 'text':message, 'parse_mode':'HTML'}
-                topic_id = os.getenv("TELEGRAM_WEEKLY_TOPIC_ID")
+                topic_id = os.getenv("V3_WEEKLY_TOPIC_ID")
                 if topic_id and topic_id.isdigit():
                     payload["message_thread_id"] = int(topic_id)
                 r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage",

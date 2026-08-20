@@ -48,7 +48,7 @@ def test_equal_weight_benchmark_is_reproducible():
 
 
 def test_telegram_is_dry_run_by_default(monkeypatch):
-    monkeypatch.delenv("V2_TELEGRAM_TOKEN", raising=False)
+    monkeypatch.delenv("V3_TELEGRAM_BOT_TOKEN", raising=False)
     result = send_messages(["one", "two"])
     assert not result.sent
     assert result.message_count == 0
@@ -56,7 +56,7 @@ def test_telegram_is_dry_run_by_default(monkeypatch):
 
 
 def test_telegram_enabled_without_credentials_fails_closed(monkeypatch):
-    for key in ["V2_TELEGRAM_TOKEN", "TELEGRAM_TOKEN", "V2_TELEGRAM_CHAT_ID", "TELEGRAM_CHAT_ID", "TELEGRAM_CHATID"]:
+    for key in ["V3_TELEGRAM_BOT_TOKEN", "V3_TELEGRAM_CHAT_ID", "TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID"]:
         monkeypatch.delenv(key, raising=False)
     result = send_messages(["one"], enabled=True)
     assert not result.sent

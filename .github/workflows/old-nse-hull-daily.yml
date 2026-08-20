@@ -34,12 +34,12 @@ jobs:
       - name: Generate and deliver independent Old NSE plus Hull PAPER radar
         if: ${{ github.event_name != 'pull_request' }}
         env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TELEGRAM_PINE_SIGNALS_TOPIC_ID: ${{ secrets.TELEGRAM_PINE_SIGNALS_TOPIC_ID }}
-          TELEGRAM_PINE_PORTFOLIO_TOPIC_ID: ${{ secrets.TELEGRAM_PINE_PORTFOLIO_TOPIC_ID }}
-          TELEGRAM_OLD_HULL_DAILY_TOPIC_ID: ${{ secrets.TELEGRAM_OLD_HULL_DAILY_TOPIC_ID }}
-          TELEGRAM_OLD_HULL_TRADES_TOPIC_ID: ${{ secrets.TELEGRAM_OLD_HULL_TRADES_TOPIC_ID }}
+          LADDER_TELEGRAM_BOT_TOKEN: ${{ secrets.LADDER_TELEGRAM_BOT_TOKEN }}
+          LADDER_TELEGRAM_CHAT_ID: ${{ secrets.LADDER_TELEGRAM_CHAT_ID }}
+          LADDER_DAILY_TOPIC_ID: ${{ secrets.LADDER_DAILY_TOPIC_ID }}
+          LADDER_PORTFOLIO_TOPIC_ID: ${{ secrets.LADDER_PORTFOLIO_TOPIC_ID }}
+          LADDER_VALIDATION_TOPIC_ID: ${{ secrets.LADDER_VALIDATION_TOPIC_ID }}
+          LADDER_SYSTEM_TOPIC_ID: ${{ secrets.LADDER_SYSTEM_TOPIC_ID }}
         run: python scripts/run_old_nse_hull_local.py --db nse_scanner.db --multi-horizon-shadow --send-telegram
       - uses: actions/upload-artifact@v4
         with:

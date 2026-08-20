@@ -1,0 +1,25 @@
+name: Hull Pine Monthly Review
+
+on:
+  schedule:
+    - cron: '50 3 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hull-pine-monthly:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Send Hull Pine monthly review
+        env:
+          HULL_TELEGRAM_BOT_TOKEN: ${{ secrets.HULL_TELEGRAM_BOT_TOKEN }}
+          HULL_TELEGRAM_CHAT_ID: ${{ secrets.HULL_TELEGRAM_CHAT_ID }}
+          HULL_REVIEW_TOPIC_ID: ${{ secrets.HULL_REVIEW_TOPIC_ID }}
+        run: python scripts/run_pine_hull_period.py monthly --send-telegram

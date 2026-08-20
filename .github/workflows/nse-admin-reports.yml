@@ -27,9 +27,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      ADMIN_CHAT_ID: ${{ secrets.ADMIN_CHAT_ID }}
+      TELEGRAM_TOKEN: ${{ secrets.V3_TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.V3_TELEGRAM_CHAT_ID }}
+      ADMIN_CHAT_ID: ${{ secrets.V3_TELEGRAM_CHAT_ID }}
       DB_PATH: nse_scanner.db
     steps:
       - name: Checkout

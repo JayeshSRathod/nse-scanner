@@ -1,6 +1,10 @@
-name: Deprecated Pine Hull EOD Paper System
+name: Hull Pine EOD Paper System
 
-on: workflow_dispatch
+on:
+  schedule:
+    # 02:45 UTC is 08:15 IST, after the shared data pipeline.
+    - cron: '45 2 * * 1-5'
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -14,8 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  retired:
-    if: ${{ false }}
+  hull-pine-daily:
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -35,10 +38,10 @@ jobs:
 
       - name: Run isolated Pine Hull paper system
         env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TELEGRAM_PINE_SIGNALS_TOPIC_ID: ${{ secrets.TELEGRAM_PINE_SIGNALS_TOPIC_ID }}
-          TELEGRAM_PINE_PORTFOLIO_TOPIC_ID: ${{ secrets.TELEGRAM_PINE_PORTFOLIO_TOPIC_ID }}
+          HULL_TELEGRAM_BOT_TOKEN: ${{ secrets.HULL_TELEGRAM_BOT_TOKEN }}
+          HULL_TELEGRAM_CHAT_ID: ${{ secrets.HULL_TELEGRAM_CHAT_ID }}
+          HULL_DAILY_TOPIC_ID: ${{ secrets.HULL_DAILY_TOPIC_ID }}
+          HULL_PORTFOLIO_TOPIC_ID: ${{ secrets.HULL_PORTFOLIO_TOPIC_ID }}
         run: python scripts/run_pine_hull_daily.py --restore-snapshots --send-telegram
 
       - name: Persist Pine-only paper state

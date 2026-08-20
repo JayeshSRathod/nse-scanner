@@ -21,9 +21,9 @@ def _error_response(status: int, description: str) -> Mock:
 
 
 def test_admin_delivery_uses_admin_chat_id(monkeypatch) -> None:
-    monkeypatch.setenv("TELEGRAM_TOKEN", "token")
-    monkeypatch.setenv("TELEGRAM_CHAT_ID", "user-123")
-    monkeypatch.setenv("ADMIN_CHAT_ID", "admin-456")
+    monkeypatch.setenv("V3_TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("V3_TELEGRAM_CHAT_ID", "user-123")
+    monkeypatch.setenv("V3_ADMIN_CHAT_ID", "admin-456")
     with patch("v2.telegram_delivery.requests.post", return_value=_ok_response()) as post:
         result = send_admin_messages(["admin report"], enabled=True)
     assert result.sent is True
@@ -33,8 +33,8 @@ def test_admin_delivery_uses_admin_chat_id(monkeypatch) -> None:
 
 
 def test_user_delivery_remains_on_user_chat_id(monkeypatch) -> None:
-    monkeypatch.setenv("TELEGRAM_TOKEN", "token")
-    monkeypatch.setenv("TELEGRAM_CHAT_ID", "user-123")
+    monkeypatch.setenv("V3_TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("V3_TELEGRAM_CHAT_ID", "user-123")
     monkeypatch.setenv("ADMIN_CHAT_ID", "admin-456")
     with patch("v2.telegram_delivery.requests.post", return_value=_ok_response()) as post:
         result = send_messages(["user report"], enabled=True)
@@ -42,9 +42,9 @@ def test_user_delivery_remains_on_user_chat_id(monkeypatch) -> None:
     assert post.call_args.kwargs["json"]["chat_id"] == "user-123"
 
 
-def test_topic_url_and_copy_buttons_work_for_compact_v2(monkeypatch) -> None:
-    monkeypatch.setenv("TELEGRAM_TOKEN", "token")
-    monkeypatch.setenv("TELEGRAM_CHAT_ID", "group-123")
+def test_topic_delivery_preserves_explicit_topic_without_callbacks(monkeypatch) -> None:
+    monkeypatch.setenv("V3_TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("V3_TELEGRAM_CHAT_ID", "group-123")
     message = (
         "🚀 ACTION CANDIDATES\n1 Fresh Actionable Stocks\n\n"
         "━━━━━━━━━━━━━━━━━━\n🥇 ABC\n3M • TREND CONTINUATION\nScore: 88/100\n\n"
@@ -55,15 +55,12 @@ def test_topic_url_and_copy_buttons_work_for_compact_v2(monkeypatch) -> None:
     assert result.sent is True
     payload = post.call_args.kwargs["json"]
     assert payload["message_thread_id"] == 321
-    keyboard = payload["reply_markup"]["inline_keyboard"][0]
-    assert keyboard[0]["url"].endswith("NSE%3AABC")
-    assert keyboard[2]["copy_text"]["text"] == "ABC | Entry ₹100.00 | SL ₹94.00 | T1 ₹109.00 | T2 ₹118.00"
-    assert all("callback_data" not in button for button in keyboard)
+    assert "reply_markup" not in payload
 
 
-def test_pine_signal_gets_same_outbound_only_buttons(monkeypatch) -> None:
-    monkeypatch.setenv("TELEGRAM_TOKEN", "token")
-    monkeypatch.setenv("TELEGRAM_CHAT_ID", "group-123")
+def test_v3_transport_does_not_generate_pine_controls(monkeypatch) -> None:
+    monkeypatch.setenv("V3_TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("V3_TELEGRAM_CHAT_ID", "group-123")
     message = (
         "📐 PINE HULL SIGNALS\n1 Fresh Paper Entries • 0 Watch\n\n"
         "━━━━━━━━━━━━━━━━━━\n🥇 RELIANCE\nPINE HULL • READY LONG\n\n"
@@ -72,48 +69,48 @@ def test_pine_signal_gets_same_outbound_only_buttons(monkeypatch) -> None:
     with patch("v2.telegram_delivery.requests.post", return_value=_ok_response()) as post:
         result = send_messages([message], enabled=True)
     assert result.sent is True
-    keyboard = post.call_args.kwargs["json"]["reply_markup"]["inline_keyboard"][0]
-    assert keyboard[0]["url"].endswith("NSE%3ARELIANCE")
-    assert keyboard[2]["copy_text"]["text"] == "RELIANCE | Entry ₹1,500.00 | SL ₹1,450.00 | T1 ₹1,575.00 | T2 ₹1,650.00"
+    assert "reply_markup" not in post.call_args.kwargs["json"]
 
 
-def test_rich_failure_falls_back_to_plain_message(monkeypatch) -> None:
-    monkeypatch.setenv("TELEGRAM_TOKEN", "token")
-    monkeypatch.setenv("TELEGRAM_CHAT_ID", "group-123")
+def test_html_failure_falls_back_to_plain_text(monkeypatch) -> None:
+    monkeypatch.setenv("V3_TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("V3_TELEGRAM_CHAT_ID", "group-123")
     responses = [_error_response(400, "Bad Request: rich message invalid"), _ok_response()]
     with patch("v2.telegram_delivery.requests.post", side_effect=responses) as post:
         result = send_messages(["plain-compatible report"], enabled=True)
     assert result.sent is True
     assert post.call_count == 2
-    assert post.call_args_list[0].args[0].endswith("/sendRichMessage")
+    assert post.call_args_list[0].args[0].endswith("/sendMessage")
     assert post.call_args_list[1].args[0].endswith("/sendMessage")
-    assert "sent_plain_fallback" in result.reason
+    assert "sent_plain_text_fallback" in result.reason
 
 
-def test_topic_failure_falls_back_to_rich_general(monkeypatch) -> None:
-    monkeypatch.setenv("TELEGRAM_TOKEN", "token")
-    monkeypatch.setenv("TELEGRAM_CHAT_ID", "group-123")
+def test_topic_html_fallback_never_crosses_to_general(monkeypatch) -> None:
+    monkeypatch.setenv("V3_TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("V3_TELEGRAM_CHAT_ID", "group-123")
     responses = [_error_response(400, "Bad Request: message thread not found"), _ok_response()]
     with patch("v2.telegram_delivery.requests.post", side_effect=responses) as post:
         result = send_messages(["report"], enabled=True, message_thread_id=999)
     assert result.sent is True
     assert post.call_count == 2
     assert post.call_args_list[0].kwargs["json"]["message_thread_id"] == 999
-    assert "message_thread_id" not in post.call_args_list[1].kwargs["json"]
-    assert "sent_plain_general_topic_fallback" in result.reason
+    assert post.call_args_list[1].kwargs["json"]["message_thread_id"] == 999
+    assert "sent_plain_text_fallback" in result.reason
 
 
 def test_missing_admin_chat_id_does_not_raise(monkeypatch) -> None:
-    monkeypatch.setenv("TELEGRAM_TOKEN", "token")
+    monkeypatch.setenv("V3_TELEGRAM_BOT_TOKEN", "token")
     monkeypatch.delenv("ADMIN_CHAT_ID", raising=False)
     monkeypatch.delenv("V2_ADMIN_CHAT_ID", raising=False)
+    monkeypatch.delenv("V3_ADMIN_CHAT_ID", raising=False)
+    monkeypatch.delenv("V3_TELEGRAM_CHAT_ID", raising=False)
     result = send_admin_messages(["admin report"], enabled=True)
     assert result.sent is False
     assert result.reason == "admin_telegram_credentials_missing"
 
 
 def test_admin_delivery_dry_run(monkeypatch) -> None:
-    monkeypatch.setenv("TELEGRAM_TOKEN", "token")
+    monkeypatch.setenv("V3_TELEGRAM_BOT_TOKEN", "token")
     monkeypatch.setenv("ADMIN_CHAT_ID", "admin-456")
     result = send_admin_messages(["admin report"], enabled=False)
     assert result.sent is False

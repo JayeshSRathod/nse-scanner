@@ -27,9 +27,9 @@ def test_paper_radar_identifies_the_active_python_hull_rules():
 
 
 def test_old_hull_delivery_uses_its_own_optional_topic(monkeypatch):
-    monkeypatch.setenv("TELEGRAM_TOKEN", "token")
-    monkeypatch.setenv("TELEGRAM_CHAT_ID", "group-123")
-    monkeypatch.setenv("TELEGRAM_OLD_HULL_DAILY_TOPIC_ID", "88")
+    monkeypatch.setenv("LADDER_TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("LADDER_TELEGRAM_CHAT_ID", "group-123")
+    monkeypatch.setenv("LADDER_DAILY_TOPIC_ID", "88")
     response = Mock()
     response.raise_for_status.return_value = None
     with patch("old_nse_hull.delivery.requests.post", return_value=response) as post:
@@ -38,10 +38,10 @@ def test_old_hull_delivery_uses_its_own_optional_topic(monkeypatch):
     assert post.call_args.kwargs["json"]["message_thread_id"] == 88
 
 
-def test_replacement_uses_retired_pine_portfolio_topic(monkeypatch):
-    monkeypatch.setenv("TELEGRAM_TOKEN", "token")
-    monkeypatch.setenv("TELEGRAM_CHAT_ID", "group-123")
-    monkeypatch.setenv("TELEGRAM_PINE_PORTFOLIO_TOPIC_ID", "99")
+def test_ladder_portfolio_never_uses_retired_pine_topic(monkeypatch):
+    monkeypatch.setenv("LADDER_TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("LADDER_TELEGRAM_CHAT_ID", "group-123")
+    monkeypatch.setenv("LADDER_PORTFOLIO_TOPIC_ID", "99")
     response = Mock()
     response.raise_for_status.return_value = None
     with patch("old_nse_hull.delivery.requests.post", return_value=response) as post:

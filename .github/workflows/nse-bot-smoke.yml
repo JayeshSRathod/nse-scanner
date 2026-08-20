@@ -11,9 +11,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      ADMIN_CHAT_ID: ${{ secrets.ADMIN_CHAT_ID }}
+      V3_TELEGRAM_BOT_TOKEN: ${{ secrets.V3_TELEGRAM_BOT_TOKEN }}
+      V3_TELEGRAM_CHAT_ID: ${{ secrets.V3_TELEGRAM_CHAT_ID }}
+      V3_SYSTEM_TOPIC_ID: ${{ secrets.V3_SYSTEM_TOPIC_ID }}
+      LADDER_TELEGRAM_BOT_TOKEN: ${{ secrets.LADDER_TELEGRAM_BOT_TOKEN }}
+      LADDER_TELEGRAM_CHAT_ID: ${{ secrets.LADDER_TELEGRAM_CHAT_ID }}
+      LADDER_SYSTEM_TOPIC_ID: ${{ secrets.LADDER_SYSTEM_TOPIC_ID }}
+      HULL_TELEGRAM_BOT_TOKEN: ${{ secrets.HULL_TELEGRAM_BOT_TOKEN }}
+      HULL_TELEGRAM_CHAT_ID: ${{ secrets.HULL_TELEGRAM_CHAT_ID }}
+      HULL_SYSTEM_TOPIC_ID: ${{ secrets.HULL_SYSTEM_TOPIC_ID }}
       GITHUB_TOKEN: ${{ secrets.NSE_REPO_TOKEN }}
       GITHUB_REPO: ${{ secrets.GITHUB_REPO }}
       GITHUB_BRANCH: ${{ secrets.GITHUB_BRANCH }}
@@ -33,3 +39,6 @@ jobs:
 
       - name: Validate bot startup
         run: python scripts/startup_check.py
+
+      - name: Verify isolated bot, chat and topic routes
+        run: python scripts/telegram_route_smoke.py

@@ -43,12 +43,11 @@ jobs:
 
       - name: Run NSE Pipeline
         env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TELEGRAM_DAILY_TOPIC_ID: ${{ secrets.TELEGRAM_DAILY_TOPIC_ID }}
-          TELEGRAM_CANDIDATES_TOPIC_ID: ${{ secrets.TELEGRAM_CANDIDATES_TOPIC_ID }}
-          TELEGRAM_PORTFOLIO_TOPIC_ID: ${{ secrets.TELEGRAM_PORTFOLIO_TOPIC_ID }}
+          V3_TELEGRAM_BOT_TOKEN: ${{ secrets.V3_TELEGRAM_BOT_TOKEN }}
+          V3_TELEGRAM_CHAT_ID: ${{ secrets.V3_TELEGRAM_CHAT_ID }}
+          V3_DAILY_TOPIC_ID: ${{ secrets.V3_DAILY_TOPIC_ID }}
+          V3_PORTFOLIO_TOPIC_ID: ${{ secrets.V3_PORTFOLIO_TOPIC_ID }}
+          V3_SYSTEM_TOPIC_ID: ${{ secrets.V3_SYSTEM_TOPIC_ID }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}
           GITHUB_BRANCH: ${{ github.ref_name }}
@@ -65,6 +64,7 @@ jobs:
           git add -f output/nse_corporate_health.json 2>/dev/null || true
           git add -f output/v3_operational_readiness.json output/v3_bootstrap_result.json output/v2_v3_eligibility_comparison.json 2>/dev/null || true
           git add scan_lifecycle.json 2>/dev/null || true
+          git add v3_telegram_delivery_state.json 2>/dev/null || true
           git add -f output/news_latest.json output/news_*.json 2>/dev/null || true
           git add portfolio.json 2>/dev/null || true
           git add v2_portfolio_state.json 2>/dev/null || true
