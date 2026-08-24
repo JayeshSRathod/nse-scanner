@@ -1,0 +1,864 @@
+From b86029422e83af048171f39eba8b8412baf55934 Mon Sep 17 00:00:00 2001
+From: Jayesh Rathod <jayesh4.rathod@ril.com>
+Date: Fri, 21 Aug 2026 13:18:05 +0530
+Subject: [PATCH 05/14] Hull Pine: gateway admission and next-session paper
+ fills
+
+Steps 6 and 9 of the Cross-Scanner Eligibility and Corporate Lifecycle Sprint.
+
+Hull Pine had the largest gap. It loaded every symbol with 300 sessions and
+consulted no security master, no active flag, no series and no corporate
+lifecycle, then booked a paper entry at the signal bar's own closing price --
+a price no order could have been filled at. Its live state file shows the
+result: 13 of 16 paper positions were ETFs and index funds.
+
+Step 6 -- admission
+-------------------
+run_daily() now runs the shared gateway before any Hull metric and evaluates
+only admitted symbols. On the real store at 2026-08-20 this removed JBCHEPHARM,
+19 stale symbols, 103 non-EQ series and 101 restricted symbols, and labelled 228
+ETFs observe-only.
+
+Step 9 -- next-session fill
+--------------------------
+READY is now a *pending setup*, never a position:
+
+  BUILD -> NEAR -> READY -> TRIGGERED -> ENTERED
+
+* The entry range runs from the signal bar's own high to that high plus
+  max_chase_atr (default 0.5) ATRs. Confirmation requires trade *above* the
+  signal high, so the signal close can never be a fill.
+* A later session fills at min(max(open, trigger), ceiling). A bar that opens
+  beyond the ceiling is DECLINED as a chase rather than filled at an
+  unobtainable price. A bar with no range is treated as circuit-locked and is
+  not executable at any price. A fill that would sit below the structural stop
+  is refused.
+* Setups expire after setup_validity_sessions (default 5) or on a decline, and
+  every transition is recorded in the state event log.
+
+Legacy state
+------------
+STATE_VERSION moves 1 -> 2. load_state previously discarded any state whose
+version did not match, so the bump alone would have silently wiped the existing
+16-position track record; _migrate_state upgrades in place instead.
+
+Per the decisions taken for this sprint:
+* Existing entries are grandfathered and tagged fill_rule=SIGNAL_CLOSE_LEGACY.
+  The next-session rule applies to new entries only; paper history is not
+  retroactively rewritten.
+* A position in a symbol that may no longer be entered is closed at its last
+  price through v2/universe_reconciliation. On the live state this closed
+  GSEC10IETF at 266.38 and MOMENTUM50 at 54.07 as UNIVERSE_EXIT /
+  NON_EQ_UNVERIFIED_HOLDING, leaving the equity holdings untouched.
+
+pine_metrics now also returns the signal bar's high and low, which the entry
+range needs.
+
+tests/test_pine_hull_engine.py::test_pine_daily_state_is_independent_and_freezes_entry_levels
+asserted position["entry"] == 260.0 -- the same-close fill this step removes.
+It is rewritten as test_ready_creates_a_pending_setup_and_never_a_same_close_entry,
+and its fixture now creates a symbol_master_v2 row, because a symbol absent from
+the master is correctly no longer enterable.
+
+Tests: 19 new covering the trigger rule, the full lifecycle, gateway admission
+and legacy holdings; 4 in the existing pine suite pass.
+---
+ pine_hull/engine.py                       | 248 +++++++++++++--
+ tests/test_pine_hull_engine.py            |  64 +++-
+ tests/test_pine_hull_next_session_fill.py | 364 ++++++++++++++++++++++
+ 3 files changed, 639 insertions(+), 37 deletions(-)
+ create mode 100755 tests/test_pine_hull_next_session_fill.py
+
+diff --git a/pine_hull/engine.py b/pine_hull/engine.py
+index 6ab3b9a..b257421 100644
+--- a/pine_hull/engine.py
++++ b/pine_hull/engine.py
+@@ -18,10 +18,20 @@ import pandas as pd
+ 
+ from v2.database import V2Database
+ from v2.indicators import atr, hma, kama, wma
++from v2.tradeability import gateway_from_database
++from v2.universe_reconciliation import reconcile_positions
+ from .opportunity_lifecycle import timing_state as lifecycle_timing_state, weekly_transition
+ 
+ 
+-STATE_VERSION = 1
++STATE_VERSION = 2
++
++#: Setup lifecycle, per the sprint specification:
++#: BUILD -> NEAR -> READY -> TRIGGERED -> ENTERED.  READY is a *pending setup*,
++#: never a position; only a subsequent session that actually trades through the
++#: entry range under executable conditions produces a fill.
++SETUP_PENDING = "READY_PENDING"
++SETUP_TRIGGERED = "TRIGGERED"
++SETUP_EXPIRED = "EXPIRED"
+ 
+ 
+ @dataclass(frozen=True)
+@@ -32,6 +42,11 @@ class PineConfig:
+     max_open_positions: int = 8
+     max_new_positions: int = 3
+     atr_multiplier: float = 3.5
++    #: Sessions a READY setup stays valid while awaiting its trigger.
++    setup_validity_sessions: int = 5
++    #: Never fill more than this many ATRs above the trigger; a gap beyond it is
++    #: a chase, not an entry.
++    max_chase_atr: float = 0.5
+ 
+ 
+ def _number(value: object, default: float = 0.0) -> float:
+@@ -136,6 +151,7 @@ def pine_metrics(frame: pd.DataFrame, *, atr_multiplier: float = 3.5) -> dict[st
+         "hma_aligned": hma_aligned, "kama_rising": kama_rising, "trend_commitment": trend_commitment,
+         "chop": chop, "rotational": rotational, "overextended": overextended,
+         "close": round(last_close, 2), "atr14": round(last_atr, 2), "hybrid_hull": round(float(hybrid_hull.iloc[-1]), 2),
++        "high": round(float(data["high"].iloc[-1]), 2), "low": round(float(data["low"].iloc[-1]), 2),
+         "hma21": round(float(hma21.iloc[-1]), 2), "hma51": round(float(hma51.iloc[-1]), 2),
+         "distance_atr": round(distance_atr, 2), "volume_ratio": round(volume_ratio, 2),
+         "rsi14": round(rsi_value, 2), "adx14": round(adx_value, 2),
+@@ -146,7 +162,25 @@ def pine_metrics(frame: pd.DataFrame, *, atr_multiplier: float = 3.5) -> dict[st
+ 
+ 
+ def _blank_state(config: PineConfig) -> dict:
+-    return {"version": STATE_VERSION, "capital_base": config.capital_base, "positions": [], "events": [], "last_run": None}
++    return {"version": STATE_VERSION, "capital_base": config.capital_base,
++            "positions": [], "events": [], "pending": [], "last_run": None}
++
++
++def _migrate_state(state: dict) -> dict:
++    """Bring a version-1 state file forward without discarding its history.
++
++    Version 1 had no pending-setup list because READY filled at the signal
++    close.  Those positions are grandfathered exactly as recorded: the
++    next-session fill rule applies to new entries only, so paper history is
++    never retroactively rewritten.
++    """
++    state.setdefault("positions", [])
++    state.setdefault("events", [])
++    state.setdefault("pending", [])
++    for position in state["positions"]:
++        position.setdefault("fill_rule", "SIGNAL_CLOSE_LEGACY")
++    state["version"] = STATE_VERSION
++    return state
+ 
+ 
+ def load_state(path: str | Path, config: PineConfig = PineConfig()) -> dict:
+@@ -155,11 +189,10 @@ def load_state(path: str | Path, config: PineConfig = PineConfig()) -> dict:
+         return _blank_state(config)
+     try:
+         state = json.loads(target.read_text(encoding="utf-8"))
+-        if state.get("version") != STATE_VERSION:
+-            raise ValueError("unsupported state version")
+-        state.setdefault("positions", [])
+-        state.setdefault("events", [])
+-        return state
++        version = state.get("version")
++        if version in {1, STATE_VERSION}:
++            return _migrate_state(state)
++        raise ValueError(f"unsupported state version {version!r}")
+     except (ValueError, json.JSONDecodeError):
+         return _blank_state(config)
+ 
+@@ -224,44 +257,198 @@ def _update_position(position: dict, frame: pd.DataFrame, metrics: dict, trade_d
+     position["state"] = "TRAILING" if position["stop"] > _number(position["initial_stop"]) else "OPEN"
+ 
+ 
++def _setup_event(state: dict, trade_date: str, setup: dict, event: str) -> None:
++    state["events"].append({"date": trade_date, "event": event, "setup_id": setup["setup_id"],
++                            "symbol": setup["symbol"], "state": setup["state"]})
++    state["events"] = state["events"][-1000:]
++
++
++def _entry_range(row: dict, config: PineConfig) -> tuple[float, float]:
++    """The band a later session must trade through for the setup to fill.
++
++    The lower bound is the signal bar's own high: the setup is confirmed only by
++    trade above it, never by the signal close itself.  The upper bound caps the
++    chase at ``max_chase_atr`` so a runaway gap is declined rather than filled
++    at an unobtainable price.
++    """
++    trigger = _number(row.get("high"), _number(row.get("close")))
++    ceiling = trigger + config.max_chase_atr * _number(row.get("atr14"))
++    return round(trigger, 2), round(ceiling, 2)
++
++
++def _build_setup(symbol: str, row: dict, trade_date: str, config: PineConfig) -> dict:
++    entry_low, entry_high = _entry_range(row, config)
++    return {
++        "setup_id": f"PINE-SETUP-{trade_date.replace('-', '')}-{uuid4().hex[:8].upper()}",
++        "symbol": symbol, "state": SETUP_PENDING, "created_date": trade_date,
++        "signal_close": _number(row.get("close")), "entry_low": entry_low, "entry_high": entry_high,
++        "initial_stop": _number(row.get("initial_stop")), "target1": _number(row.get("target1")),
++        "target2": _number(row.get("target2")), "score": _number(row.get("score")),
++        "timing_state": str(row.get("timing_state", "READY")), "htf_state": str(row.get("htf_state", "NEUTRAL")),
++        "prior_hma21": _number(row.get("hma21")), "sessions_waited": 0,
++        "expires_after_sessions": config.setup_validity_sessions,
++    }
++
++
++def _evaluate_trigger(setup: dict, bar: pd.Series, config: PineConfig) -> dict:
++    """Decide whether a pending setup fills on this bar, and at what price.
++
++    Returns ``{"outcome": ..., "fill": float | None, "reason": str}`` where
++    outcome is ``FILLED``, ``WAITING`` or ``DECLINED``.
++    """
++    high, low, open_ = _number(bar["high"]), _number(bar["low"]), _number(bar["open"])
++    entry_low, entry_high = _number(setup["entry_low"]), _number(setup["entry_high"])
++
++    # No two-way trading: a bar with no range is frozen, typically an upper or
++    # lower circuit lock. It is not executable at any price.
++    if high <= low:
++        return {"outcome": "WAITING", "fill": None, "reason": "CIRCUIT_LOCKED"}
++    if high < entry_low:
++        return {"outcome": "WAITING", "fill": None, "reason": "TRIGGER_NOT_REACHED"}
++    if open_ > entry_high:
++        return {"outcome": "DECLINED", "fill": None, "reason": "GAP_BEYOND_ENTRY_RANGE"}
++    fill = min(max(open_, entry_low), entry_high)
++    if fill <= _number(setup["initial_stop"]):
++        return {"outcome": "DECLINED", "fill": None, "reason": "FILL_BELOW_STOP"}
++    return {"outcome": "FILLED", "fill": round(fill, 2), "reason": "TRADED_THROUGH_ENTRY_RANGE"}
++
++
++def _position_from_setup(setup: dict, fill: float, quantity: int, trade_date: str, row: dict) -> dict:
++    return {
++        "trade_id": f"PINE-{trade_date.replace('-', '')}-{uuid4().hex[:8].upper()}",
++        "setup_id": setup["setup_id"], "symbol": setup["symbol"], "state": "OPEN",
++        "signal_date": setup["created_date"], "entry_date": trade_date,
++        "entry": fill, "fill_rule": "NEXT_SESSION_TRIGGER",
++        "entry_low": setup["entry_low"], "entry_high": setup["entry_high"],
++        "initial_stop": _number(setup["initial_stop"]), "stop": _number(setup["initial_stop"]),
++        "target1": _number(setup["target1"]), "target2": _number(setup["target2"]),
++        "quantity": quantity, "last_price": _number(row.get("close"), fill),
++        "t1_hit": False, "t2_hit": False,
++        "prior_hma21": _number(row.get("hma21"), _number(setup["prior_hma21"])),
++        "realised_pnl": 0.0,
++        "htf_weekly_bullish": bool(row.get("weekly_bullish", False)),
++        "htf_state": str(row.get("htf_state", setup["htf_state"])),
++        "timing_state": str(row.get("timing_state", setup["timing_state"])),
++        "daily_hull_bullish": bool(row.get("daily_bullish", False)),
++    }
++
++
++def _close_position(position: dict, trade_date: str, price: float, reason: str, state: dict) -> None:
++    position.update({"state": "CLOSED", "exit_date": trade_date,
++                     "exit_price": round(price, 2), "exit_reason": reason})
++    position["realised_pnl"] = round(
++        (price - _number(position["entry"])) * int(position.get("quantity", 0)), 2,
++    )
++    _position_event(state, trade_date, position, f"EXIT_{reason}")
++
++
+ def run_daily(
+     db_path: str | Path = "nse_scanner.db", *, state_path: str | Path = "pine_hull_state.json",
+     as_of: str | None = None, config: PineConfig = PineConfig(),
+ ) -> dict:
+-    prices = V2Database(db_path).load_prices(end_date=as_of, min_sessions=300)
++    database = V2Database(db_path)
++    prices = database.load_prices(end_date=as_of, min_sessions=300)
+     if prices.empty:
+         raise RuntimeError("No Pine-compatible daily price history")
+     trade_date = pd.Timestamp(prices["trade_date"].max()).date().isoformat()
++
++    # --- Pre-Scan Tradeability Gateway -------------------------------------
++    # Hull Pine previously loaded every symbol with 300 sessions and consulted
++    # no security master, no active flag and no corporate lifecycle, so a merged
++    # or dead symbol kept being scored off its final close, and ETFs reached the
++    # paper portfolio.  Admission is now decided before any Hull metric.
++    verdict = gateway_from_database(db_path, prices, market_date=trade_date)
++    prices = verdict.filter_frame(prices)
+     state = load_state(state_path, config)
+     frames = {str(symbol): frame.sort_values("trade_date").copy() for symbol, frame in prices.groupby("symbol")}
+     metrics = {symbol: pine_metrics(frame, atr_multiplier=config.atr_multiplier) for symbol, frame in frames.items()}
++
+     for position in state["positions"]:
+         if _active(position) and position["symbol"] in frames:
+             _update_position(position, frames[position["symbol"]], metrics[position["symbol"]], trade_date, state, config)
+ 
++    # --- reconcile holdings against the current universe -------------------
++    # Existing entries are grandfathered, but a position in a symbol that may no
++    # longer be traded is closed at its last price so paper P&L stays honest.
++    last_prices = {symbol: _number(row.get("close")) for symbol, row in metrics.items()}
++    reconciled: list[dict] = []
++    for action in reconcile_positions(
++        [p for p in state["positions"] if _active(p)], verdict, last_prices=last_prices,
++    ):
++        for position in state["positions"]:
++            if position["symbol"] != action.symbol or not _active(position):
++                continue
++            price = action.exit_price if action.exit_price is not None else _number(position.get("last_price"))
++            _close_position(position, trade_date, price, action.action, state)
++            position["exit_detail"] = action.reason_code
++            reconciled.append({**action.to_dict(), "trade_id": position["trade_id"]})
++
++    # --- pending setups: READY becomes an entry only on a later session ----
+     active_symbols = {position["symbol"] for position in state["positions"] if _active(position)}
+-    candidates = []
+-    for symbol, row in metrics.items():
+-        if row.get("state") == "READY" and symbol not in active_symbols and _number(row.get("initial_stop")) < _number(row.get("close")):
+-            candidates.append((symbol, row))
+-    candidates.sort(key=lambda item: (-_number(item[1].get("score")), item[0]))
+     created: list[dict] = []
+-    for symbol, row in candidates[:config.max_new_positions]:
+-        quantity = _allocation(_number(row["close"]), _number(row["initial_stop"]), state["positions"], config)
+-        if quantity <= 0:
++    expired: list[dict] = []
++    still_pending: list[dict] = []
++    for setup in state.get("pending", []):
++        if setup.get("state") != SETUP_PENDING:
++            continue
++        symbol = setup["symbol"]
++        if setup["created_date"] >= trade_date:
++            still_pending.append(setup)                       # same session; wait
++            continue
++        if symbol in active_symbols or not verdict.entry_permitted(symbol) or symbol not in frames:
++            setup["state"] = SETUP_EXPIRED
++            setup["expiry_reason"] = ("ALREADY_HELD" if symbol in active_symbols
++                                      else "NOT_ENTRY_PERMITTED")
++            _setup_event(state, trade_date, setup, "SETUP_EXPIRED")
++            expired.append(setup)
++            continue
++        bar = frames[symbol].iloc[-1]
++        outcome = _evaluate_trigger(setup, bar, config)
++        setup["sessions_waited"] = int(setup.get("sessions_waited", 0)) + 1
++        setup["last_checked"] = trade_date
++        setup["last_outcome"] = outcome["reason"]
++        if outcome["outcome"] == "FILLED":
++            quantity = _allocation(outcome["fill"], _number(setup["initial_stop"]), state["positions"], config)
++            if quantity <= 0:
++                setup["state"] = SETUP_EXPIRED
++                setup["expiry_reason"] = "NO_ALLOCATION"
++                _setup_event(state, trade_date, setup, "SETUP_EXPIRED")
++                expired.append(setup)
++                continue
++            setup["state"] = SETUP_TRIGGERED
++            setup["fill"] = outcome["fill"]
++            position = _position_from_setup(setup, outcome["fill"], quantity, trade_date, metrics[symbol])
++            state["positions"].append(position)
++            active_symbols.add(symbol)
++            created.append(position)
++            _setup_event(state, trade_date, setup, "SETUP_TRIGGERED")
++            _position_event(state, trade_date, position, "ENTRY")
+             continue
+-        position = {
+-            "trade_id": f"PINE-{trade_date.replace('-', '')}-{uuid4().hex[:8].upper()}", "symbol": symbol,
+-            "state": "OPEN", "entry_date": trade_date, "entry": _number(row["close"]), "initial_stop": _number(row["initial_stop"]),
+-            "stop": _number(row["initial_stop"]), "target1": _number(row["target1"]), "target2": _number(row["target2"]),
+-            "quantity": quantity, "last_price": _number(row["close"]), "t1_hit": False, "t2_hit": False,
+-            "prior_hma21": _number(row["hma21"]), "realised_pnl": 0.0,
+-            "htf_weekly_bullish": bool(row["weekly_bullish"]), "htf_state": row.get("htf_state", "NEUTRAL"),
+-            "timing_state": row.get("timing_state", "WEAK"), "daily_hull_bullish": bool(row["daily_bullish"]),
+-        }
+-        state["positions"].append(position)
+-        created.append(position)
+-        _position_event(state, trade_date, position, "ENTRY")
++        if outcome["outcome"] == "DECLINED" or setup["sessions_waited"] >= int(setup["expires_after_sessions"]):
++            setup["state"] = SETUP_EXPIRED
++            setup["expiry_reason"] = outcome["reason"] if outcome["outcome"] == "DECLINED" else "SETUP_TIMED_OUT"
++            _setup_event(state, trade_date, setup, "SETUP_EXPIRED")
++            expired.append(setup)
++            continue
++        still_pending.append(setup)
++
++    # --- new READY setups --------------------------------------------------
++    pending_symbols = {setup["symbol"] for setup in still_pending}
++    candidates = [
++        (symbol, row) for symbol, row in metrics.items()
++        if row.get("state") == "READY"
++        and symbol not in active_symbols
++        and symbol not in pending_symbols
++        and verdict.entry_permitted(symbol)
++        and _number(row.get("initial_stop")) < _number(row.get("close"))
++    ]
++    candidates.sort(key=lambda item: (-_number(item[1].get("score")), item[0]))
++    new_setups: list[dict] = []
++    for symbol, row in candidates[:config.max_new_positions]:
++        setup = _build_setup(symbol, row, trade_date, config)
++        new_setups.append(setup)
++        _setup_event(state, trade_date, setup, "SETUP_CREATED")
++    state["pending"] = still_pending + new_setups
+ 
+     state["last_run"] = trade_date
+     save_state(state, state_path)
+@@ -274,10 +461,13 @@ def run_daily(
+         key=lambda item: (-_number(item[1].get("score")), item[0]),
+     )[:12]
+     return {
+-        "trade_date": trade_date, "created": created, "watch": [{"symbol": symbol, **row} for symbol, row in watch],
++        "trade_date": trade_date, "market_date": trade_date,
++        "created": created, "watch": [{"symbol": symbol, **row} for symbol, row in watch],
++        "pending": state["pending"], "expired_setups": expired, "reconciled": reconciled,
+         "positions": state["positions"], "open_positions": open_positions, "realised_pnl": round(realised, 2),
+         "unrealised_pnl": round(unrealised, 2), "total_pnl": round(realised + unrealised, 2),
+         "evaluated": len(metrics), "state_path": str(state_path),
++        "tradeability": verdict.diagnostics(),
+     }
+ 
+ 
+diff --git a/tests/test_pine_hull_engine.py b/tests/test_pine_hull_engine.py
+index cd1f19a..200abae 100644
+--- a/tests/test_pine_hull_engine.py
++++ b/tests/test_pine_hull_engine.py
+@@ -1,10 +1,12 @@
+ from __future__ import annotations
+ 
++import json
+ import sqlite3
+ from pathlib import Path
+ 
+ import numpy as np
+ import pandas as pd
++import pytest
+ 
+ from pine_hull.engine import PineConfig, load_state, pine_metrics, run_daily
+ from pine_hull.preview import render_daily_signals
+@@ -31,6 +33,15 @@ def _database(path: Path, frame: pd.DataFrame) -> None:
+         conn.execute("""CREATE TABLE daily_prices_v2 (
+             symbol TEXT, trade_date TEXT, open REAL, high REAL, low REAL, close REAL, volume REAL
+         )""")
++        # PINE must be a carried, active EQ security: the tradeability gateway
++        # treats a symbol absent from the master as an unverified non-equity and
++        # withholds it from entry.
++        conn.execute("""CREATE TABLE symbol_master_v2 (
++            symbol TEXT PRIMARY KEY, isin TEXT, company_name TEXT, series TEXT,
++            sector TEXT, industry TEXT, listing_date TEXT, delisting_date TEXT,
++            active INTEGER NOT NULL DEFAULT 1,
++            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
++        conn.execute("INSERT INTO symbol_master_v2 (symbol, series, active) VALUES ('PINE','EQ',1)")
+         loaded = frame.assign(symbol="PINE")[["symbol", "trade_date", "open", "high", "low", "close", "volume"]].copy()
+         loaded["trade_date"] = loaded["trade_date"].dt.strftime("%Y-%m-%d")
+         loaded.to_sql("daily_prices_v2", conn, if_exists="append", index=False)
+@@ -45,17 +56,54 @@ def test_pine_core_reports_ready_for_clean_uptrend() -> None:
+     assert metrics["initial_stop"] < metrics["close"]
+ 
+ 
+-def test_pine_daily_state_is_independent_and_freezes_entry_levels(tmp_path: Path) -> None:
++def test_ready_creates_a_pending_setup_and_never_a_same_close_entry(tmp_path: Path) -> None:
++    """READY is a setup, not a fill.
++
++    This test previously asserted ``position["entry"] == 260.0`` — the signal
++    bar's own close — which is precisely the defect being removed: Hull Pine
++    booked a paper entry at a price no order could have been filled at.  READY
++    now produces a pending setup whose entry range a *later* session must trade
++    through.
++    """
+     db_path, state_path = tmp_path / "prices.db", tmp_path / "pine_state.json"
+-    _database(db_path, _frame())
++    frame = _frame()
++    _database(db_path, frame)
+     result = run_daily(db_path, state_path=state_path, config=PineConfig(capital_base=300_000.0))
+-    assert len(result["created"]) == 1
+-    position = result["created"][0]
+-    assert position["entry"] == 260.0
+-    assert position["target1"] > position["entry"]
++
++    assert result["created"] == [], "READY must not open a position on the signal bar"
++    assert len(result["pending"]) == 1
++    setup = result["pending"][0]
++    assert setup["state"] == "READY_PENDING"
++    assert setup["setup_id"].startswith("PINE-SETUP-")
++    assert setup["signal_close"] == 260.0
++    # The trigger is the signal bar's high, so no fill is possible at the close.
++    assert setup["entry_low"] == pytest.approx(float(frame["high"].iloc[-1]), abs=0.01)
++    assert setup["entry_low"] > setup["signal_close"]
++    assert setup["entry_high"] > setup["entry_low"]
++    assert setup["target1"] > setup["signal_close"]
++
+     saved = load_state(state_path)
+-    assert saved["positions"][0]["trade_id"].startswith("PINE-")
+-    assert saved["positions"][0]["state"] == "OPEN"
++    assert saved["positions"] == []
++    assert saved["pending"][0]["setup_id"] == setup["setup_id"]
++
++
++def test_legacy_version_1_state_is_migrated_not_discarded(tmp_path: Path) -> None:
++    """Bumping the state version must not wipe a real paper track record."""
++    state_path = tmp_path / "pine_state.json"
++    state_path.write_text(json.dumps({
++        "version": 1, "capital_base": 300_000.0, "last_run": "2026-08-20",
++        "events": [], "positions": [
++            {"trade_id": "PINE-20260810-AAAA", "symbol": "BERGEPAINT", "state": "OPEN",
++             "entry_date": "2026-08-20", "entry": 528.55, "quantity": 10,
++             "initial_stop": 500.0, "stop": 500.0, "target1": 560.0, "target2": 590.0},
++        ],
++    }), encoding="utf-8")
++    state = load_state(state_path)
++    assert state["version"] == 2
++    assert len(state["positions"]) == 1
++    assert state["positions"][0]["entry"] == 528.55
++    assert state["positions"][0]["fill_rule"] == "SIGNAL_CLOSE_LEGACY"
++    assert state["pending"] == []
+ 
+ 
+ def test_pine_signal_message_matches_compact_daily_candidate_style() -> None:
+diff --git a/tests/test_pine_hull_next_session_fill.py b/tests/test_pine_hull_next_session_fill.py
+new file mode 100755
+index 0000000..1d32449
+--- /dev/null
++++ b/tests/test_pine_hull_next_session_fill.py
+@@ -0,0 +1,364 @@
++"""Steps 6 and 9: Hull Pine gateway admission and next-session paper fills.
++
++Hull Pine had the largest gap of the three scanners.  It loaded every symbol
++with 300 sessions, consulted no security master, no active flag and no corporate
++lifecycle, and booked a paper entry at the signal bar's own closing price — a
++price no order could have been filled at.  Its live state file showed the
++consequence: 13 of 16 paper positions were ETFs and index funds.
++
++Lifecycle now: BUILD -> NEAR -> READY -> TRIGGERED -> ENTERED.
++"""
++from __future__ import annotations
++
++import json
++import sqlite3
++from pathlib import Path
++
++import numpy as np
++import pandas as pd
++import pytest
++
++from pine_hull.engine import (
++    PineConfig,
++    _evaluate_trigger,
++    load_state,
++    pine_metrics,
++    run_daily,
++)
++from v2.database import V2Database
++from v2.security_lifecycle import LifecycleEvent, upsert_events
++
++CONFIG = PineConfig(capital_base=300_000.0)
++
++
++def _uptrend(rows: int = 330, base: float = 100.0, top: float = 260.0) -> pd.DataFrame:
++    """A clean uptrend that reaches Hull READY on its final bar."""
++    dates = pd.bdate_range("2025-01-02", periods=rows)
++    close = pd.Series(np.linspace(base, top, rows))
++    return pd.DataFrame({
++        "trade_date": dates, "open": close - 0.3, "high": close + 3.0,
++        "low": close - 3.0, "close": close, "volume": 150_000,
++    })
++
++
++def _append_bar(frame: pd.DataFrame, *, open_: float, high: float,
++                low: float, close: float) -> pd.DataFrame:
++    nxt = frame["trade_date"].iloc[-1] + pd.offsets.BDay(1)
++    row = pd.DataFrame([{
++        "trade_date": nxt, "open": open_, "high": high, "low": low,
++        "close": close, "volume": 150_000,
++    }])
++    return pd.concat([frame, row], ignore_index=True)
++
++
++def _write(path: Path, frames: dict[str, pd.DataFrame],
++           master: dict[str, tuple[str, int]] | None = None,
++           events: list[LifecycleEvent] | None = None) -> None:
++    master = master if master is not None else {s: ("EQ", 1) for s in frames}
++    with sqlite3.connect(path) as conn:
++        conn.execute("""CREATE TABLE IF NOT EXISTS daily_prices_v2 (
++            symbol TEXT, trade_date TEXT, open REAL, high REAL, low REAL,
++            close REAL, volume REAL, PRIMARY KEY(symbol, trade_date))""")
++        conn.execute("""CREATE TABLE IF NOT EXISTS symbol_master_v2 (
++            symbol TEXT PRIMARY KEY, isin TEXT, company_name TEXT, series TEXT,
++            sector TEXT, industry TEXT, listing_date TEXT, delisting_date TEXT,
++            active INTEGER NOT NULL DEFAULT 1,
++            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
++        conn.execute("DELETE FROM daily_prices_v2")
++        conn.execute("DELETE FROM symbol_master_v2")
++        for symbol, frame in frames.items():
++            loaded = frame.assign(symbol=symbol)[
++                ["symbol", "trade_date", "open", "high", "low", "close", "volume"]].copy()
++            loaded["trade_date"] = loaded["trade_date"].dt.strftime("%Y-%m-%d")
++            loaded.to_sql("daily_prices_v2", conn, if_exists="append", index=False)
++        conn.executemany(
++            "INSERT INTO symbol_master_v2 (symbol, series, active) VALUES (?,?,?)",
++            [(s, series, active) for s, (series, active) in master.items()],
++        )
++    V2Database(path).ensure_v3_schema()
++    if events:
++        with sqlite3.connect(path) as conn:
++            upsert_events(conn, events)
++
++
++# --- the trigger rule in isolation -----------------------------------------
++
++BASE_SETUP = {
++    "setup_id": "S1", "symbol": "X", "state": "READY_PENDING",
++    "created_date": "2026-08-20", "signal_close": 100.0,
++    "entry_low": 103.0, "entry_high": 105.0, "initial_stop": 95.0,
++    "target1": 110.0, "target2": 120.0, "prior_hma21": 99.0,
++    "sessions_waited": 0, "expires_after_sessions": 5,
++}
++
++
++def _bar(open_: float, high: float, low: float, close: float) -> pd.Series:
++    return pd.Series({"open": open_, "high": high, "low": low, "close": close})
++
++
++def test_bar_that_never_reaches_the_trigger_keeps_waiting():
++    outcome = _evaluate_trigger(BASE_SETUP, _bar(100.0, 102.0, 99.0, 101.0), CONFIG)
++    assert outcome["outcome"] == "WAITING"
++    assert outcome["reason"] == "TRIGGER_NOT_REACHED"
++
++
++def test_bar_trading_through_the_range_fills_at_the_trigger():
++    outcome = _evaluate_trigger(BASE_SETUP, _bar(101.0, 106.0, 100.5, 105.5), CONFIG)
++    assert outcome["outcome"] == "FILLED"
++    assert outcome["fill"] == 103.0, "fill is the trigger, not the bar's close"
++
++
++def test_open_inside_the_range_fills_at_the_open():
++    outcome = _evaluate_trigger(BASE_SETUP, _bar(104.0, 108.0, 103.5, 107.0), CONFIG)
++    assert outcome["outcome"] == "FILLED"
++    assert outcome["fill"] == 104.0
++
++
++def test_gap_beyond_the_range_is_declined_not_chased():
++    outcome = _evaluate_trigger(BASE_SETUP, _bar(112.0, 118.0, 111.0, 117.0), CONFIG)
++    assert outcome["outcome"] == "DECLINED"
++    assert outcome["reason"] == "GAP_BEYOND_ENTRY_RANGE"
++
++
++def test_frozen_bar_is_not_executable():
++    """A bar with no range is circuit-locked; there is no fill at any price."""
++    outcome = _evaluate_trigger(BASE_SETUP, _bar(104.0, 104.0, 104.0, 104.0), CONFIG)
++    assert outcome["outcome"] == "WAITING"
++    assert outcome["reason"] == "CIRCUIT_LOCKED"
++
++
++def test_fill_below_the_stop_is_refused():
++    setup = {**BASE_SETUP, "initial_stop": 104.5}
++    outcome = _evaluate_trigger(setup, _bar(101.0, 106.0, 100.0, 105.0), CONFIG)
++    assert outcome["outcome"] == "DECLINED"
++    assert outcome["reason"] == "FILL_BELOW_STOP"
++
++
++# --- end-to-end lifecycle ---------------------------------------------------
++
++def test_ready_then_trigger_produces_a_next_session_entry(tmp_path: Path):
++    db, state = tmp_path / "p.db", tmp_path / "s.json"
++    frame = _uptrend()
++    _write(db, {"PINE": frame})
++    first = run_daily(db, state_path=state, config=CONFIG)
++    assert first["created"] == []
++    setup = first["pending"][0]
++    signal_date, trigger = setup["created_date"], setup["entry_low"]
++
++    # A later session trades decisively through the entry range.
++    extended = _append_bar(frame, open_=trigger - 1.0, high=trigger + 4.0,
++                           low=trigger - 2.0, close=trigger + 3.0)
++    _write(db, {"PINE": extended})
++    second = run_daily(db, state_path=state, config=CONFIG)
++
++    assert len(second["created"]) == 1
++    position = second["created"][0]
++    assert position["entry"] == pytest.approx(trigger, abs=0.01)
++    assert position["fill_rule"] == "NEXT_SESSION_TRIGGER"
++    assert position["signal_date"] == signal_date
++    assert position["entry_date"] > signal_date, "entry must be a later session"
++    assert position["setup_id"] == setup["setup_id"]
++    assert position["state"] == "OPEN"
++    assert second["pending"] == []
++
++
++def test_setup_survives_a_quiet_session_without_filling(tmp_path: Path):
++    db, state = tmp_path / "p.db", tmp_path / "s.json"
++    frame = _uptrend()
++    _write(db, {"PINE": frame})
++    first = run_daily(db, state_path=state, config=CONFIG)
++    trigger = first["pending"][0]["entry_low"]
++
++    quiet = _append_bar(frame, open_=trigger - 5.0, high=trigger - 1.0,
++                        low=trigger - 6.0, close=trigger - 2.0)
++    _write(db, {"PINE": quiet})
++    second = run_daily(db, state_path=state, config=CONFIG)
++
++    assert second["created"] == []
++    assert len(second["pending"]) == 1
++    assert second["pending"][0]["sessions_waited"] == 1
++    assert second["pending"][0]["last_outcome"] == "TRIGGER_NOT_REACHED"
++
++
++def test_setup_expires_after_its_validity_window(tmp_path: Path):
++    db, state = tmp_path / "p.db", tmp_path / "s.json"
++    config = PineConfig(capital_base=300_000.0, setup_validity_sessions=2)
++    frame = _uptrend()
++    _write(db, {"PINE": frame})
++    first = run_daily(db, state_path=state, config=config)
++    trigger = first["pending"][0]["entry_low"]
++
++    quiet = frame
++    for _ in range(2):
++        quiet = _append_bar(quiet, open_=trigger - 5.0, high=trigger - 1.0,
++                            low=trigger - 6.0, close=trigger - 2.0)
++        _write(db, {"PINE": quiet})
++        result = run_daily(db, state_path=state, config=config)
++
++    assert result["created"] == []
++    assert any(s["expiry_reason"] == "SETUP_TIMED_OUT" for s in result["expired_setups"])
++    assert all(s["state"] != "READY_PENDING" for s in result["pending"])
++
++
++def test_gap_beyond_range_expires_the_setup_without_an_entry(tmp_path: Path):
++    db, state = tmp_path / "p.db", tmp_path / "s.json"
++    frame = _uptrend()
++    _write(db, {"PINE": frame})
++    first = run_daily(db, state_path=state, config=CONFIG)
++    setup = first["pending"][0]
++
++    gapped = _append_bar(frame, open_=setup["entry_high"] + 10.0,
++                         high=setup["entry_high"] + 15.0,
++                         low=setup["entry_high"] + 9.0,
++                         close=setup["entry_high"] + 14.0)
++    _write(db, {"PINE": gapped})
++    second = run_daily(db, state_path=state, config=CONFIG)
++
++    assert second["created"] == []
++    assert second["expired_setups"][0]["expiry_reason"] == "GAP_BEYOND_ENTRY_RANGE"
++
++
++def test_events_record_the_full_setup_to_entry_trail(tmp_path: Path):
++    db, state = tmp_path / "p.db", tmp_path / "s.json"
++    frame = _uptrend()
++    _write(db, {"PINE": frame})
++    first = run_daily(db, state_path=state, config=CONFIG)
++    trigger = first["pending"][0]["entry_low"]
++    extended = _append_bar(frame, open_=trigger - 1.0, high=trigger + 4.0,
++                           low=trigger - 2.0, close=trigger + 3.0)
++    _write(db, {"PINE": extended})
++    run_daily(db, state_path=state, config=CONFIG)
++
++    events = [e["event"] for e in load_state(state)["events"]]
++    assert "SETUP_CREATED" in events
++    assert "SETUP_TRIGGERED" in events
++    assert "ENTRY" in events
++
++
++# --- gateway admission ------------------------------------------------------
++
++def test_symbol_absent_from_the_master_gets_no_setup(tmp_path: Path):
++    """This is why GSEC10IETF and friends reached the paper portfolio."""
++    db, state = tmp_path / "p.db", tmp_path / "s.json"
++    _write(db, {"GOLDBEES": _uptrend()}, master={})
++    result = run_daily(db, state_path=state, config=CONFIG)
++    assert result["created"] == []
++    assert result["pending"] == []
++    assert result["tradeability"]["non_eq_unverified"] == 1
++    # ...but it is still observed.
++    assert result["evaluated"] == 1
++
++
++def test_terminal_symbol_is_excluded_from_hull_scoring(tmp_path: Path):
++    db, state = tmp_path / "p.db", tmp_path / "s.json"
++    frame = _uptrend()
++    # The scheme must actually have taken effect before the market date this
++    # synthetic universe ends on, otherwise the symbol is legitimately live.
++    last_traded = (frame["trade_date"].iloc[-40]).date().isoformat()
++    effective = (frame["trade_date"].iloc[-45]).date().isoformat()
++    event = LifecycleEvent(
++        symbol="JBCHEPHARM", event_type="AMALGAMATION", status="EFFECTIVE",
++        effective_date=effective, last_trading_date=last_traded,
++        successor_symbol="TORNTPHARM", exchange_ratio_from=100.0,
++        exchange_ratio_to=51.0, terminal=True,
++    )
++    _write(db, {"JBCHEPHARM": frame, "PINE": frame}, events=[event])
++    result = run_daily(db, state_path=state, config=CONFIG)
++    assert "JBCHEPHARM" not in {row["symbol"] for row in result["pending"]}
++    assert "JBCHEPHARM" not in {row["symbol"] for row in result["watch"]}
++    assert result["tradeability"]["terminal_symbols"] == ["JBCHEPHARM"]
++    assert "PINE" in {row["symbol"] for row in result["pending"]}
++
++
++def test_a_symbol_is_only_terminal_from_its_effective_date(tmp_path: Path):
++    """Historical integrity: a scheme dated in the future must not remove it."""
++    db, state = tmp_path / "p.db", tmp_path / "s.json"
++    frame = _uptrend()
++    event = LifecycleEvent(
++        symbol="JBCHEPHARM", event_type="AMALGAMATION", status="EFFECTIVE",
++        effective_date="2026-07-08", last_trading_date="2026-07-16",
++        successor_symbol="TORNTPHARM", exchange_ratio_from=100.0,
++        exchange_ratio_to=51.0, terminal=True,
++    )
++    _write(db, {"JBCHEPHARM": frame}, events=[event])
++    result = run_daily(db, state_path=state, config=CONFIG)
++    assert result["market_date"] < "2026-07-17"
++    assert result["tradeability"]["terminal_symbols"] == []
++
++
++def test_inactive_symbol_gets_no_setup(tmp_path: Path):
++    db, state = tmp_path / "p.db", tmp_path / "s.json"
++    _write(db, {"PINE": _uptrend()}, master={"PINE": ("EQ", 0)})
++    result = run_daily(db, state_path=state, config=CONFIG)
++    assert result["pending"] == []
++    assert result["tradeability"]["rejection_counts"]["INACTIVE_SECURITY"] == 1
++
++
++# --- legacy holdings --------------------------------------------------------
++
++def test_observe_only_holding_is_closed_as_a_universe_exit(tmp_path: Path):
++    """The decision taken for the 3 open ETF positions in the live state file."""
++    db, state_path = tmp_path / "p.db", tmp_path / "s.json"
++    frame = _uptrend()
++    _write(db, {"GSEC10IETF": frame, "PINE": frame}, master={"PINE": ("EQ", 1)})
++    state_path.write_text(json.dumps({
++        "version": 1, "capital_base": 300_000.0, "last_run": None, "events": [],
++        "positions": [
++            {"trade_id": "PINE-OLD-1", "symbol": "GSEC10IETF", "state": "TRAILING",
++             "entry_date": "2026-08-11", "entry": 267.26, "quantity": 224,
++             "initial_stop": 250.0, "stop": 255.0, "target1": 280.0,
++             "target2": 300.0, "last_price": 267.26, "realised_pnl": 0.0},
++        ],
++    }), encoding="utf-8")
++
++    result = run_daily(db, state_path=state_path, config=CONFIG)
++    closed = [p for p in result["positions"] if p["symbol"] == "GSEC10IETF"]
++    assert closed and closed[0]["state"] == "CLOSED"
++    assert closed[0]["exit_reason"] == "UNIVERSE_EXIT"
++    assert closed[0]["exit_detail"] == "NON_EQ_UNVERIFIED_HOLDING"
++    assert any(r["symbol"] == "GSEC10IETF" for r in result["reconciled"])
++
++
++def test_a_still_valid_equity_holding_is_left_alone(tmp_path: Path):
++    db, state_path = tmp_path / "p.db", tmp_path / "s.json"
++    frame = _uptrend()
++    _write(db, {"PINE": frame})
++    state_path.write_text(json.dumps({
++        "version": 1, "capital_base": 300_000.0, "last_run": None, "events": [],
++        "positions": [
++            {"trade_id": "PINE-OLD-2", "symbol": "PINE", "state": "OPEN",
++             "entry_date": "2026-08-01", "entry": 200.0, "quantity": 10,
++             "initial_stop": 150.0, "stop": 150.0, "target1": 280.0,
++             "target2": 300.0, "last_price": 250.0, "realised_pnl": 0.0},
++        ],
++    }), encoding="utf-8")
++
++    result = run_daily(db, state_path=state_path, config=CONFIG)
++    held = [p for p in result["positions"] if p["trade_id"] == "PINE-OLD-2"][0]
++    assert held["state"] in {"OPEN", "TRAILING"}
++    assert held["entry"] == 200.0, "grandfathered entry must not be rewritten"
++    assert result["reconciled"] == []
++
++
++def test_an_already_held_symbol_does_not_get_a_duplicate_setup(tmp_path: Path):
++    db, state_path = tmp_path / "p.db", tmp_path / "s.json"
++    frame = _uptrend()
++    _write(db, {"PINE": frame})
++    state_path.write_text(json.dumps({
++        "version": 1, "capital_base": 300_000.0, "last_run": None, "events": [],
++        "positions": [
++            {"trade_id": "PINE-OLD-3", "symbol": "PINE", "state": "OPEN",
++             "entry_date": "2026-08-01", "entry": 200.0, "quantity": 10,
++             "initial_stop": 150.0, "stop": 150.0, "target1": 280.0,
++             "target2": 300.0, "last_price": 250.0, "realised_pnl": 0.0},
++        ],
++    }), encoding="utf-8")
++    result = run_daily(db, state_path=state_path, config=CONFIG)
++    assert result["pending"] == []
++
++
++def test_metrics_expose_the_signal_bar_high_for_the_entry_range():
++    frame = _uptrend()
++    metrics = pine_metrics(frame)
++    assert metrics["high"] == pytest.approx(float(frame["high"].iloc[-1]), abs=0.01)
++    assert metrics["high"] > metrics["close"]
+-- 
+2.34.1
+

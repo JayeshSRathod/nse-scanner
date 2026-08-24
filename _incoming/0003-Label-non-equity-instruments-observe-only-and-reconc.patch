@@ -1,0 +1,740 @@
+From 3b3f693ae7c4423e8e6afc04ed12dd59cd76f3c5 Mon Sep 17 00:00:00 2001
+From: Jayesh Rathod <jayesh4.rathod@ril.com>
+Date: Fri, 21 Aug 2026 13:08:11 +0530
+Subject: [PATCH 03/14] Label non-equity instruments observe-only and reconcile
+ open positions
+
+Finding
+-------
+Hull Pine has been paper-trading ETFs. 13 of the 16 positions in
+pine_hull_state.json are index funds, and 3 of the 5 currently open are:
+GSEC10IETF (a government-securities ETF, TRAILING), MOMENTUM50 and ABSLNN50ET.
+Only BERGEPAINT and FOSECOIND are equities. pine_hull/engine.py joins no
+security master, so any symbol with 300 bars was a candidate. On 2026-08-20,
+343 symbols in the price feed that traded that session are absent from the EQ
+master, and every one inspected was an ETF or index fund.
+
+Decision
+--------
+Rather than reject them, the gateway now classifies them. A symbol absent from
+the EQ security master is admitted and displayed as NON_EQ_UNVERIFIED with
+data_verified=False, and is entry_blocked: it may be observed but cannot
+receive a paper entry, because its series, market cap, delivery and promoter
+data cannot be trusted. Labelling is not a loophole -- freshness, lifecycle and
+regulatory rules still apply to it, which is asserted.
+
+require_universe_membership=True restores hard rejection with
+NOT_IN_CURRENT_NSE_UNIVERSE for callers that want it.
+
+Added v2/universe_reconciliation.py
+-----------------------------------
+The gateway decides what may be entered; this decides what happens to a
+position already open in a symbol that may no longer be traded.
+
+  CORPORATE_CONVERSION  merged with a known successor and ratio. Converted, not
+                        exited: realised P&L is zero and the position continues
+                        in the successor. Fractional entitlements are recorded
+                        rather than silently rounded (175 JBCHEPHARM -> 89
+                        TORNTPHARM plus 0.25 for the scheme to settle).
+  TERMINAL_EXIT         terminal with no successor. Closed at last price and
+                        flagged for manual review.
+  UNIVERSE_EXIT         still trades but is no longer enterable: stale,
+                        restricted, or an observe-only non-equity holding.
+                        Closed at the last close so paper P&L stays continuous.
+
+Accepts plain mappings, so it serves the JSON state files used by Hull Pine and
+the Momentum Ladder as well as V3's sqlite portfolio store.
+
+Tests: 12 new for reconciliation, 3 new for instrument classification, 54 pass
+across the gateway and V3 wiring suites.
+---
+ tests/test_tradeability_gateway.py    |  52 ++++++-
+ tests/test_universe_reconciliation.py | 201 ++++++++++++++++++++++++++
+ v2/tradeability.py                    |  97 ++++++++++---
+ v2/universe_reconciliation.py         | 194 +++++++++++++++++++++++++
+ 4 files changed, 524 insertions(+), 20 deletions(-)
+ create mode 100755 tests/test_universe_reconciliation.py
+ create mode 100755 v2/universe_reconciliation.py
+
+diff --git a/tests/test_tradeability_gateway.py b/tests/test_tradeability_gateway.py
+index 28f705f..4cc381c 100755
+--- a/tests/test_tradeability_gateway.py
++++ b/tests/test_tradeability_gateway.py
+@@ -83,15 +83,58 @@ def test_fresh_active_eq_symbol_is_tradeable():
+ 
+ # --- the eight mandatory rules ---------------------------------------------
+ 
+-def test_missing_security_master_row_fails_closed():
++def test_missing_security_master_row_is_rejected_when_membership_is_required():
+     result = evaluate_tradeability(
+         "GHOSTCO", _frame("GHOSTCO", FRESH),
+         market_date=MARKET_DATE, master_row=None, session_calendar=CALENDAR,
++        require_universe_membership=True,
+     )
+     assert not result.eligible
+     assert result.reason_code == "NOT_IN_CURRENT_NSE_UNIVERSE"
+ 
+ 
++def test_symbol_absent_from_the_eq_master_is_observe_only_by_default():
++    """ETFs and index funds reach the price feed but are not carried equities.
++
++    They used to be indistinguishable from equities, which is how GSEC10IETF and
++    friends ended up in the Hull Pine paper portfolio.  They are now admitted for
++    display, labelled, and withheld from entry.
++    """
++    result = evaluate_tradeability(
++        "GOLDBEES", _frame("GOLDBEES", FRESH),
++        market_date=MARKET_DATE, master_row=None, session_calendar=CALENDAR,
++    )
++    assert result.eligible
++    assert result.observe_only
++    assert result.entry_blocked is True
++    assert result.instrument_class == "NON_EQ_UNVERIFIED"
++    assert result.data_verified is False
++    assert "Observation only" in (result.detail or "")
++
++
++def test_a_mastered_equity_stays_verified_and_enterable():
++    result = evaluate_tradeability(
++        "RELIANCE", _frame("RELIANCE", FRESH),
++        market_date=MARKET_DATE, master_row=_master("RELIANCE"),
++        session_calendar=CALENDAR,
++    )
++    assert result.instrument_class == "EQUITY"
++    assert result.data_verified is True
++    assert result.observe_only is False
++
++
++def test_unverified_instrument_is_still_subject_to_every_other_rule():
++    """Labelling must not become a loophole around freshness or lifecycle."""
++    stale = _sessions(300, end="2026-07-16")
++    result = evaluate_tradeability(
++        "DEADETF", _frame("DEADETF", stale),
++        market_date=MARKET_DATE, master_row=None,
++        session_calendar=tuple(sorted(set(stale) | set(FRESH))),
++    )
++    assert not result.eligible
++    assert result.reason_code == "STALE_SYMBOL_PRICE"
++
++
+ def test_non_eq_series_is_rejected():
+     result = evaluate_tradeability(
+         "SOMEBE", _frame("SOMEBE", FRESH),
+@@ -112,7 +155,7 @@ def test_inactive_security_is_rejected_for_every_csv_encoding(flag):
+     assert result.reason_code == "INACTIVE_SECURITY", flag
+ 
+ 
+-def test_absent_active_flag_fails_closed():
++def test_absent_active_flag_fails_closed_for_a_carried_symbol():
+     row = {"symbol": "NOFLAG", "series": "EQ"}
+     result = evaluate_tradeability(
+         "NOFLAG", _frame("NOFLAG", FRESH),
+@@ -198,7 +241,8 @@ def test_every_emitted_reason_code_is_declared():
+     frame = _frame("X", FRESH)
+     cases = [
+         evaluate_tradeability("X", frame, market_date=MARKET_DATE, master_row=None,
+-                              session_calendar=CALENDAR),
++                              session_calendar=CALENDAR,
++                              require_universe_membership=True),
+         evaluate_tradeability("X", frame, market_date=MARKET_DATE,
+                               master_row=_master("X", series="SM"), session_calendar=CALENDAR),
+         evaluate_tradeability("X", frame, market_date=MARKET_DATE,
+@@ -412,6 +456,8 @@ def test_universe_evaluation_separates_causes_and_counts_them():
+     assert verdict.results["JBCHEPHARM"].reason_code == "TERMINAL_MERGER"
+     assert verdict.results["STALECO"].reason_code == "STALE_SYMBOL_PRICE"
+     assert verdict.rejection_counts() == {"STALE_SYMBOL_PRICE": 1, "TERMINAL_MERGER": 1}
++    assert verdict.observe_only_symbols == ()
++    assert verdict.unverified_symbols == ()
+ 
+     filtered = verdict.filter_frame(prices)
+     assert set(filtered["symbol"]) == {"RELIANCE", "TORNTPHARM"}
+diff --git a/tests/test_universe_reconciliation.py b/tests/test_universe_reconciliation.py
+new file mode 100755
+index 0000000..112dfad
+--- /dev/null
++++ b/tests/test_universe_reconciliation.py
+@@ -0,0 +1,201 @@
++"""What happens to a paper position when its symbol leaves the universe."""
++from __future__ import annotations
++
++import pandas as pd
++import pytest
++
++from v2.security_lifecycle import LifecycleEvent
++from v2.tradeability import evaluate_universe
++from v2.universe_reconciliation import (
++    CORPORATE_CONVERSION,
++    TERMINAL_EXIT,
++    UNIVERSE_EXIT,
++    classify_position,
++    reconcile_positions,
++    render_reconciliation_notice,
++)
++
++MARKET_DATE = "2026-08-20"
++DAYS = ["2026-08-18", "2026-08-19", "2026-08-20"]
++STALE_DAYS = ["2026-07-14", "2026-07-15", "2026-07-16"]
++
++
++def _frame(symbol: str, days: list[str], close: float) -> pd.DataFrame:
++    return pd.DataFrame({
++        "symbol": symbol, "trade_date": days,
++        "open": close, "high": close * 1.01, "low": close * 0.99,
++        "close": close, "volume": 100_000,
++    })
++
++
++def _master(symbol: str, **extra) -> dict:
++    row = {"symbol": symbol, "series": "EQ", "active": 1}
++    row.update(extra)
++    return row
++
++
++JBCHEPHARM_EVENT = LifecycleEvent(
++    symbol="JBCHEPHARM", event_type="AMALGAMATION", status="EFFECTIVE",
++    effective_date="2026-07-08", record_date="2026-07-17",
++    last_trading_date="2026-07-16", successor_symbol="TORNTPHARM",
++    exchange_ratio_from=100.0, exchange_ratio_to=51.0, terminal=True,
++)
++
++DELISTED_EVENT = LifecycleEvent(
++    symbol="GONECO", event_type="DELISTING", status="EFFECTIVE",
++    effective_date="2026-06-01", last_trading_date="2026-05-29", terminal=True,
++)
++
++
++def _verdict():
++    prices = pd.concat([
++        _frame("BERGEPAINT", DAYS, 528.55),
++        _frame("GSEC10IETF", DAYS, 267.26),
++        _frame("JBCHEPHARM", STALE_DAYS, 2408.9),
++        _frame("GONECO", STALE_DAYS, 45.0),
++        _frame("STALECO", STALE_DAYS, 90.0),
++    ], ignore_index=True)
++    return evaluate_universe(
++        prices, market_date=MARKET_DATE,
++        master={s: _master(s) for s in ("BERGEPAINT", "STALECO", "GONECO")},
++        lifecycle=[JBCHEPHARM_EVENT, DELISTED_EVENT],
++    )
++
++
++# --- per-position classification -------------------------------------------
++
++def test_a_healthy_equity_position_is_held():
++    verdict = _verdict()
++    action = classify_position(
++        "BERGEPAINT", verdict=verdict.results["BERGEPAINT"],
++        market_date=MARKET_DATE, quantity=10, last_price=528.55,
++    )
++    assert action is None, "a tradeable equity must not be disturbed"
++
++
++def test_merged_holding_is_converted_not_exited():
++    verdict = _verdict()
++    action = classify_position(
++        "JBCHEPHARM", verdict=verdict.results["JBCHEPHARM"],
++        market_date=MARKET_DATE, quantity=100, last_price=2408.9,
++    )
++    assert action is not None
++    assert action.action == CORPORATE_CONVERSION
++    assert action.reason_code == "TERMINAL_MERGER"
++    assert action.successor_symbol == "TORNTPHARM"
++    assert action.conversion_ratio == pytest.approx(0.51)
++    assert action.successor_quantity == 51.0
++    assert action.fractional_entitlement == 0.0
++    assert action.closes_position is False
++    assert "Realised P&L: 0 at conversion" in action.describe()
++
++
++def test_fractional_entitlement_is_recorded_not_rounded_away():
++    """100 -> 51 on a 175-share holding gives 89.25 shares."""
++    verdict = _verdict()
++    action = classify_position(
++        "JBCHEPHARM", verdict=verdict.results["JBCHEPHARM"],
++        market_date=MARKET_DATE, quantity=175, last_price=2408.9,
++    )
++    assert action.successor_quantity == 89.0
++    assert action.fractional_entitlement == pytest.approx(0.25)
++    assert "do not round" in action.describe()
++
++
++def test_delisting_without_a_successor_is_a_terminal_exit_for_review():
++    verdict = _verdict()
++    action = classify_position(
++        "GONECO", verdict=verdict.results["GONECO"],
++        market_date=MARKET_DATE, quantity=50, last_price=45.0,
++    )
++    assert action.action == TERMINAL_EXIT
++    assert action.reason_code == "DELISTED_SECURITY"
++    assert action.closes_position is True
++    assert "manual review" in action.detail
++
++
++def test_stale_symbol_holding_is_a_universe_exit_at_the_last_close():
++    verdict = _verdict()
++    action = classify_position(
++        "STALECO", verdict=verdict.results["STALECO"],
++        market_date=MARKET_DATE, quantity=20, last_price=90.0,
++    )
++    assert action.action == UNIVERSE_EXIT
++    assert action.reason_code == "STALE_SYMBOL_PRICE"
++    assert action.exit_price == 90.0
++
++
++def test_observe_only_etf_holding_is_exited():
++    """The decision taken for the legacy Hull Pine ETF positions."""
++    verdict = _verdict()
++    result = verdict.results["GSEC10IETF"]
++    assert result.eligible and result.observe_only    # admitted, not enterable
++    action = classify_position(
++        "GSEC10IETF", verdict=result, market_date=MARKET_DATE,
++        quantity=224, last_price=267.26,
++    )
++    assert action.action == UNIVERSE_EXIT
++    assert action.reason_code == "NON_EQ_UNVERIFIED_HOLDING"
++    assert action.exit_price == 267.26
++
++
++def test_a_symbol_with_no_verdict_at_all_is_exited():
++    action = classify_position(
++        "VANISHED", verdict=None, market_date=MARKET_DATE,
++        quantity=5, last_price=12.0,
++    )
++    assert action.action == UNIVERSE_EXIT
++    assert action.reason_code == "NO_CURRENT_VERDICT"
++
++
++# --- batch ------------------------------------------------------------------
++
++def test_reconcile_positions_handles_a_mixed_json_state_file():
++    verdict = _verdict()
++    positions = [
++        {"symbol": "BERGEPAINT", "quantity": 10, "last_price": 528.55, "state": "OPEN"},
++        {"symbol": "GSEC10IETF", "quantity": 224, "last_price": 267.26, "state": "TRAILING"},
++        {"symbol": "JBCHEPHARM", "quantity": 100, "last_price": 2408.9, "state": "OPEN"},
++        {"symbol": "STALECO", "quantity": 20, "last_price": 90.0, "state": "OPEN"},
++    ]
++    actions = {action.symbol: action for action in reconcile_positions(positions, verdict)}
++    assert "BERGEPAINT" not in actions
++    assert actions["GSEC10IETF"].action == UNIVERSE_EXIT
++    assert actions["JBCHEPHARM"].action == CORPORATE_CONVERSION
++    assert actions["STALECO"].action == UNIVERSE_EXIT
++
++
++def test_reconcile_tolerates_missing_and_malformed_fields():
++    verdict = _verdict()
++    positions = [
++        {"symbol": "GSEC10IETF"},                      # no quantity or price
++        {"symbol": "STALECO", "quantity": "not-a-number", "last_price": None},
++        {"quantity": 5},                               # no symbol at all
++    ]
++    actions = reconcile_positions(positions, verdict)
++    assert {a.symbol for a in actions} == {"GSEC10IETF", "STALECO"}
++
++
++def test_explicit_last_prices_override_the_position_record():
++    verdict = _verdict()
++    actions = reconcile_positions(
++        [{"symbol": "STALECO", "quantity": 1, "last_price": 1.0}],
++        verdict, last_prices={"STALECO": 90.0},
++    )
++    assert actions[0].exit_price == 90.0
++
++
++def test_notice_is_empty_when_nothing_needs_reconciling():
++    assert render_reconciliation_notice([]) == ""
++
++
++def test_notice_names_every_affected_symbol():
++    verdict = _verdict()
++    actions = reconcile_positions([
++        {"symbol": "GSEC10IETF", "quantity": 224, "last_price": 267.26},
++        {"symbol": "JBCHEPHARM", "quantity": 100, "last_price": 2408.9},
++    ], verdict)
++    notice = render_reconciliation_notice(actions)
++    assert "UNIVERSE RECONCILIATION" in notice
++    assert "GSEC10IETF" in notice and "UNIVERSE_EXIT" in notice
++    assert "TORNTPHARM" in notice and "CORPORATE_CONVERSION" in notice
+diff --git a/v2/tradeability.py b/v2/tradeability.py
+index c39f5d4..422c570 100755
+--- a/v2/tradeability.py
++++ b/v2/tradeability.py
+@@ -58,6 +58,14 @@ REASON_CODES: tuple[str, ...] = (
+     "INVALID_LATEST_ROW",
+ )
+ 
++#: Instrument classification.  Symbols carried in the official NSE EQ security
++#: master are EQUITY; anything trading on the exchange but absent from it (ETFs,
++#: index funds, government-securities funds) is NON_EQ_UNVERIFIED.  Following the
++#: project rule that unverified instruments "may be observed, but cannot receive
++#: a paper entry", they are admitted for display and withheld from entry.
++EQUITY = "EQUITY"
++NON_EQ_UNVERIFIED = "NON_EQ_UNVERIFIED"
++
+ STAGE_CORPORATE_LIFECYCLE = "CORPORATE_LIFECYCLE"
+ STAGE_UNIVERSE = "UNIVERSE"
+ STAGE_TRADEABILITY = "TRADEABILITY"
+@@ -101,6 +109,16 @@ class TradeabilityResult:
+     successor_symbol: str | None = None
+     conversion_ratio: float | None = None
+     detail: str | None = None
++    #: EQUITY or NON_EQ_UNVERIFIED.
++    instrument_class: str = EQUITY
++    #: False when the symbol is absent from the official EQ security master, so
++    #: series, market cap, delivery and promoter data cannot be trusted.
++    data_verified: bool = True
++
++    @property
++    def observe_only(self) -> bool:
++        """Visible and scored, but never eligible for a paper entry."""
++        return self.eligible and self.entry_blocked
+ 
+     @property
+     def terminal(self) -> bool:
+@@ -125,6 +143,8 @@ class TradeabilityResult:
+             lines.append(f"Last traded: {self.symbol_last_date}")
+         if self.successor_symbol:
+             lines.append(f"Successor: {self.successor_symbol}")
++        if self.instrument_class != EQUITY:
++            lines.append(f"Instrument: {self.instrument_class} (DATA PENDING)")
+         return "\n".join(lines)
+ 
+ 
+@@ -171,12 +191,29 @@ class UniverseVerdict:
+         keep = set(self.eligible_symbols)
+         return prices[prices[symbol_column].astype(str).isin(keep)].copy()
+ 
++    @property
++    def observe_only_symbols(self) -> tuple[str, ...]:
++        return tuple(sorted(s for s, r in self.results.items() if r.observe_only))
++
++    @property
++    def unverified_symbols(self) -> tuple[str, ...]:
++        return tuple(sorted(
++            s for s, r in self.results.items()
++            if r.eligible and r.instrument_class != EQUITY
++        ))
++
++    def instrument_class(self, symbol: str) -> str:
++        result = self.results.get(str(symbol))
++        return result.instrument_class if result else EQUITY
++
+     def diagnostics(self) -> dict[str, object]:
+         return {
+             "market_date": self.market_date,
+             "evaluated": len(self.results),
+             "eligible": len(self.eligible_symbols),
+             "entry_permitted": len(self.entry_permitted_symbols),
++            "observe_only": len(self.observe_only_symbols),
++            "non_eq_unverified": len(self.unverified_symbols),
+             "rejected": len(self.results) - len(self.eligible_symbols),
+             "rejection_counts": self.rejection_counts(),
+             "terminal_symbols": sorted(
+@@ -242,7 +279,7 @@ def evaluate_tradeability(
+     restricted_reason: str | None = None,
+     session_calendar: Sequence[str] | None = None,
+     max_staleness_sessions: int = 0,
+-    require_universe_membership: bool = True,
++    require_universe_membership: bool = False,
+     require_series_eq: bool = True,
+     corporate_review_is_terminal: bool = False,
+ ) -> TradeabilityResult:
+@@ -258,8 +295,12 @@ def evaluate_tradeability(
+         :func:`market_date_from_prices`.
+     master_row
+         The symbol's row from the current official NSE security master.
+-        ``None`` means "not in the current universe" and, with
+-        ``require_universe_membership``, is a rejection rather than a pass.
++        ``None`` means the symbol trades on the exchange but is not a carried EQ
++        equity — in practice an ETF or index fund.  By default it is admitted as
++        ``NON_EQ_UNVERIFIED`` and marked observe-only, because its series,
++        market cap, delivery and promoter data cannot be trusted.  Set
++        ``require_universe_membership=True`` to reject such symbols outright
++        with ``NOT_IN_CURRENT_NSE_UNIVERSE`` instead.
+     max_staleness_sessions
+         ``0`` demands the symbol traded in the market date's own session.  Raise
+         it only for deliberately tolerant research modes.
+@@ -287,32 +328,47 @@ def evaluate_tradeability(
+             conversion_ratio=lifecycle_event.conversion_ratio,
+         )
+ 
+-    # 2. Current official NSE security-master membership.
++    # 2. Current official NSE security-master membership.  Absence means the
++    #    symbol is not a carried EQ equity; it is labelled and made observe-only
++    #    rather than silently treated as a normal equity, which is how ETFs
++    #    previously reached the Hull Pine paper portfolio.
++    instrument_class = EQUITY
++    data_verified = True
++    unverified_detail: str | None = None
+     if master_row is None:
+         if require_universe_membership:
+             return reject(
+                 STAGE_UNIVERSE, "NOT_IN_CURRENT_NSE_UNIVERSE",
+                 detail="Symbol absent from the current NSE security master",
+             )
++        instrument_class = NON_EQ_UNVERIFIED
++        data_verified = False
++        unverified_detail = (
++            "Absent from the EQ security master; series, market cap, delivery "
++            "and promoter data are unverified. Observation only."
++        )
+         master_row = {}
+ 
+-    # 3. Series and active flag — fail closed when the field is absent.
+-    series_value = master_row.get("series")
+-    series = str(series_value).strip().upper() if series_value is not None else ""
+-    if require_series_eq and series != "EQ":
+-        return reject(
+-            STAGE_TRADEABILITY, "NON_EQ_SERIES",
+-            detail=f"series={series or 'UNKNOWN'} required=EQ",
+-        )
+-    active_value = master_row.get("active")
+-    if active_value is None:
+-        if require_universe_membership:
++    # 3. Series and active flag — fail closed when the field is absent, but only
++    #    for symbols the master actually carries.
++    if data_verified:
++        series_value = master_row.get("series")
++        series = str(series_value).strip().upper() if series_value is not None else ""
++        if require_series_eq and series != "EQ":
++            return reject(
++                STAGE_TRADEABILITY, "NON_EQ_SERIES",
++                detail=f"series={series or 'UNKNOWN'} required=EQ",
++            )
++        active_value = master_row.get("active")
++        if active_value is None:
+             return reject(
+                 STAGE_TRADEABILITY, "INACTIVE_SECURITY",
+                 detail="Active flag missing from the security master",
+             )
+-    elif _flag_is_false(active_value):
+-        return reject(STAGE_TRADEABILITY, "INACTIVE_SECURITY", detail=f"active={active_value}")
++        if _flag_is_false(active_value):
++            return reject(
++                STAGE_TRADEABILITY, "INACTIVE_SECURITY", detail=f"active={active_value}",
++            )
+ 
+     delisting_date = _iso(master_row.get("delisting_date"))
+     if delisting_date and delisting_date <= market_iso:
+@@ -403,11 +459,18 @@ def evaluate_tradeability(
+         review_reason = "CORPORATE_ACTION_REVIEW"
+         entry_blocked = True
+ 
++    # 8. An unverified instrument is observed, never entered.
++    detail = None
++    if not data_verified:
++        entry_blocked = True
++        detail = unverified_detail
++
+     return TradeabilityResult(
+         symbol=symbol, eligible=True, reason_code=TRADEABLE, stage=STAGE_TRADEABILITY,
+         market_date=market_iso, symbol_last_date=symbol_last, staleness_sessions=behind,
+         entry_blocked=entry_blocked, review_reason=review_reason,
+         successor_symbol=successor, conversion_ratio=ratio,
++        instrument_class=instrument_class, data_verified=data_verified, detail=detail,
+     )
+ 
+ 
+diff --git a/v2/universe_reconciliation.py b/v2/universe_reconciliation.py
+new file mode 100755
+index 0000000..c9a03e4
+--- /dev/null
++++ b/v2/universe_reconciliation.py
+@@ -0,0 +1,194 @@
++"""Reconcile open paper positions against the current tradeable universe.
++
++The gateway decides what may be *entered*.  This module answers the companion
++question every scanner also has to answer: what happens to a position that is
++already open in a symbol the scanner may no longer trade?
++
++Three outcomes, in priority order:
++
++``CORPORATE_CONVERSION``
++    The symbol was amalgamated or merged and a successor with an exchange ratio
++    is known.  The holding is converted, not exited: realised P&L is zero at the
++    conversion and the position continues in the successor symbol.  Fractional
++    entitlements are recorded rather than silently rounded.
++
++``TERMINAL_EXIT``
++    The symbol is terminal with no successor — a plain delisting or suspension.
++    There is nothing to convert and no market to exit into, so the position is
++    closed at its last known price and flagged for manual review.
++
++``UNIVERSE_EXIT``
++    The symbol still trades but is no longer admissible for entry: it has gone
++    stale, become restricted, or is an unverified non-equity instrument that the
++    scanner may observe but not hold.  The position is closed at the last
++    available close so the paper equity curve stays continuous and honest.
++
++Nothing here writes to the price history.  These are portfolio decisions.
++"""
++from __future__ import annotations
++
++from dataclasses import asdict, dataclass
++from typing import Iterable, Mapping
++
++from .tradeability import EQUITY, TradeabilityResult, UniverseVerdict
++
++CORPORATE_CONVERSION = "CORPORATE_CONVERSION"
++TERMINAL_EXIT = "TERMINAL_EXIT"
++UNIVERSE_EXIT = "UNIVERSE_EXIT"
++
++#: Reason codes that mean "the security has ceased to be itself".
++_TERMINAL_CODES = frozenset({"TERMINAL_MERGER", "DELISTED_SECURITY", "SUSPENDED_SECURITY"})
++
++
++@dataclass(frozen=True)
++class ReconciliationAction:
++    """One decision about one open position."""
++
++    symbol: str
++    action: str
++    reason_code: str
++    market_date: str
++    exit_price: float | None = None
++    successor_symbol: str | None = None
++    conversion_ratio: float | None = None
++    #: Successor quantity for a conversion, before fractional treatment.
++    successor_quantity: float | None = None
++    #: The fractional remainder the scheme must settle in cash.
++    fractional_entitlement: float | None = None
++    detail: str | None = None
++
++    @property
++    def closes_position(self) -> bool:
++        return self.action in {TERMINAL_EXIT, UNIVERSE_EXIT}
++
++    def to_dict(self) -> dict:
++        return asdict(self)
++
++    def describe(self) -> str:
++        lines = [f"{self.symbol} • {self.action}", f"Reason: {self.reason_code}"]
++        if self.action == CORPORATE_CONVERSION:
++            transfer = f"{self.symbol} → {self.successor_symbol}"
++            if self.conversion_ratio:
++                transfer += f" (ratio {self.conversion_ratio:.4f})"
++            lines.append(transfer)
++            if self.successor_quantity is not None:
++                lines.append(f"Successor quantity: {self.successor_quantity:g}")
++            if self.fractional_entitlement:
++                lines.append(
++                    f"Fractional entitlement: {self.fractional_entitlement:g}"
++                    " — settle per the scheme, do not round"
++                )
++            lines.append("Realised P&L: 0 at conversion")
++        elif self.exit_price is not None:
++            lines.append(f"Exit price: {self.exit_price:g}")
++        if self.detail:
++            lines.append(self.detail)
++        return "\n".join(lines)
++
++
++def classify_position(
++    symbol: str,
++    *,
++    verdict: TradeabilityResult | None,
++    market_date: str,
++    quantity: float = 0.0,
++    last_price: float | None = None,
++) -> ReconciliationAction | None:
++    """Decide what must happen to one open position. ``None`` means "hold"."""
++    if verdict is None:
++        # No verdict at all means the symbol vanished from the price frame
++        # entirely; treat it as a universe exit so it cannot linger unpriced.
++        return ReconciliationAction(
++            symbol=symbol, action=UNIVERSE_EXIT, reason_code="NO_CURRENT_VERDICT",
++            market_date=market_date, exit_price=last_price,
++            detail="Symbol produced no gateway verdict on this market date",
++        )
++
++    if verdict.reason_code in _TERMINAL_CODES:
++        ratio = verdict.conversion_ratio
++        if verdict.successor_symbol and ratio:
++            raw = quantity * ratio
++            whole = float(int(raw))
++            return ReconciliationAction(
++                symbol=symbol, action=CORPORATE_CONVERSION,
++                reason_code=verdict.reason_code, market_date=market_date,
++                successor_symbol=verdict.successor_symbol, conversion_ratio=ratio,
++                successor_quantity=whole,
++                fractional_entitlement=round(raw - whole, 8),
++                detail=verdict.detail,
++            )
++        return ReconciliationAction(
++            symbol=symbol, action=TERMINAL_EXIT, reason_code=verdict.reason_code,
++            market_date=market_date, exit_price=last_price,
++            detail=(verdict.detail or "") + " | No successor; requires manual review",
++        )
++
++    if not verdict.eligible:
++        return ReconciliationAction(
++            symbol=symbol, action=UNIVERSE_EXIT, reason_code=verdict.reason_code,
++            market_date=market_date, exit_price=last_price, detail=verdict.detail,
++        )
++
++    if verdict.instrument_class != EQUITY:
++        return ReconciliationAction(
++            symbol=symbol, action=UNIVERSE_EXIT,
++            reason_code="NON_EQ_UNVERIFIED_HOLDING", market_date=market_date,
++            exit_price=last_price,
++            detail=(
++                "Instrument may be observed but not held; the scanner cannot "
++                "verify its series, market cap or delivery data"
++            ),
++        )
++
++    return None
++
++
++def reconcile_positions(
++    positions: Iterable[Mapping[str, object]],
++    verdict: UniverseVerdict,
++    *,
++    last_prices: Mapping[str, float] | None = None,
++    symbol_key: str = "symbol",
++    quantity_key: str = "quantity",
++    price_key: str = "last_price",
++) -> list[ReconciliationAction]:
++    """Classify every open position against a gateway verdict.
++
++    Accepts plain mappings so the same helper serves the JSON state files used by
++    Hull Pine and the Momentum Ladder as well as V3's sqlite portfolio store.
++    """
++    prices = dict(last_prices or {})
++    actions: list[ReconciliationAction] = []
++    for position in positions:
++        symbol = str(position.get(symbol_key, "") or "")
++        if not symbol:
++            continue
++        raw_price = position.get(price_key)
++        try:
++            fallback = float(raw_price) if raw_price is not None else None
++        except (TypeError, ValueError):
++            fallback = None
++        try:
++            quantity = float(position.get(quantity_key) or 0.0)
++        except (TypeError, ValueError):
++            quantity = 0.0
++        action = classify_position(
++            symbol, verdict=verdict.results.get(symbol),
++            market_date=verdict.market_date, quantity=quantity,
++            last_price=prices.get(symbol, fallback),
++        )
++        if action is not None:
++            actions.append(action)
++    return actions
++
++
++def render_reconciliation_notice(actions: Iterable[ReconciliationAction]) -> str:
++    """Operator-facing summary for Telegram and the admin report."""
++    actions = list(actions)
++    if not actions:
++        return ""
++    lines = ["⚠️ UNIVERSE RECONCILIATION"]
++    for action in actions:
++        lines.append("")
++        lines.append(action.describe())
++    return "\n".join(lines)
+-- 
+2.34.1
+

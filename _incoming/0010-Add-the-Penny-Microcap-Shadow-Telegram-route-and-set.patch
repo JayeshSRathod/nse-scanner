@@ -1,0 +1,1183 @@
+From d31621b3c797ff83d0413160bf27262684fa12ee Mon Sep 17 00:00:00 2001
+From: Jayesh Rathod <jayesh4.rathod@ril.com>
+Date: Fri, 21 Aug 2026 15:09:16 +0530
+Subject: [PATCH 10/14] Add the Penny & Microcap Shadow Telegram route and
+ setup guide
+
+Provisions the fourth bot so it can be created and validated before the penny
+scanner is wired to it. The scanner's strategy logic is maintained separately and
+is not touched here.
+
+penny_shadow/telegram.py
+  Fail-closed delivery on PENNY_* secrets, following the per-scanner pattern in
+  docs/TELEGRAM_THREE_BOT_ROUTING.md. A missing credential returns
+  penny_telegram_credentials_missing and delivers nothing; it never falls back to
+  the V3, Ladder or Hull bot, which is asserted -- a penny card must not surface
+  in a large-cap topic. Six topics, split by stage rather than by report, so the
+  radar firehose can be muted without losing entry authorisations. Messages over
+  Telegram's 4,096-character limit split on card boundaries so a card is never
+  truncated mid-way. preflight() reports which secrets are visible without
+  printing any value.
+
+penny_shadow/cards.py
+  Renders the four specified sections -- Radar, Confirming, Ready, Circuit Risk
+  -- from plain dictionaries, so it does not depend on the scanner's internals.
+  Matches the specification's card layout exactly. Two deliberate properties:
+
+  * Missing evidence is stated, never invented. An absent delivery percentage
+    reads "Not yet confirmed" rather than 0.0%, and an unverified market cap
+    reads "UNVERIFIED -- observation only".
+  * A symbol carrying a circuit or terminal availability state routes to Circuit
+    Risk and never to Ready, whatever it scored. NHCFOODS therefore stays
+    detected, scored 82/100, and visibly unbuyable -- the behaviour the
+    specification asks for.
+
+scripts/penny_telegram_smoke.py
+  Proves the token, chat and each topic work using sample cards in the real
+  format, so a formatting or permission problem surfaces before a live run.
+  Dry run by default.
+
+docs/PENNY_TELEGRAM_BOT_SETUP.md
+  Nine steps from @BotFather to a scheduled workflow, including the getUpdates
+  and Copy-Link methods for chat and topic IDs, the four common Telegram errors
+  and their causes, how to apply the shared gateway with the penny-specific
+  allowance for an unverified market cap at EARLY RADAR, and token rotation.
+
+docs/TELEGRAM_THREE_BOT_ROUTING.md is updated from three bots to four.
+
+Tests: 27 new. Suite 411 passed, same 7 pre-existing failures.
+---
+ docs/PENNY_TELEGRAM_BOT_SETUP.md   | 254 +++++++++++++++++++++++++++++
+ docs/TELEGRAM_THREE_BOT_ROUTING.md |  18 +-
+ penny_shadow/__init__.py           |  22 +++
+ penny_shadow/cards.py              | 236 +++++++++++++++++++++++++++
+ penny_shadow/telegram.py           | 164 +++++++++++++++++++
+ scripts/penny_telegram_smoke.py    | 128 +++++++++++++++
+ tests/test_penny_telegram.py       | 245 ++++++++++++++++++++++++++++
+ 7 files changed, 1066 insertions(+), 1 deletion(-)
+ create mode 100755 docs/PENNY_TELEGRAM_BOT_SETUP.md
+ create mode 100644 penny_shadow/__init__.py
+ create mode 100755 penny_shadow/cards.py
+ create mode 100755 penny_shadow/telegram.py
+ create mode 100755 scripts/penny_telegram_smoke.py
+ create mode 100755 tests/test_penny_telegram.py
+
+diff --git a/docs/PENNY_TELEGRAM_BOT_SETUP.md b/docs/PENNY_TELEGRAM_BOT_SETUP.md
+new file mode 100755
+index 0000000..030a291
+--- /dev/null
++++ b/docs/PENNY_TELEGRAM_BOT_SETUP.md
+@@ -0,0 +1,254 @@
++# Penny & Microcap Shadow Scanner — Telegram Bot Setup
++
++Fourth route in the per-scanner pattern in `TELEGRAM_THREE_BOT_ROUTING.md`. Work
++through the steps in order; steps 1–6 are done in Telegram and GitHub, steps 7–9
++are in the repository. Nothing is delivered until step 8 passes.
++
++**Never put a token or chat ID in a source file, a workflow file, or a commit.**
++All values are GitHub Actions secrets.
++
++---
++
++## Step 1 — Create the bot
++
++In Telegram, message **@BotFather**:
++
++```
++/newbot
++```
++
++- **Name** (display name): `NSE Penny Shadow`
++- **Username** (must end in `bot`): e.g. `nse_penny_shadow_bot`
++
++BotFather replies with an HTTP API token shaped like
++`8123456789:AAH...`. Copy it once; it is `PENNY_TELEGRAM_BOT_TOKEN`.
++
++Recommended hardening, still in @BotFather:
++
++```
++/setjoingroups   → Enable   (the bot must join your group)
++/setprivacy      → Disable  (lets the bot read commands in the group; skip if
++                             you only ever push and never issue commands)
++/setdescription  → Penny & microcap paper research. Not trading advice.
++/setcommands     → status - delivery and gateway status
++                   radar - today's early radar list
++                   ready - entry-authorised candidates
++```
++
++> `/setcommands` only matters if you later add a polling handler. Delivery-only
++> operation needs no commands.
++
++---
++
++## Step 2 — Create the group and enable topics
++
++1. Create a **new group** — do not reuse the V3, Ladder or Hull group. Isolation
++   is the point: a penny card must never land in a large-cap topic.
++2. Name it e.g. `NSE Penny Shadow — Paper`.
++3. Add your new bot as a **member**, then promote it to **admin**. A bot cannot
++   post into topics without admin rights.
++4. Group settings → **Topics** → **Enable**.
++
++---
++
++## Step 3 — Create the four delivery topics
++
++Create these topics in the group. The split lets you mute the radar firehose
++without losing entry authorisations:
++
++| Topic | Holds |
++|---|---|
++| `Early Radar` | movement starting; observation only |
++| `Confirming` | participation confirming; still not an entry |
++| `Ready` | entry-authorised paper candidates |
++| `Circuit Risk` | circuit-locked, extended, terminal |
++| `Portfolio` | paper positions and reconciliation |
++| `System` | daily summary, gateway diagnostics, failures |
++
++---
++
++## Step 4 — Find the chat ID and topic IDs
++
++**Chat ID.** Post any message in the group, then open:
++
++```
++https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates
++```
++
++Look for `"chat":{"id":-1001234567890,...}`. Supergroup IDs are negative and
++start `-100`. That is `PENNY_TELEGRAM_CHAT_ID`.
++
++**Topic IDs.** In Telegram Desktop, right-click a topic → **Copy Link**. You get
++`https://t.me/c/1234567890/57` — the trailing number (`57`) is the topic ID. In
++`getUpdates` the same value appears as `message_thread_id`.
++
++> If `getUpdates` returns an empty `result`, post a fresh message and retry. If a
++> webhook is set the endpoint stays empty; call `/deleteWebhook` first.
++
++---
++
++## Step 5 — Add the GitHub Actions secrets
++
++Repository → **Settings** → **Secrets and variables** → **Actions** → **New
++repository secret**.
++
++**Required** — delivery fails closed without both:
++
++| Secret | Value |
++|---|---|
++| `PENNY_TELEGRAM_BOT_TOKEN` | the @BotFather token |
++| `PENNY_TELEGRAM_CHAT_ID` | e.g. `-1001234567890` |
++
++**Optional** — omit any and that section posts to the chat root:
++
++| Secret | Value |
++|---|---|
++| `PENNY_RADAR_TOPIC_ID` | topic ID for `Early Radar` |
++| `PENNY_CONFIRMING_TOPIC_ID` | topic ID for `Confirming` |
++| `PENNY_READY_TOPIC_ID` | topic ID for `Ready` |
++| `PENNY_CIRCUIT_TOPIC_ID` | topic ID for `Circuit Risk` |
++| `PENNY_PORTFOLIO_TOPIC_ID` | topic ID for `Portfolio` |
++| `PENNY_SYSTEM_TOPIC_ID` | topic ID for `System` |
++
++---
++
++## Step 6 — Confirm the bot can post
++
++Before involving the repository, prove the credentials work:
++
++```bash
++curl -s "https://api.telegram.org/bot<TOKEN>/sendMessage" \
++  -d chat_id="-1001234567890" \
++  -d message_thread_id="57" \
++  -d text="penny route check"
++```
++
++`{"ok":true,...}` means the bot is a group admin and the topic ID is valid.
++
++Common failures:
++
++| Response | Cause |
++|---|---|
++| `403 bot is not a member of the group` | bot not added |
++| `400 not enough rights to send text messages` | bot not admin |
++| `400 message thread not found` | wrong topic ID, or topics disabled |
++| `400 chat not found` | chat ID missing the `-100` prefix |
++
++---
++
++## Step 7 — Local smoke test
++
++Renders the real card format and reports which secrets are visible, without
++printing any of their values:
++
++```bash
++# see what the environment exposes; sends nothing
++python scripts/penny_telegram_smoke.py
++
++# preview one section's cards
++python scripts/penny_telegram_smoke.py --section radar
++
++# actually deliver sample cards to every configured topic
++export PENNY_TELEGRAM_BOT_TOKEN=...
++export PENNY_TELEGRAM_CHAT_ID=-1001234567890
++export PENNY_RADAR_TOPIC_ID=57
++python scripts/penny_telegram_smoke.py --send
++```
++
++Expected on success: `All configured routes delivered. Safe to wire the scanner.`
++
++---
++
++## Step 8 — Wire the scanner
++
++`penny_shadow/cards.py` renders from plain dictionaries, so it does not care how
++the scanner is structured internally. Each candidate needs `symbol` and `score`;
++every other field degrades to `Not yet confirmed` rather than rendering a
++misleading zero.
++
++```python
++from penny_shadow.cards import render_sections, render_summary
++from penny_shadow.telegram import (
++    send_radar, send_confirming, send_ready, send_circuit, send_system,
++)
++
++# candidates: list of dicts from the penny scanner
++#   symbol, score, cmp, return_5d, turnover_ratio, delivery_pct, trend,
++#   stage         -> RADAR | CONFIRMING | QUALIFIED | READY
++#   availability  -> CIRCUIT_LOCKED | CIRCUIT_WATCH | EXTENDED | TERMINATED | None
++#   market_cap_verified -> False marks the card observation-only
++#   entry_low / entry_high / stop, notes[]
++
++messages = render_sections(candidates, market_date)
++send_radar([messages["radar"]], enabled=live) if "radar" in messages else None
++send_confirming([messages["confirming"]], enabled=live) if "confirming" in messages else None
++send_ready([messages["ready"]], enabled=live) if "ready" in messages else None
++send_circuit([messages["circuit"]], enabled=live) if "circuit" in messages else None
++send_system(render_summary(candidates, market_date, gateway=verdict.diagnostics()),
++            enabled=live)
++```
++
++Set `stage` from the shared vocabulary in `v2/progressive_stages.py`, and
++`availability` from `availability_from_gateway(...)` so the gateway's decisions
++reach the card. A symbol whose `availability` is a circuit or terminal state is
++routed to **Circuit Risk** and never to **Ready**, whatever it scored — that is
++how NHCFOODS stays detected while remaining unbuyable.
++
++### Apply the shared gateway too
++
++The penny scanner should run the same admission control as the other three:
++
++```python
++from v2.tradeability import gateway_from_database
++
++verdict = gateway_from_database(db_path, prices)
++prices = verdict.filter_frame(prices)
++# entry authorisation additionally requires verdict.entry_permitted(symbol)
++```
++
++Penny-specific note: at `EARLY RADAR` the specification allows an unverified
++market cap. Pass `require_universe_membership=False` (the default) so such a
++symbol is admitted and labelled `NON_EQ_UNVERIFIED` / observe-only, rather than
++rejected — and set `market_cap_verified=False` on the card so it reads
++`UNVERIFIED — observation only`.
++
++---
++
++## Step 9 — Schedule it
++
++Add a workflow mirroring `.github/workflows/pine-hull-daily.yml`, passing only
++the `PENNY_*` secrets:
++
++```yaml
++    env:
++      PYTHONPATH: ${{ github.workspace }}
++      PENNY_TELEGRAM_BOT_TOKEN: ${{ secrets.PENNY_TELEGRAM_BOT_TOKEN }}
++      PENNY_TELEGRAM_CHAT_ID: ${{ secrets.PENNY_TELEGRAM_CHAT_ID }}
++      PENNY_RADAR_TOPIC_ID: ${{ secrets.PENNY_RADAR_TOPIC_ID }}
++      PENNY_CONFIRMING_TOPIC_ID: ${{ secrets.PENNY_CONFIRMING_TOPIC_ID }}
++      PENNY_READY_TOPIC_ID: ${{ secrets.PENNY_READY_TOPIC_ID }}
++      PENNY_CIRCUIT_TOPIC_ID: ${{ secrets.PENNY_CIRCUIT_TOPIC_ID }}
++      PENNY_PORTFOLIO_TOPIC_ID: ${{ secrets.PENNY_PORTFOLIO_TOPIC_ID }}
++      PENNY_SYSTEM_TOPIC_ID: ${{ secrets.PENNY_SYSTEM_TOPIC_ID }}
++```
++
++Do **not** expose `V3_*`, `LADDER_*` or `HULL_*` secrets to this job. The route
++is isolated by construction, and a test asserts it cannot borrow another
++scanner's bot.
++
++Run for at least a week with `--send` disabled, compare the rendered previews
++against the scanner's own output, then enable live delivery.
++
++---
++
++## Operating notes
++
++- **Fail closed.** A missing `PENNY_*` credential returns
++  `penny_telegram_credentials_missing` and delivers nothing. It never falls back
++  to another bot.
++- **Long lists.** Messages over 4,096 characters split on card boundaries, so a
++  card is never truncated mid-way.
++- **Rotating the token.** `/revoke` in @BotFather, then update the secret. The
++  chat and topic IDs are unaffected.
++- **Rate limits.** Roughly 20 messages/minute per group. Delivery sleeps 1s
++  between messages; prefer one message per section over one per stock.
+diff --git a/docs/TELEGRAM_THREE_BOT_ROUTING.md b/docs/TELEGRAM_THREE_BOT_ROUTING.md
+index f2a718d..7ffd6f3 100644
+--- a/docs/TELEGRAM_THREE_BOT_ROUTING.md
++++ b/docs/TELEGRAM_THREE_BOT_ROUTING.md
+@@ -1,4 +1,4 @@
+-# Three-Bot Telegram Routing
++# Per-Scanner Telegram Routing (four bots)
+ 
+ The repository shares market and corporate data, but every scanner has a fail-closed Telegram route. A missing scanner-specific credential stops that delivery; it never falls back to another bot.
+ 
+@@ -31,4 +31,20 @@ The repository shares market and corporate data, but every scanner has a fail-cl
+ - `HULL_REVIEW_TOPIC_ID`
+ - `HULL_SYSTEM_TOPIC_ID`
+ 
++## Penny & Microcap Shadow — `penny_shadow`
++
++- `PENNY_TELEGRAM_BOT_TOKEN`
++- `PENNY_TELEGRAM_CHAT_ID`
++- `PENNY_RADAR_TOPIC_ID`
++- `PENNY_CONFIRMING_TOPIC_ID`
++- `PENNY_READY_TOPIC_ID`
++- `PENNY_CIRCUIT_TOPIC_ID`
++- `PENNY_PORTFOLIO_TOPIC_ID`
++- `PENNY_SYSTEM_TOPIC_ID`
++
++The penny route splits by stage rather than by report, so the radar firehose can
++be muted without losing entry authorisations. Setup is documented step by step in
++`PENNY_TELEGRAM_BOT_SETUP.md`; validate with
++`python scripts/penny_telegram_smoke.py` before wiring the scanner.
++
+ All values are GitHub Actions secrets. Do not add tokens or IDs to source files. Create and validate the new topics before removing legacy secrets or deleting old topics.
+diff --git a/penny_shadow/__init__.py b/penny_shadow/__init__.py
+new file mode 100644
+index 0000000..56205d3
+--- /dev/null
++++ b/penny_shadow/__init__.py
+@@ -0,0 +1,22 @@
++"""Penny & Microcap Shadow Scanner — delivery layer.
++
++The scanner's strategy logic is maintained separately; this package holds its
++isolated Telegram route and card renderer so the fourth bot can be provisioned
++and validated before the scanner is wired to it.
++"""
++from .cards import render_card, render_sections, render_summary
++from .telegram import (
++    credentials_present,
++    preflight,
++    send_circuit,
++    send_confirming,
++    send_radar,
++    send_ready,
++    send_system,
++)
++
++__all__ = [
++    "render_card", "render_sections", "render_summary",
++    "credentials_present", "preflight",
++    "send_radar", "send_confirming", "send_ready", "send_circuit", "send_system",
++]
+diff --git a/penny_shadow/cards.py b/penny_shadow/cards.py
+new file mode 100755
+index 0000000..3de5655
+--- /dev/null
++++ b/penny_shadow/cards.py
+@@ -0,0 +1,236 @@
++"""Penny & Microcap Shadow Scanner Telegram cards.
++
++Renders the four sections the specification asks for — Radar, Confirming, Ready
++and Circuit Risk — from plain candidate dictionaries, so this module works
++whatever shape the penny scanner's internals take.  Each candidate needs, at
++minimum, ``symbol`` and ``score``; every other field degrades gracefully to a
++"not yet confirmed" line rather than a crash or a misleading zero.
++
++Card layout follows the specification exactly:
++
++    🪙 PENNY EARLY RADAR
++    21 Aug 2026 EOD • PAPER
++
++    🔵 ABC • EARLY RADAR • 44/100
++    CMP ₹8.42
++
++    5D return: +6.8%
++    Turnover: 1.8× normal
++    Delivery: Not yet confirmed
++    Trend: EMA20 turning upward
++
++    Next: Confirm sustained participation
++"""
++from __future__ import annotations
++
++from typing import Iterable, Mapping, Sequence
++
++from v2.progressive_stages import (
++    CIRCUIT_LOCKED,
++    CIRCUIT_WATCH,
++    CONFIRMING,
++    EXTENDED,
++    POST_CIRCUIT_CONFIRMING,
++    QUALIFIED,
++    RADAR,
++    READY,
++    STAGE_BADGE,
++    STAGE_NEXT_ACTION,
++    TERMINATED,
++)
++
++DIVIDER = "━━━━━━━━━━━━━━"
++
++#: Display label per stage. RADAR reads as EARLY RADAR in penny cards, which is
++#: the wording the specification uses.
++STAGE_LABEL = {
++    RADAR: "EARLY RADAR",
++    CONFIRMING: "CONFIRMING",
++    QUALIFIED: "READY REVIEW",
++    READY: "READY",
++    CIRCUIT_WATCH: "CIRCUIT WATCH",
++    CIRCUIT_LOCKED: "CIRCUIT LOCKED",
++    POST_CIRCUIT_CONFIRMING: "POST-CIRCUIT CONFIRMING",
++    EXTENDED: "EXTENDED",
++    TERMINATED: "TERMINATED",
++}
++
++#: Sections, in delivery order, and the states each collects.
++SECTIONS: tuple[tuple[str, str, frozenset[str]], ...] = (
++    ("🪙 PENNY EARLY RADAR", "radar", frozenset({RADAR})),
++    ("🟡 PENNY CONFIRMING", "confirming", frozenset({CONFIRMING})),
++    ("🟢 PENNY READY — PAPER", "ready", frozenset({QUALIFIED, READY})),
++    ("🔴 PENNY CIRCUIT RISK", "circuit", frozenset({
++        CIRCUIT_WATCH, CIRCUIT_LOCKED, POST_CIRCUIT_CONFIRMING, EXTENDED, TERMINATED,
++    })),
++)
++
++_NOT_CONFIRMED = "Not yet confirmed"
++
++
++def _rupees(value: object) -> str:
++    try:
++        return f"₹{float(value):,.2f}"
++    except (TypeError, ValueError):
++        return "₹—"
++
++
++def _signed_pct(value: object) -> str | None:
++    try:
++        number = float(value)
++    except (TypeError, ValueError):
++        return None
++    return f"{number:+.1f}%"
++
++
++def _multiple(value: object) -> str | None:
++    try:
++        number = float(value)
++    except (TypeError, ValueError):
++        return None
++    return f"{number:.1f}× normal"
++
++
++def _state_of(candidate: Mapping[str, object]) -> str:
++    """Availability wins the headline; stage is the fallback."""
++    availability = str(candidate.get("availability") or "").strip()
++    if availability:
++        return availability
++    return str(candidate.get("stage") or RADAR)
++
++
++def render_card(candidate: Mapping[str, object]) -> str:
++    """One candidate card. Missing evidence is stated, never invented."""
++    symbol = str(candidate.get("symbol", "?"))
++    state = _state_of(candidate)
++    label = STAGE_LABEL.get(state, state)
++    badge = STAGE_BADGE.get(state, "🔵")
++
++    header = f"{badge} <b>{symbol}</b> • {label}"
++    score = candidate.get("score")
++    if score is not None:
++        try:
++            header += f" • {float(score):.0f}/100"
++        except (TypeError, ValueError):
++            pass
++    lines = [header, f"CMP {_rupees(candidate.get('cmp', candidate.get('close')))}", ""]
++
++    if candidate.get("market_cap_verified") is False:
++        lines.append("Market cap: UNVERIFIED — observation only")
++
++    return_5d = _signed_pct(candidate.get("return_5d"))
++    lines.append(f"5D return: {return_5d}" if return_5d else f"5D return: {_NOT_CONFIRMED}")
++
++    turnover = _multiple(candidate.get("turnover_ratio"))
++    lines.append(f"Turnover: {turnover}" if turnover else f"Turnover: {_NOT_CONFIRMED}")
++
++    delivery = candidate.get("delivery_pct")
++    delivery_text = _NOT_CONFIRMED
++    if delivery is not None:
++        try:
++            delivery_text = f"{float(delivery):.1f}%"
++        except (TypeError, ValueError):
++            delivery_text = _NOT_CONFIRMED
++    trend = str(candidate.get("trend") or "").strip()
++    lines.append(f"Delivery: {delivery_text}")
++    if trend:
++        lines.append(f"Trend: {trend}")
++
++    entry_low, entry_high = candidate.get("entry_low"), candidate.get("entry_high")
++    if entry_low is not None and entry_high is not None:
++        prefix = "Entry" if state == READY else "Probable entry"
++        lines.append(f"{prefix}: {_rupees(entry_low)}–{_rupees(entry_high)}")
++    if candidate.get("stop") is not None:
++        lines.append(f"SL: {_rupees(candidate['stop'])}")
++
++    for note in candidate.get("notes") or ():
++        lines.append(str(note))
++
++    next_action = str(candidate.get("next_action") or "").strip() \
++        or STAGE_NEXT_ACTION.get(state, "")
++    if next_action:
++        lines.extend(["", f"Next: {next_action}"])
++    return "\n".join(lines)
++
++
++def render_section(
++    title: str,
++    candidates: Sequence[Mapping[str, object]],
++    market_date: str,
++    *,
++    max_cards: int = 20,
++) -> str:
++    """One section message, or empty when the section has no candidates."""
++    if not candidates:
++        return ""
++    ordered = sorted(
++        candidates,
++        key=lambda row: (-float(row.get("score") or 0.0), str(row.get("symbol", ""))),
++    )
++    lines = [f"<b>{title}</b>", f"{market_date} EOD • PAPER", ""]
++    for index, candidate in enumerate(ordered[:max_cards]):
++        if index:
++            lines.extend([DIVIDER, ""])
++        lines.append(render_card(candidate))
++        lines.append("")
++    if len(ordered) > max_cards:
++        lines.append(f"… and {len(ordered) - max_cards} more")
++    lines.append("⚠️ Paper research output. Not a live-trading instruction.")
++    return "\n".join(lines).strip()
++
++
++def bucket_candidates(
++    candidates: Iterable[Mapping[str, object]],
++) -> dict[str, list[Mapping[str, object]]]:
++    """Split candidates into the four delivery sections."""
++    buckets: dict[str, list[Mapping[str, object]]] = {
++        key: [] for _, key, _ in SECTIONS
++    }
++    for candidate in candidates:
++        state = _state_of(candidate)
++        for _, key, states in SECTIONS:
++            if state in states:
++                buckets[key].append(candidate)
++                break
++    return buckets
++
++
++def render_sections(
++    candidates: Iterable[Mapping[str, object]],
++    market_date: str,
++    *,
++    max_cards: int = 20,
++) -> dict[str, str]:
++    """``{section_key: message}``, omitting sections with nothing to say."""
++    buckets = bucket_candidates(candidates)
++    messages: dict[str, str] = {}
++    for title, key, _ in SECTIONS:
++        body = render_section(title, buckets[key], market_date, max_cards=max_cards)
++        if body:
++            messages[key] = body
++    return messages
++
++
++def render_summary(
++    candidates: Sequence[Mapping[str, object]],
++    market_date: str,
++    *,
++    gateway: Mapping[str, object] | None = None,
++) -> str:
++    """A one-message digest for the system topic."""
++    buckets = bucket_candidates(candidates)
++    lines = ["🪙 <b>PENNY & MICROCAP SHADOW — SUMMARY</b>",
++             f"{market_date} EOD • PAPER", ""]
++    for title, key, _ in SECTIONS:
++        lines.append(f"{title}: {len(buckets[key])}")
++    entry_ready = sum(
++        1 for row in candidates
++        if _state_of(row) == READY and row.get("market_cap_verified") is not False
++    )
++    lines.append(f"Entry authorised: {entry_ready}")
++    if gateway:
++        from v2.scanner_notices import render_gateway_notice
++        notice = render_gateway_notice(gateway)
++        if notice:
++            lines.extend(["", notice])
++    return "\n".join(lines)
+diff --git a/penny_shadow/telegram.py b/penny_shadow/telegram.py
+new file mode 100755
+index 0000000..c842aff
+--- /dev/null
++++ b/penny_shadow/telegram.py
+@@ -0,0 +1,164 @@
++"""Fail-closed Telegram delivery for the isolated Penny & Microcap Shadow bot.
++
++Fourth route in the per-scanner pattern established by
++``docs/TELEGRAM_THREE_BOT_ROUTING.md``.  A missing ``PENNY_*`` credential stops
++this delivery and never falls back to the V3, Ladder or Hull bot — a penny-stock
++card must never appear in a large-cap topic.
++
++Topics are separate by stage, per the specification's "Separate Telegram
++sections for Radar, Confirming, Ready and Circuit Risk", so a reader can mute
++the radar firehose without losing entry authorisations.
++"""
++from __future__ import annotations
++
++import os
++import time
++from dataclasses import dataclass
++
++import requests
++
++#: Environment variables this module reads.  Nothing is ever hard-coded.
++TOKEN_VAR = "PENNY_TELEGRAM_BOT_TOKEN"
++CHAT_VAR = "PENNY_TELEGRAM_CHAT_ID"
++
++#: Topic kinds and the env var suffix each resolves to.
++TOPIC_RADAR = "RADAR"
++TOPIC_CONFIRMING = "CONFIRMING"
++TOPIC_READY = "READY"
++TOPIC_CIRCUIT = "CIRCUIT"
++TOPIC_PORTFOLIO = "PORTFOLIO"
++TOPIC_SYSTEM = "SYSTEM"
++
++TOPIC_KINDS: tuple[str, ...] = (
++    TOPIC_RADAR, TOPIC_CONFIRMING, TOPIC_READY,
++    TOPIC_CIRCUIT, TOPIC_PORTFOLIO, TOPIC_SYSTEM,
++)
++
++REQUIRED_SECRETS: tuple[str, ...] = (TOKEN_VAR, CHAT_VAR)
++OPTIONAL_SECRETS: tuple[str, ...] = tuple(f"PENNY_{kind}_TOPIC_ID" for kind in TOPIC_KINDS)
++
++#: Telegram rejects messages over 4096 characters.
++CHAR_LIMIT = 4096
++
++
++@dataclass(frozen=True)
++class DeliveryResult:
++    sent: bool
++    message_count: int
++    reason: str
++
++    def to_dict(self) -> dict:
++        return {"sent": self.sent, "message_count": self.message_count,
++                "reason": self.reason}
++
++
++def topic_id(kind: str) -> int | None:
++    """Resolve ``PENNY_<KIND>_TOPIC_ID``; ``None`` means post to the chat root."""
++    value = os.getenv(f"PENNY_{kind.upper()}_TOPIC_ID", "").strip()
++    try:
++        parsed = int(value)
++    except ValueError:
++        return None
++    return parsed if parsed > 0 else None
++
++
++def credentials_present() -> bool:
++    return all(os.getenv(name, "").strip() for name in REQUIRED_SECRETS)
++
++
++def split_message(message: str, limit: int = CHAR_LIMIT) -> list[str]:
++    """Split on card boundaries so a long radar list never truncates mid-card."""
++    message = message.strip()
++    if len(message) <= limit:
++        return [message] if message else []
++    chunks: list[str] = []
++    current: list[str] = []
++    size = 0
++    for block in message.split("\n\n"):
++        addition = len(block) + 2
++        if size + addition > limit and current:
++            chunks.append("\n\n".join(current))
++            current, size = [], 0
++        current.append(block)
++        size += addition
++    if current:
++        chunks.append("\n\n".join(current))
++    return chunks
++
++
++def _post(messages: list[str], *, enabled: bool, kind: str,
++          session: requests.Session | None = None) -> DeliveryResult:
++    if not enabled:
++        return DeliveryResult(False, 0, "dry_run")
++    token = os.getenv(TOKEN_VAR, "").strip()
++    chat_id = os.getenv(CHAT_VAR, "").strip()
++    if not token or not chat_id:
++        # Fail closed and name the route, so a missing secret is obvious in the
++        # workflow log rather than silently delivering nothing.
++        return DeliveryResult(False, 0, "penny_telegram_credentials_missing")
++
++    payloads: list[str] = []
++    for message in messages:
++        payloads.extend(split_message(message))
++    if not payloads:
++        return DeliveryResult(False, 0, "no_messages")
++
++    thread = topic_id(kind)
++    endpoint = f"https://api.telegram.org/bot{token}/sendMessage"
++    poster = session or requests
++    sent, errors = 0, []
++    for index, text in enumerate(payloads, start=1):
++        body: dict[str, object] = {
++            "chat_id": chat_id, "text": text, "parse_mode": "HTML",
++            "disable_web_page_preview": True,
++        }
++        if thread is not None:
++            body["message_thread_id"] = thread
++        try:
++            response = poster.post(endpoint, json=body, timeout=20)
++            response.raise_for_status()
++            if not response.json().get("ok"):
++                raise RuntimeError("telegram_rejected")
++            sent += 1
++        except (requests.RequestException, RuntimeError, ValueError) as exc:
++            errors.append(f"message_{index}:{type(exc).__name__}")
++        if index < len(payloads):
++            time.sleep(1)
++
++    if sent == len(payloads):
++        return DeliveryResult(True, sent, "sent")
++    reason = ("partial_delivery:" if sent else "delivery_failed:") + ",".join(errors)
++    return DeliveryResult(sent > 0, sent, reason)
++
++
++def send_radar(messages: list[str], *, enabled: bool, session=None) -> DeliveryResult:
++    return _post(messages, enabled=enabled, kind=TOPIC_RADAR, session=session)
++
++
++def send_confirming(messages: list[str], *, enabled: bool, session=None) -> DeliveryResult:
++    return _post(messages, enabled=enabled, kind=TOPIC_CONFIRMING, session=session)
++
++
++def send_ready(messages: list[str], *, enabled: bool, session=None) -> DeliveryResult:
++    return _post(messages, enabled=enabled, kind=TOPIC_READY, session=session)
++
++
++def send_circuit(messages: list[str], *, enabled: bool, session=None) -> DeliveryResult:
++    return _post(messages, enabled=enabled, kind=TOPIC_CIRCUIT, session=session)
++
++
++def send_portfolio(message: str, *, enabled: bool, session=None) -> DeliveryResult:
++    return _post([message], enabled=enabled, kind=TOPIC_PORTFOLIO, session=session)
++
++
++def send_system(message: str, *, enabled: bool, session=None) -> DeliveryResult:
++    return _post([message], enabled=enabled, kind=TOPIC_SYSTEM, session=session)
++
++
++def preflight() -> dict:
++    """Report which secrets are visible, without printing any of their values."""
++    return {
++        "required": {name: bool(os.getenv(name, "").strip()) for name in REQUIRED_SECRETS},
++        "topics": {kind: topic_id(kind) is not None for kind in TOPIC_KINDS},
++        "ready": credentials_present(),
++    }
+diff --git a/scripts/penny_telegram_smoke.py b/scripts/penny_telegram_smoke.py
+new file mode 100755
+index 0000000..462b475
+--- /dev/null
++++ b/scripts/penny_telegram_smoke.py
+@@ -0,0 +1,128 @@
++#!/usr/bin/env python3
++"""Validate the Penny bot's credentials and topics before wiring the scanner.
++
++Run this first.  It proves the token, chat and each topic ID work, using sample
++cards in the real card format, so a formatting or permission problem surfaces
++here rather than in a live daily run.
++
++    # 1. see what the environment exposes, send nothing
++    python scripts/penny_telegram_smoke.py
++
++    # 2. send one sample card per configured topic
++    python scripts/penny_telegram_smoke.py --send
++
++    # 3. send only the ready section
++    python scripts/penny_telegram_smoke.py --send --section ready
++
++Secret values are never printed — only whether each is present.
++"""
++from __future__ import annotations
++
++import argparse
++import json
++import sys
++from pathlib import Path
++
++sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
++
++from penny_shadow.cards import render_sections, render_summary  # noqa: E402
++from penny_shadow.telegram import (  # noqa: E402
++    OPTIONAL_SECRETS,
++    REQUIRED_SECRETS,
++    TOPIC_KINDS,
++    credentials_present,
++    preflight,
++    send_circuit,
++    send_confirming,
++    send_radar,
++    send_ready,
++    send_system,
++    topic_id,
++)
++
++#: Sample candidates in the specification's own example shape.
++SAMPLES = [
++    {"symbol": "SAMPLEA", "stage": "RADAR", "score": 44.0, "cmp": 8.42,
++     "return_5d": 6.8, "turnover_ratio": 1.8, "delivery_pct": None,
++     "trend": "EMA20 turning upward", "market_cap_verified": False},
++    {"symbol": "SAMPLEB", "stage": "CONFIRMING", "score": 59.0, "cmp": 21.30,
++     "return_5d": 9.4, "turnover_ratio": 2.3, "delivery_pct": 31.5,
++     "trend": "Range breakout developing", "entry_low": 21.60, "entry_high": 22.15,
++     "notes": ["Turnover remained strong for 3 sessions"]},
++    {"symbol": "SAMPLEC", "stage": "READY", "score": 74.0, "cmp": 33.10,
++     "return_5d": 4.2, "turnover_ratio": 2.1, "delivery_pct": 38.0,
++     "trend": "Controlled pullback held EMA20", "entry_low": 33.40,
++     "entry_high": 34.05, "stop": 30.90},
++    {"symbol": "SAMPLED", "stage": "READY", "availability": "CIRCUIT_LOCKED",
++     "score": 82.0, "cmp": 1.63, "return_5d": 19.6, "turnover_ratio": 4.5,
++     "delivery_pct": None, "trend": "Momentum detected",
++     "notes": ["Current entry unavailable", "Price already extended"]},
++]
++
++SENDERS = {
++    "radar": send_radar,
++    "confirming": send_confirming,
++    "ready": send_ready,
++    "circuit": send_circuit,
++}
++
++
++def main(argv: list[str] | None = None) -> int:
++    parser = argparse.ArgumentParser(description=__doc__,
++                                     formatter_class=argparse.RawDescriptionHelpFormatter)
++    parser.add_argument("--send", action="store_true",
++                        help="actually deliver; without it nothing is sent")
++    parser.add_argument("--section", choices=sorted(SENDERS) + ["summary", "all"],
++                        default="all")
++    parser.add_argument("--date", default="2026-08-21")
++    args = parser.parse_args(argv)
++
++    status = preflight()
++    print("PENNY TELEGRAM PREFLIGHT")
++    print("-" * 44)
++    for name in REQUIRED_SECRETS:
++        print(f"  {'OK  ' if status['required'][name] else 'MISS'}  {name}")
++    for kind in TOPIC_KINDS:
++        var = f"PENNY_{kind}_TOPIC_ID"
++        present = status["topics"][kind]
++        note = f"thread {topic_id(kind)}" if present else "not set (posts to chat root)"
++        print(f"  {'OK  ' if present else '--  '}  {var:28s} {note}")
++
++    if not credentials_present():
++        print("\nFAIL: set the two required secrets before sending.")
++        print("Optional topic IDs:", ", ".join(OPTIONAL_SECRETS))
++        return 1
++
++    messages = render_sections(SAMPLES, args.date)
++    print(f"\nRendered sections: {', '.join(messages) or 'none'}")
++    for key, body in messages.items():
++        print(f"  {key}: {len(body)} chars")
++
++    if not args.send:
++        print("\nDry run. Re-run with --send to deliver the sample cards.")
++        print("\n--- preview:", args.section, "---")
++        preview = (render_summary(SAMPLES, args.date) if args.section == "summary"
++                   else messages.get(args.section, next(iter(messages.values()), "")))
++        print(preview)
++        return 0
++
++    results: dict[str, dict] = {}
++    if args.section in {"all", "summary"}:
++        results["summary"] = send_system(
++            render_summary(SAMPLES, args.date), enabled=True).to_dict()
++    for key, sender in SENDERS.items():
++        if args.section not in {"all", key} or key not in messages:
++            continue
++        results[key] = sender([messages[key]], enabled=True).to_dict()
++
++    print("\nDelivery:", json.dumps(results, indent=2))
++    failed = [key for key, value in results.items() if not value["sent"]]
++    if failed:
++        print(f"\nFAIL: {', '.join(failed)} did not deliver.")
++        return 1
++    print("\nAll configured routes delivered. Safe to wire the scanner.")
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/tests/test_penny_telegram.py b/tests/test_penny_telegram.py
+new file mode 100755
+index 0000000..29f2e85
+--- /dev/null
++++ b/tests/test_penny_telegram.py
+@@ -0,0 +1,245 @@
++"""Penny & Microcap Shadow bot: isolation, fail-closed delivery, card format."""
++from __future__ import annotations
++
++import pytest
++
++from penny_shadow import cards
++from penny_shadow.telegram import (
++    CHAR_LIMIT,
++    REQUIRED_SECRETS,
++    TOPIC_KINDS,
++    credentials_present,
++    preflight,
++    send_circuit,
++    send_radar,
++    send_ready,
++    split_message,
++    topic_id,
++)
++
++MARKET_DATE = "2026-08-21"
++
++RADAR = {"symbol": "ABC", "stage": "RADAR", "score": 44.0, "cmp": 8.42,
++         "return_5d": 6.8, "turnover_ratio": 1.8, "delivery_pct": None,
++         "trend": "EMA20 turning upward", "market_cap_verified": False}
++CONFIRMING = {"symbol": "XYZ", "stage": "CONFIRMING", "score": 59.0, "cmp": 21.30,
++              "return_5d": 9.4, "turnover_ratio": 2.3, "delivery_pct": 31.5,
++              "trend": "Range breakout developing",
++              "entry_low": 21.60, "entry_high": 22.15}
++READY = {"symbol": "GOODPENNY", "stage": "READY", "score": 74.0, "cmp": 33.10,
++         "return_5d": 4.2, "turnover_ratio": 2.1, "delivery_pct": 38.0,
++         "entry_low": 33.40, "entry_high": 34.05, "stop": 30.90}
++LOCKED = {"symbol": "NHCFOODS", "stage": "READY", "availability": "CIRCUIT_LOCKED",
++          "score": 82.0, "cmp": 1.63, "return_5d": 19.6, "turnover_ratio": 4.5,
++          "notes": ["Current entry unavailable", "Price already extended"]}
++ALL = [RADAR, CONFIRMING, READY, LOCKED]
++
++
++@pytest.fixture(autouse=True)
++def _clean_env(monkeypatch):
++    for name in REQUIRED_SECRETS:
++        monkeypatch.delenv(name, raising=False)
++    for kind in TOPIC_KINDS:
++        monkeypatch.delenv(f"PENNY_{kind}_TOPIC_ID", raising=False)
++
++
++# --- fail-closed isolation --------------------------------------------------
++
++def test_delivery_fails_closed_without_credentials():
++    result = send_radar(["hello"], enabled=True)
++    assert result.sent is False
++    assert result.reason == "penny_telegram_credentials_missing"
++    assert result.message_count == 0
++
++
++def test_the_penny_route_never_borrows_another_scanners_bot(monkeypatch):
++    """A penny card must never surface in a large-cap topic."""
++    for foreign in ("V3_TELEGRAM_BOT_TOKEN", "LADDER_TELEGRAM_BOT_TOKEN",
++                    "HULL_TELEGRAM_BOT_TOKEN"):
++        monkeypatch.setenv(foreign, "borrowed-token")
++        monkeypatch.setenv(foreign.replace("BOT_TOKEN", "CHAT_ID"), "-100999")
++    assert credentials_present() is False
++    assert send_radar(["x"], enabled=True).reason == "penny_telegram_credentials_missing"
++
++
++def test_dry_run_sends_nothing_even_with_credentials(monkeypatch):
++    monkeypatch.setenv("PENNY_TELEGRAM_BOT_TOKEN", "t")
++    monkeypatch.setenv("PENNY_TELEGRAM_CHAT_ID", "-1001")
++    assert send_radar(["x"], enabled=False).reason == "dry_run"
++
++
++def test_empty_messages_are_not_delivered(monkeypatch):
++    monkeypatch.setenv("PENNY_TELEGRAM_BOT_TOKEN", "t")
++    monkeypatch.setenv("PENNY_TELEGRAM_CHAT_ID", "-1001")
++    assert send_radar(["", "   "], enabled=True).reason == "no_messages"
++
++
++def test_preflight_reports_presence_without_leaking_values(monkeypatch):
++    monkeypatch.setenv("PENNY_TELEGRAM_BOT_TOKEN", "super-secret")
++    status = preflight()
++    assert status["required"]["PENNY_TELEGRAM_BOT_TOKEN"] is True
++    assert status["required"]["PENNY_TELEGRAM_CHAT_ID"] is False
++    assert status["ready"] is False
++    assert "super-secret" not in repr(status)
++
++
++# --- topic routing ----------------------------------------------------------
++
++def test_topic_id_is_read_per_section(monkeypatch):
++    monkeypatch.setenv("PENNY_RADAR_TOPIC_ID", "42")
++    assert topic_id("RADAR") == 42
++    assert topic_id("READY") is None
++
++
++@pytest.mark.parametrize("value", ["0", "-1", "", "abc"])
++def test_invalid_topic_ids_fall_back_to_the_chat_root(monkeypatch, value):
++    monkeypatch.setenv("PENNY_READY_TOPIC_ID", value)
++    assert topic_id("READY") is None
++
++
++def test_each_section_posts_to_its_own_thread(monkeypatch):
++    monkeypatch.setenv("PENNY_TELEGRAM_BOT_TOKEN", "t")
++    monkeypatch.setenv("PENNY_TELEGRAM_CHAT_ID", "-1001")
++    monkeypatch.setenv("PENNY_RADAR_TOPIC_ID", "11")
++    monkeypatch.setenv("PENNY_CIRCUIT_TOPIC_ID", "44")
++
++    threads: list[object] = []
++
++    class _Session:
++        def post(self, url, json, timeout):  # noqa: A002
++            threads.append(json.get("message_thread_id"))
++
++            class _R:
++                @staticmethod
++                def raise_for_status(): return None
++
++                @staticmethod
++                def json(): return {"ok": True}
++            return _R()
++
++    session = _Session()
++    assert send_radar(["a"], enabled=True, session=session).sent
++    assert send_circuit(["b"], enabled=True, session=session).sent
++    assert send_ready(["c"], enabled=True, session=session).sent
++    assert threads == [11, 44, None]
++
++
++# --- long-message handling --------------------------------------------------
++
++def test_short_messages_are_not_split():
++    assert split_message("hello") == ["hello"]
++    assert split_message("") == []
++
++
++def test_long_messages_split_on_card_boundaries():
++    card = "X" * 900
++    chunks = split_message("\n\n".join([card] * 10))
++    assert len(chunks) > 1
++    assert all(len(chunk) <= CHAR_LIMIT for chunk in chunks)
++    # No card is broken across chunks.
++    assert all(set(chunk.replace("\n", "")) == {"X"} for chunk in chunks)
++
++
++# --- card format ------------------------------------------------------------
++
++def test_radar_card_matches_the_specified_layout():
++    card = cards.render_card(RADAR)
++    assert "🔵 <b>ABC</b> • EARLY RADAR • 44/100" in card
++    assert "CMP ₹8.42" in card
++    assert "5D return: +6.8%" in card
++    assert "Turnover: 1.8× normal" in card
++    assert "Delivery: Not yet confirmed" in card
++    assert "Trend: EMA20 turning upward" in card
++    assert "Next: Confirm sustained participation" in card
++
++
++def test_unverified_market_cap_is_stated_on_the_card():
++    assert "Market cap: UNVERIFIED — observation only" in cards.render_card(RADAR)
++
++
++def test_confirming_card_offers_a_probable_entry_not_an_entry():
++    card = cards.render_card(CONFIRMING)
++    assert "CONFIRMING • 59/100" in card
++    assert "Probable entry: ₹21.60–₹22.15" in card
++    assert "Delivery: 31.5%" in card
++
++
++def test_ready_card_states_an_entry_and_a_stop():
++    card = cards.render_card(READY)
++    assert "READY • 74/100" in card
++    assert "Entry: ₹33.40–₹34.05" in card
++    assert "Probable entry" not in card
++    assert "SL: ₹30.90" in card
++
++
++def test_circuit_locked_card_keeps_its_score_but_refuses_entry():
++    card = cards.render_card(LOCKED)
++    assert "🔴 <b>NHCFOODS</b> • CIRCUIT LOCKED • 82/100" in card
++    assert "82/100" in card, "a locked symbol is still detected and scored"
++    assert "Current entry unavailable" in card
++    assert "wait for normal two-way trading" in card
++
++
++def test_missing_evidence_is_stated_never_invented():
++    card = cards.render_card({"symbol": "BARE", "stage": "RADAR", "score": 36.0})
++    assert "CMP ₹—" in card
++    assert card.count("Not yet confirmed") >= 2
++    assert "+0.0%" not in card, "absent data must not render as zero"
++
++
++# --- sectioning -------------------------------------------------------------
++
++def test_candidates_are_split_into_the_four_sections():
++    buckets = cards.bucket_candidates(ALL)
++    assert [row["symbol"] for row in buckets["radar"]] == ["ABC"]
++    assert [row["symbol"] for row in buckets["confirming"]] == ["XYZ"]
++    assert [row["symbol"] for row in buckets["ready"]] == ["GOODPENNY"]
++    assert [row["symbol"] for row in buckets["circuit"]] == ["NHCFOODS"]
++
++
++def test_a_locked_symbol_is_routed_to_circuit_risk_not_to_ready():
++    """It reached READY on score, but it must not appear as an entry."""
++    buckets = cards.bucket_candidates([LOCKED])
++    assert buckets["ready"] == []
++    assert buckets["circuit"] == [LOCKED]
++
++
++def test_empty_sections_are_omitted():
++    messages = cards.render_sections([RADAR], MARKET_DATE)
++    assert set(messages) == {"radar"}
++
++
++def test_sections_are_dated_and_marked_paper():
++    messages = cards.render_sections(ALL, MARKET_DATE)
++    for body in messages.values():
++        assert f"{MARKET_DATE} EOD • PAPER" in body
++        assert "Not a live-trading instruction" in body
++
++
++def test_cards_are_ordered_by_score_within_a_section():
++    low = {**RADAR, "symbol": "LOW", "score": 36.0}
++    high = {**RADAR, "symbol": "HIGH", "score": 48.0}
++    body = cards.render_sections([low, high], MARKET_DATE)["radar"]
++    assert body.index("HIGH") < body.index("LOW")
++
++
++def test_overflow_is_reported_rather_than_silently_truncated():
++    many = [{**RADAR, "symbol": f"S{i}", "score": 40.0 + i} for i in range(25)]
++    body = cards.render_sections(many, MARKET_DATE, max_cards=5)["radar"]
++    assert "… and 20 more" in body
++
++
++def test_summary_counts_every_section_and_authorised_entries():
++    summary = cards.render_summary(ALL, MARKET_DATE)
++    assert "🪙 PENNY EARLY RADAR: 1" in summary
++    assert "🔴 PENNY CIRCUIT RISK: 1" in summary
++    assert "Entry authorised: 1", "only GOODPENNY qualifies"
++
++
++def test_summary_can_carry_the_gateway_notice():
++    summary = cards.render_summary(ALL, MARKET_DATE, gateway={
++        "evaluated": 900, "eligible": 700, "rejection_counts": {"STALE_SYMBOL_PRICE": 12},
++        "terminal_symbols": [], "review_symbols": [],
++    })
++    assert "TRADEABILITY" in summary
++    assert "STALE_SYMBOL_PRICE: 12" in summary
+-- 
+2.34.1
+

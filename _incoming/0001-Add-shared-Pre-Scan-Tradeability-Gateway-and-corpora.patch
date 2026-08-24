@@ -1,0 +1,1769 @@
+From db8c3ee8e8b831e0ef99ab122ede79ab14775c2a Mon Sep 17 00:00:00 2001
+From: Jayesh Rathod <jayesh4.rathod@ril.com>
+Date: Fri, 21 Aug 2026 12:37:18 +0530
+Subject: [PATCH 01/14] Add shared Pre-Scan Tradeability Gateway and corporate
+ lifecycle registry
+
+Steps 1-3 of the Cross-Scanner Eligibility and Corporate Lifecycle Sprint.
+
+Problem
+-------
+JBCHEPHARM was amalgamated into TORNTPHARM (effective 2026-07-08, last traded
+2026-07-16) yet kept appearing in Hull output a month later at its stale
+2026-07-16 close of Rs 2,408.90. Every existing control failed open:
+
+  * no symbol_master_v2 row  -> series defaulted to EQ, active check skipped
+  * no corporate_actions_v3 row -> the +/-5/+14-day ex-date window found nothing
+  * ~380 stale bars -> satisfied min_sessions in both V3 (260) and Pine (300)
+
+This is a data-governance defect, not a strategy defect, so it is fixed at the
+shared data layer rather than by blacklisting one ticker.
+
+Added
+-----
+* v2/security_lifecycle.py - dated registry of terminal corporate events with
+  successor symbols and exchange ratios. terminal_from is derived from
+  last_trading_date + 1 so historical replays remain exact.
+* v2/tradeability.py - the gateway. Eight mandatory rules, ten reason codes,
+  per-symbol price freshness measured in sessions rather than calendar days.
+  Fails closed on missing metadata. Strategy-agnostic, so V3, the Momentum
+  Ladder, Hull Pine and Penny Shadow can share it without merging their logic.
+* migrations/v2/005_security_lifecycle.sql plus the same DDL in
+  ensure_v3_schema(), because this repo has no ordered migration runner.
+* corporate_data/normalized/security_lifecycle_events.csv - the JBCHEPHARM
+  record, git-backed for disposable CI runners.
+* tests/test_tradeability_gateway.py - 39 tests.
+
+Changed
+-------
+* v2/database.py - load_lifecycle_registry() (seeds from the CSV snapshot when
+  the table is empty, so a runner that restored only prices is still safe),
+  save_tradeability_audit(), and load_symbol_master() no longer drops
+  delisting_date.
+* nse_corporate_store.py - git-back the lifecycle CSV; skip absent tables
+  instead of emitting a zero-column INSERT.
+
+Historical data is untouched. Terminal marking is per market date, so a replay
+of 2026-07-10 still admits JBCHEPHARM exactly as it was validly admitted then.
+
+Verified against the real CSV store on market date 2026-08-20 (2,965 symbols):
+JBCHEPHARM rejected as TERMINAL_MERGER with successor TORNTPHARM; TORNTPHARM
+itself still tradeable; 2,127 eligible. Of the 838 rejections, all 343
+fresh-but-unmastered symbols were confirmed to be ETFs and index funds, so no
+genuine equity is lost. The 7 pre-existing Telegram copy-text failures in
+tests/ are unchanged from main.
+
+No wiring into V3, Momentum Ladder or Hull Pine yet; that is steps 4-6.
+---
+ .../normalized/security_lifecycle_events.csv  |   2 +
+ migrations/v2/005_security_lifecycle.sql      |  60 ++
+ nse_corporate_store.py                        |   6 +
+ tests/test_tradeability_gateway.py            | 534 ++++++++++++++++++
+ v2/database.py                                |  72 ++-
+ v2/security_lifecycle.py                      | 444 +++++++++++++++
+ v2/tradeability.py                            | 508 +++++++++++++++++
+ 7 files changed, 1624 insertions(+), 2 deletions(-)
+ create mode 100755 corporate_data/normalized/security_lifecycle_events.csv
+ create mode 100755 migrations/v2/005_security_lifecycle.sql
+ create mode 100755 tests/test_tradeability_gateway.py
+ create mode 100755 v2/security_lifecycle.py
+ create mode 100755 v2/tradeability.py
+
+diff --git a/corporate_data/normalized/security_lifecycle_events.csv b/corporate_data/normalized/security_lifecycle_events.csv
+new file mode 100755
+index 0000000..a1776be
+--- /dev/null
++++ b/corporate_data/normalized/security_lifecycle_events.csv
+@@ -0,0 +1,2 @@
++symbol,event_type,status,announcement_date,effective_date,record_date,last_trading_date,successor_symbol,exchange_ratio_from,exchange_ratio_to,source,terminal,notes
++JBCHEPHARM,AMALGAMATION,EFFECTIVE,,2026-07-08,2026-07-17,2026-07-16,TORNTPHARM,100.0,51.0,TORRENT_PHARMA_EXCHANGE_FILING,1,Amalgamated into Torrent Pharmaceuticals and dissolved without winding up; 51 TORNTPHARM shares for every 100 JBCHEPHARM shares. Retain all price history and historical signals.
+diff --git a/migrations/v2/005_security_lifecycle.sql b/migrations/v2/005_security_lifecycle.sql
+new file mode 100755
+index 0000000..b5e6f61
+--- /dev/null
++++ b/migrations/v2/005_security_lifecycle.sql
+@@ -0,0 +1,60 @@
++-- 005_security_lifecycle.sql
++-- Authoritative terminal corporate-event registry for the scanner family.
++--
++-- A symbol listed here as EFFECTIVE or TERMINAL must leave the *current*
++-- scanning universe from its last trading date onwards, while every historical
++-- price bar and every historical signal for earlier dates remains valid and
++-- untouched.  Non-terminal statuses (ANNOUNCED, APPROVED) keep the symbol
++-- visible but withhold new paper entries.
++--
++-- NOTE: this repository has no ordered migration runner; the same DDL is also
++-- applied idempotently at runtime by V2Database.ensure_v3_schema() so
++-- disposable CI runners get the table without a manual migration step.  Keep
++-- the two definitions in sync.
++
++CREATE TABLE IF NOT EXISTS security_lifecycle_events (
++    symbol              TEXT NOT NULL,
++    event_type          TEXT NOT NULL,
++    status              TEXT NOT NULL,
++    announcement_date   TEXT,
++    effective_date      TEXT,
++    record_date         TEXT,
++    last_trading_date   TEXT,
++    successor_symbol    TEXT,
++    exchange_ratio_from REAL,
++    exchange_ratio_to   REAL,
++    source              TEXT NOT NULL DEFAULT 'MANUAL',
++    terminal            INTEGER NOT NULL DEFAULT 0 CHECK(terminal IN (0, 1)),
++    notes               TEXT,
++    loaded_at           TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    PRIMARY KEY(symbol, event_type, status)
++);
++
++CREATE INDEX IF NOT EXISTS idx_security_lifecycle_symbol
++    ON security_lifecycle_events(symbol);
++CREATE INDEX IF NOT EXISTS idx_security_lifecycle_terminal
++    ON security_lifecycle_events(terminal, effective_date);
++
++-- Gateway rejection audit: one row per symbol per market date, so a scan's
++-- admission decisions are reconstructable after the fact.
++CREATE TABLE IF NOT EXISTS tradeability_audit_v3 (
++    symbol             TEXT NOT NULL,
++    market_date        TEXT NOT NULL,
++    eligible           INTEGER NOT NULL,
++    stage              TEXT NOT NULL,
++    reason_code        TEXT NOT NULL,
++    entry_blocked      INTEGER NOT NULL DEFAULT 0,
++    review_reason      TEXT,
++    symbol_last_date   TEXT,
++    staleness_sessions INTEGER,
++    successor_symbol   TEXT,
++    detail             TEXT,
++    created_at         TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    PRIMARY KEY(symbol, market_date)
++);
++
++CREATE INDEX IF NOT EXISTS idx_tradeability_audit_reason
++    ON tradeability_audit_v3(market_date, reason_code);
++
++INSERT OR IGNORE INTO schema_migrations (migration_id, checksum, notes)
++VALUES ('005_security_lifecycle', 'v1', 'Security lifecycle registry and tradeability audit');
+diff --git a/nse_corporate_store.py b/nse_corporate_store.py
+index c4668d2..afbadf3 100644
+--- a/nse_corporate_store.py
++++ b/nse_corporate_store.py
+@@ -15,6 +15,7 @@ TABLES = {
+     "governance_events_v3": "governance_events.csv",
+     "shareholding_patterns_v3": "shareholding_patterns.csv",
+     "corporate_actions_v3": "corporate_actions.csv",
++    "security_lifecycle_events": "security_lifecycle_events.csv",
+ }
+ 
+ 
+@@ -45,6 +46,11 @@ def restore_snapshots(db_path: str) -> dict[str, int]:
+                 continue
+             columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+             usable = [column for column in frame.columns if column in columns]
++            if not usable:
++                # Table absent from this runner's schema; skip rather than
++                # emitting an INSERT with no columns.
++                counts[table] = 0
++                continue
+             placeholders = ",".join("?" for _ in usable)
+             conn.executemany(
+                 f"INSERT OR REPLACE INTO {table} ({','.join(usable)}) VALUES ({placeholders})",
+diff --git a/tests/test_tradeability_gateway.py b/tests/test_tradeability_gateway.py
+new file mode 100755
+index 0000000..28f705f
+--- /dev/null
++++ b/tests/test_tradeability_gateway.py
+@@ -0,0 +1,534 @@
++"""Regression tests for the shared Pre-Scan Tradeability Gateway.
++
++These cover every reason code the gateway can emit, the JBCHEPHARM defect that
++motivated it, and the historical-integrity rule that a replay of a past date
++must still admit a symbol that was legitimately tradeable then.
++"""
++from __future__ import annotations
++
++import sqlite3
++from datetime import date, timedelta
++from pathlib import Path
++
++import pandas as pd
++import pytest
++
++from v2.database import V2Database
++from v2.security_lifecycle import (
++    LifecycleEvent,
++    LifecycleRegistry,
++    event_from_mapping,
++    load_events,
++    load_registry,
++    read_snapshot,
++    upsert_events,
++)
++from v2.tradeability import (
++    REASON_CODES,
++    TRADEABLE,
++    evaluate_tradeability,
++    evaluate_universe,
++    gateway_from_database,
++    market_date_from_prices,
++    session_calendar_from_prices,
++)
++
++MARKET_DATE = "2026-08-20"
++
++
++def _sessions(count: int, end: str = MARKET_DATE) -> list[str]:
++    """`count` synthetic weekday sessions ending on `end` inclusive."""
++    days: list[str] = []
++    cursor = date.fromisoformat(end)
++    while len(days) < count:
++        if cursor.weekday() < 5:
++            days.append(cursor.isoformat())
++        cursor -= timedelta(days=1)
++    return sorted(days)
++
++
++def _frame(symbol: str, days: list[str], close: float = 100.0) -> pd.DataFrame:
++    return pd.DataFrame({
++        "symbol": symbol,
++        "trade_date": days,
++        "open": close, "high": close * 1.01, "low": close * 0.99, "close": close,
++        "volume": 500_000,
++    })
++
++
++def _master(symbol: str, **overrides) -> dict:
++    row = {"symbol": symbol, "series": "EQ", "active": 1}
++    row.update(overrides)
++    return row
++
++
++CALENDAR = tuple(_sessions(60))
++FRESH = _sessions(60)
++
++
++# --- happy path -------------------------------------------------------------
++
++def test_fresh_active_eq_symbol_is_tradeable():
++    result = evaluate_tradeability(
++        "RELIANCE", _frame("RELIANCE", FRESH),
++        market_date=MARKET_DATE, master_row=_master("RELIANCE"),
++        session_calendar=CALENDAR,
++    )
++    assert result.eligible
++    assert result.reason_code == TRADEABLE
++    assert result.entry_blocked is False
++    assert result.symbol_last_date == MARKET_DATE
++    assert result.staleness_sessions == 0
++
++
++# --- the eight mandatory rules ---------------------------------------------
++
++def test_missing_security_master_row_fails_closed():
++    result = evaluate_tradeability(
++        "GHOSTCO", _frame("GHOSTCO", FRESH),
++        market_date=MARKET_DATE, master_row=None, session_calendar=CALENDAR,
++    )
++    assert not result.eligible
++    assert result.reason_code == "NOT_IN_CURRENT_NSE_UNIVERSE"
++
++
++def test_non_eq_series_is_rejected():
++    result = evaluate_tradeability(
++        "SOMEBE", _frame("SOMEBE", FRESH),
++        market_date=MARKET_DATE, master_row=_master("SOMEBE", series="BE"),
++        session_calendar=CALENDAR,
++    )
++    assert result.reason_code == "NON_EQ_SERIES"
++
++
++@pytest.mark.parametrize("flag", [0, "0", "0.0", False, "false", "NO"])
++def test_inactive_security_is_rejected_for_every_csv_encoding(flag):
++    """A CSV round-trip turns active=0 into the truthy string "0"."""
++    result = evaluate_tradeability(
++        "DEADCO", _frame("DEADCO", FRESH),
++        market_date=MARKET_DATE, master_row=_master("DEADCO", active=flag),
++        session_calendar=CALENDAR,
++    )
++    assert result.reason_code == "INACTIVE_SECURITY", flag
++
++
++def test_absent_active_flag_fails_closed():
++    row = {"symbol": "NOFLAG", "series": "EQ"}
++    result = evaluate_tradeability(
++        "NOFLAG", _frame("NOFLAG", FRESH),
++        market_date=MARKET_DATE, master_row=row, session_calendar=CALENDAR,
++    )
++    assert result.reason_code == "INACTIVE_SECURITY"
++
++
++def test_security_master_delisting_date_is_terminal():
++    result = evaluate_tradeability(
++        "OLDCO", _frame("OLDCO", FRESH),
++        market_date=MARKET_DATE,
++        master_row=_master("OLDCO", delisting_date="2026-06-30"),
++        session_calendar=CALENDAR,
++    )
++    assert result.reason_code == "DELISTED_SECURITY"
++
++
++def test_regulatory_restriction_is_rejected():
++    result = evaluate_tradeability(
++        "ASMCO", _frame("ASMCO", FRESH),
++        market_date=MARKET_DATE, master_row=_master("ASMCO"),
++        restricted_reason="ASM_STAGE_2", session_calendar=CALENDAR,
++    )
++    assert result.reason_code == "RESTRICTED_SECURITY"
++    assert result.detail == "ASM_STAGE_2"
++
++
++def test_stale_symbol_price_is_rejected_even_with_long_history():
++    """The core defect: 300 old bars used to satisfy every min_sessions check."""
++    stale = _sessions(300, end="2026-07-16")
++    result = evaluate_tradeability(
++        "STALECO", _frame("STALECO", stale),
++        market_date=MARKET_DATE, master_row=_master("STALECO"),
++        session_calendar=tuple(sorted(set(stale) | set(FRESH))),
++    )
++    assert result.reason_code == "STALE_SYMBOL_PRICE"
++    assert result.symbol_last_date == "2026-07-16"
++    assert result.staleness_sessions and result.staleness_sessions > 20
++
++
++def test_staleness_is_counted_in_sessions_not_calendar_days():
++    days = _sessions(60)
++    one_behind = days[:-1]
++    result = evaluate_tradeability(
++        "LAGCO", _frame("LAGCO", one_behind),
++        market_date=MARKET_DATE, master_row=_master("LAGCO"),
++        session_calendar=CALENDAR,
++    )
++    assert result.staleness_sessions == 1
++    assert result.reason_code == "STALE_SYMBOL_PRICE"
++
++    tolerant = evaluate_tradeability(
++        "LAGCO", _frame("LAGCO", one_behind),
++        market_date=MARKET_DATE, master_row=_master("LAGCO"),
++        session_calendar=CALENDAR, max_staleness_sessions=1,
++    )
++    assert tolerant.eligible
++
++
++def test_invalid_latest_row_is_rejected():
++    frame = _frame("BADCO", FRESH)
++    frame.loc[frame.index[-1], "close"] = 0.0
++    result = evaluate_tradeability(
++        "BADCO", frame, market_date=MARKET_DATE,
++        master_row=_master("BADCO"), session_calendar=CALENDAR,
++    )
++    assert result.reason_code == "INVALID_LATEST_ROW"
++
++
++def test_latest_bar_after_market_date_is_rejected():
++    future = FRESH + ["2026-08-21"]
++    result = evaluate_tradeability(
++        "FUTURECO", _frame("FUTURECO", future),
++        market_date=MARKET_DATE, master_row=_master("FUTURECO"),
++        session_calendar=CALENDAR,
++    )
++    assert result.reason_code == "INVALID_LATEST_ROW"
++
++
++def test_every_emitted_reason_code_is_declared():
++    """Guards against a typo'd code leaking into Telegram or diagnostics."""
++    frame = _frame("X", FRESH)
++    cases = [
++        evaluate_tradeability("X", frame, market_date=MARKET_DATE, master_row=None,
++                              session_calendar=CALENDAR),
++        evaluate_tradeability("X", frame, market_date=MARKET_DATE,
++                              master_row=_master("X", series="SM"), session_calendar=CALENDAR),
++        evaluate_tradeability("X", frame, market_date=MARKET_DATE,
++                              master_row=_master("X", active=0), session_calendar=CALENDAR),
++    ]
++    for result in cases:
++        assert result.reason_code in REASON_CODES
++
++
++# --- corporate lifecycle ----------------------------------------------------
++
++JBCHEPHARM_EVENT = LifecycleEvent(
++    symbol="JBCHEPHARM", event_type="AMALGAMATION", status="EFFECTIVE",
++    effective_date="2026-07-08", record_date="2026-07-17",
++    last_trading_date="2026-07-16", successor_symbol="TORNTPHARM",
++    exchange_ratio_from=100.0, exchange_ratio_to=51.0,
++    source="TORRENT_PHARMA_EXCHANGE_FILING", terminal=True,
++)
++
++
++def test_jbchepharm_is_rejected_with_terminal_merger_not_a_side_effect():
++    """The reported reason must be the cause, not the symptom."""
++    stale = _sessions(300, end="2026-07-16")
++    result = evaluate_tradeability(
++        "JBCHEPHARM", _frame("JBCHEPHARM", stale, close=2408.9),
++        market_date=MARKET_DATE,
++        master_row=None,                      # genuinely absent from the master
++        lifecycle_event=JBCHEPHARM_EVENT,
++        session_calendar=tuple(sorted(set(stale) | set(FRESH))),
++    )
++    assert not result.eligible
++    assert result.reason_code == "TERMINAL_MERGER"
++    assert result.stage == "CORPORATE_LIFECYCLE"
++    assert result.successor_symbol == "TORNTPHARM"
++    assert result.conversion_ratio == pytest.approx(0.51)
++    assert result.terminal
++
++
++def test_historical_replay_before_last_trading_date_still_admits_the_symbol():
++    """Prior appearances were valid for their dates and must stay reproducible."""
++    days = _sessions(300, end="2026-07-16")
++    result = evaluate_tradeability(
++        "JBCHEPHARM", _frame("JBCHEPHARM", days, close=2408.9),
++        market_date="2026-07-16",
++        master_row=_master("JBCHEPHARM"),
++        lifecycle_event=JBCHEPHARM_EVENT,
++        session_calendar=tuple(days),
++    )
++    assert result.eligible, result.detail
++    assert result.reason_code == TRADEABLE
++
++
++def test_symbol_becomes_terminal_the_session_after_its_last_trade():
++    assert JBCHEPHARM_EVENT.is_terminal_on("2026-07-16") is False
++    assert JBCHEPHARM_EVENT.is_terminal_on("2026-07-17") is True
++    assert JBCHEPHARM_EVENT.terminal_from == date(2026, 7, 17)
++
++
++def test_effective_date_alone_drives_terminality_when_last_trade_unknown():
++    event = LifecycleEvent(
++        symbol="XCO", event_type="DELISTING", status="EFFECTIVE",
++        effective_date="2026-05-01", terminal=True,
++    )
++    assert event.is_terminal_on("2026-04-30") is False
++    assert event.is_terminal_on("2026-05-01") is True
++    assert event.reason_code == "DELISTED_SECURITY"
++
++
++def test_approved_scheme_stays_visible_but_blocks_new_entries():
++    event = LifecycleEvent(
++        symbol="PENDCO", event_type="AMALGAMATION", status="APPROVED",
++        announcement_date="2026-06-01", effective_date="2026-10-01",
++        successor_symbol="BIGCO", exchange_ratio_from=10.0, exchange_ratio_to=7.0,
++    )
++    result = evaluate_tradeability(
++        "PENDCO", _frame("PENDCO", FRESH), market_date=MARKET_DATE,
++        master_row=_master("PENDCO"), lifecycle_event=event,
++        session_calendar=CALENDAR,
++    )
++    assert result.eligible                    # displayed, not discarded
++    assert result.entry_blocked is True       # but no fresh paper entry
++    assert result.review_reason == "CORPORATE_ACTION_REVIEW"
++    assert result.successor_symbol == "BIGCO"
++
++
++def test_announced_scheme_warns_without_blocking_entry():
++    event = LifecycleEvent(
++        symbol="RUMOURCO", event_type="MERGER", status="ANNOUNCED",
++        announcement_date="2026-08-01",
++    )
++    result = evaluate_tradeability(
++        "RUMOURCO", _frame("RUMOURCO", FRESH), market_date=MARKET_DATE,
++        master_row=_master("RUMOURCO"), lifecycle_event=event,
++        session_calendar=CALENDAR,
++    )
++    assert result.eligible
++    assert result.review_reason == "CORPORATE_ACTION_REVIEW"
++    assert result.entry_blocked is False
++
++
++def test_cancelled_scheme_is_inert():
++    event = LifecycleEvent(
++        symbol="CALLEDOFF", event_type="MERGER", status="CANCELLED",
++        announcement_date="2026-02-01",
++    )
++    result = evaluate_tradeability(
++        "CALLEDOFF", _frame("CALLEDOFF", FRESH), market_date=MARKET_DATE,
++        master_row=_master("CALLEDOFF"), lifecycle_event=event,
++        session_calendar=CALENDAR,
++    )
++    assert result.eligible
++    assert result.review_reason is None
++    assert result.entry_blocked is False
++
++
++def test_corporate_review_can_be_made_terminal_for_strict_callers():
++    event = LifecycleEvent(
++        symbol="PENDCO", event_type="AMALGAMATION", status="APPROVED",
++        announcement_date="2026-06-01", effective_date="2026-10-01",
++    )
++    result = evaluate_tradeability(
++        "PENDCO", _frame("PENDCO", FRESH), market_date=MARKET_DATE,
++        master_row=_master("PENDCO"), lifecycle_event=event,
++        session_calendar=CALENDAR, corporate_review_is_terminal=True,
++    )
++    assert not result.eligible
++    assert result.reason_code == "CORPORATE_ACTION_REVIEW"
++
++
++# --- registry semantics -----------------------------------------------------
++
++def test_registry_prefers_the_terminal_event_over_an_earlier_announcement():
++    registry = LifecycleRegistry([
++        LifecycleEvent("ACO", "AMALGAMATION", "ANNOUNCED", announcement_date="2026-01-01"),
++        LifecycleEvent("ACO", "AMALGAMATION", "EFFECTIVE", effective_date="2026-06-01",
++                       last_trading_date="2026-06-10", successor_symbol="BCO",
++                       exchange_ratio_from=2.0, exchange_ratio_to=1.0, terminal=True),
++    ])
++    chosen = registry.event_for("ACO", MARKET_DATE)
++    assert chosen is not None and chosen.status == "EFFECTIVE"
++    assert registry.terminal_symbols(MARKET_DATE) == frozenset({"ACO"})
++    assert registry.successor_map(MARKET_DATE)["ACO"] == ("BCO", 0.5)
++    # ...but not yet, on an earlier market date
++    assert registry.terminal_symbols("2026-06-10") == frozenset()
++
++
++def test_registry_lookup_is_case_insensitive():
++    registry = LifecycleRegistry([JBCHEPHARM_EVENT])
++    assert registry.event_for("jbchepharm", MARKET_DATE) is not None
++
++
++def test_event_from_mapping_rejects_unknown_vocabulary():
++    with pytest.raises(ValueError):
++        event_from_mapping({"symbol": "X", "event_type": "GUESSING", "status": "EFFECTIVE"})
++    with pytest.raises(ValueError):
++        event_from_mapping({"symbol": "X", "event_type": "MERGER", "status": "MAYBE"})
++    with pytest.raises(ValueError):
++        event_from_mapping({"symbol": "", "event_type": "MERGER", "status": "EFFECTIVE"})
++
++
++def test_effective_status_implies_terminal_even_if_the_column_says_zero():
++    event = event_from_mapping({
++        "symbol": "jbchepharm", "event_type": "AMALGAMATION", "status": "EFFECTIVE",
++        "last_trading_date": "2026-07-16", "successor_symbol": "torntpharm",
++        "terminal": "0",
++    })
++    assert event.terminal is True
++    assert event.symbol == "JBCHEPHARM"
++    assert event.successor_symbol == "TORNTPHARM"
++
++
++# --- shipped snapshot -------------------------------------------------------
++
++def test_shipped_snapshot_contains_the_jbchepharm_record():
++    events = read_snapshot(Path("corporate_data/normalized/security_lifecycle_events.csv"))
++    by_symbol = {event.symbol: event for event in events}
++    assert "JBCHEPHARM" in by_symbol, "the seeded merger record is missing"
++    event = by_symbol["JBCHEPHARM"]
++    assert event.event_type == "AMALGAMATION"
++    assert event.status == "EFFECTIVE"
++    assert event.effective_date == "2026-07-08"
++    assert event.record_date == "2026-07-17"
++    assert event.last_trading_date == "2026-07-16"
++    assert event.successor_symbol == "TORNTPHARM"
++    assert (event.exchange_ratio_from, event.exchange_ratio_to) == (100.0, 51.0)
++    assert event.conversion_ratio == pytest.approx(0.51)
++    assert event.is_terminal_on("2026-08-21")
++
++
++# --- universe-level behaviour ----------------------------------------------
++
++def _universe() -> pd.DataFrame:
++    stale = _sessions(300, end="2026-07-16")
++    return pd.concat([
++        _frame("RELIANCE", FRESH, 1400.0),
++        _frame("TORNTPHARM", FRESH, 3800.0),
++        _frame("JBCHEPHARM", stale, 2408.9),
++        _frame("STALECO", stale, 90.0),
++    ], ignore_index=True)
++
++
++def test_universe_evaluation_separates_causes_and_counts_them():
++    prices = _universe()
++    verdict = evaluate_universe(
++        prices,
++        master={s: _master(s) for s in ("RELIANCE", "TORNTPHARM", "STALECO")},
++        lifecycle=[JBCHEPHARM_EVENT],
++    )
++    assert verdict.market_date == MARKET_DATE
++    assert verdict.eligible_symbols == ("RELIANCE", "TORNTPHARM")
++    assert verdict.results["JBCHEPHARM"].reason_code == "TERMINAL_MERGER"
++    assert verdict.results["STALECO"].reason_code == "STALE_SYMBOL_PRICE"
++    assert verdict.rejection_counts() == {"STALE_SYMBOL_PRICE": 1, "TERMINAL_MERGER": 1}
++
++    filtered = verdict.filter_frame(prices)
++    assert set(filtered["symbol"]) == {"RELIANCE", "TORNTPHARM"}
++    diagnostics = verdict.diagnostics()
++    assert diagnostics["terminal_symbols"] == ["JBCHEPHARM"]
++    assert diagnostics["eligible"] == 2
++
++
++def test_market_date_comes_from_the_universe_not_from_today():
++    prices = _universe()
++    assert market_date_from_prices(prices) == MARKET_DATE
++    assert session_calendar_from_prices(prices)[-1] == MARKET_DATE
++
++
++def test_named_symbol_absent_from_prices_still_gets_a_verdict():
++    verdict = evaluate_universe(
++        _universe(), master={"RELIANCE": _master("RELIANCE")},
++        symbols=["RELIANCE", "NEVERTRADED"],
++    )
++    assert verdict.results["NEVERTRADED"].eligible is False
++    assert set(verdict.results) == {"RELIANCE", "NEVERTRADED"}
++
++
++# --- database round trip ----------------------------------------------------
++
++def _database(tmp_path: Path) -> Path:
++    path = tmp_path / "nse_scanner.db"
++    with sqlite3.connect(path) as conn:
++        conn.execute("""CREATE TABLE daily_prices_v2 (
++            symbol TEXT, trade_date TEXT, open REAL, high REAL, low REAL,
++            close REAL, volume REAL, PRIMARY KEY(symbol, trade_date))""")
++        conn.execute("""CREATE TABLE symbol_master_v2 (
++            symbol TEXT PRIMARY KEY, isin TEXT, company_name TEXT, series TEXT,
++            sector TEXT, industry TEXT, listing_date TEXT, delisting_date TEXT,
++            active INTEGER NOT NULL DEFAULT 1,
++            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
++        prices = _universe()
++        conn.executemany(
++            "INSERT INTO daily_prices_v2 VALUES (?,?,?,?,?,?,?)",
++            [tuple(row) for row in prices[
++                ["symbol", "trade_date", "open", "high", "low", "close", "volume"]
++            ].itertuples(index=False)],
++        )
++        conn.executemany(
++            "INSERT INTO symbol_master_v2 (symbol, series, active) VALUES (?,?,?)",
++            [("RELIANCE", "EQ", 1), ("TORNTPHARM", "EQ", 1), ("STALECO", "EQ", 1)],
++        )
++    V2Database(path).ensure_v3_schema()
++    return path
++
++
++def test_lifecycle_events_survive_a_sqlite_round_trip(tmp_path):
++    path = _database(tmp_path)
++    with sqlite3.connect(path) as conn:
++        assert upsert_events(conn, [JBCHEPHARM_EVENT]) == 1
++        upsert_events(conn, [JBCHEPHARM_EVENT])          # idempotent
++        stored = load_events(conn)
++        assert len(stored) == 1
++        assert stored[0] == JBCHEPHARM_EVENT
++        assert load_registry(conn).terminal_symbols(MARKET_DATE) == frozenset({"JBCHEPHARM"})
++
++
++def test_ensure_v3_schema_creates_the_lifecycle_and_audit_tables(tmp_path):
++    path = _database(tmp_path)
++    with sqlite3.connect(path) as conn:
++        names = {row[0] for row in conn.execute(
++            "SELECT name FROM sqlite_master WHERE type='table'")}
++    assert {"security_lifecycle_events", "tradeability_audit_v3"} <= names
++
++
++def test_symbol_master_now_exposes_delisting_date(tmp_path):
++    path = _database(tmp_path)
++    master = V2Database(path).load_symbol_master(MARKET_DATE)
++    assert "delisting_date" in master.columns
++
++
++def test_gateway_from_database_seeds_the_registry_and_blocks_jbchepharm(tmp_path, monkeypatch):
++    """A runner that restored only price data must still catch the merger."""
++    path = _database(tmp_path)
++    monkeypatch.chdir(Path(__file__).resolve().parents[1])   # repo root, for the CSV
++    prices = V2Database(path).load_prices(end_date=MARKET_DATE)
++    verdict = gateway_from_database(path, prices)
++    assert verdict.results["JBCHEPHARM"].reason_code == "TERMINAL_MERGER"
++    assert verdict.results["JBCHEPHARM"].successor_symbol == "TORNTPHARM"
++    assert "RELIANCE" in verdict.eligible_symbols
++
++    with sqlite3.connect(path) as conn:
++        assert conn.execute(
++            "SELECT COUNT(*) FROM security_lifecycle_events WHERE symbol='JBCHEPHARM'"
++        ).fetchone()[0] == 1
++
++
++def test_tradeability_audit_is_persisted(tmp_path):
++    path = _database(tmp_path)
++    database = V2Database(path)
++    prices = database.load_prices(end_date=MARKET_DATE)
++    verdict = evaluate_universe(
++        prices, master=database.load_symbol_master(MARKET_DATE),
++        lifecycle=[JBCHEPHARM_EVENT],
++    )
++    database.save_tradeability_audit(verdict.market_date, verdict.results)
++    with sqlite3.connect(path) as conn:
++        rows = dict(conn.execute(
++            "SELECT symbol, reason_code FROM tradeability_audit_v3 WHERE market_date=?",
++            (MARKET_DATE,)).fetchall())
++    assert rows["JBCHEPHARM"] == "TERMINAL_MERGER"
++    assert rows["RELIANCE"] == TRADEABLE
++
++
++def test_price_history_is_never_deleted_by_the_gateway(tmp_path):
++    """Historical bars and replay records must survive terminal marking."""
++    path = _database(tmp_path)
++    database = V2Database(path)
++    prices = database.load_prices(end_date=MARKET_DATE)
++    before = len(prices[prices["symbol"] == "JBCHEPHARM"])
++    verdict = evaluate_universe(prices, master=database.load_symbol_master(MARKET_DATE),
++                               lifecycle=[JBCHEPHARM_EVENT])
++    database.save_tradeability_audit(verdict.market_date, verdict.results)
++    after = len(database.load_prices(end_date=MARKET_DATE).query("symbol == 'JBCHEPHARM'"))
++    assert after == before > 0
+diff --git a/v2/database.py b/v2/database.py
+index 0c5bc6c..ad3d7c3 100644
+--- a/v2/database.py
++++ b/v2/database.py
+@@ -109,8 +109,70 @@ class V2Database:
+                     status TEXT NOT NULL, row_count INTEGER NOT NULL DEFAULT 0,
+                     detail TEXT, checked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                     PRIMARY KEY(dataset, as_of_date));
++                CREATE TABLE IF NOT EXISTS security_lifecycle_events (
++                    symbol TEXT NOT NULL, event_type TEXT NOT NULL, status TEXT NOT NULL,
++                    announcement_date TEXT, effective_date TEXT, record_date TEXT,
++                    last_trading_date TEXT, successor_symbol TEXT,
++                    exchange_ratio_from REAL, exchange_ratio_to REAL,
++                    source TEXT NOT NULL DEFAULT 'MANUAL',
++                    terminal INTEGER NOT NULL DEFAULT 0 CHECK(terminal IN (0, 1)),
++                    notes TEXT, loaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
++                    PRIMARY KEY(symbol, event_type, status));
++                CREATE INDEX IF NOT EXISTS idx_security_lifecycle_symbol
++                    ON security_lifecycle_events(symbol);
++                CREATE INDEX IF NOT EXISTS idx_security_lifecycle_terminal
++                    ON security_lifecycle_events(terminal, effective_date);
++                CREATE TABLE IF NOT EXISTS tradeability_audit_v3 (
++                    symbol TEXT NOT NULL, market_date TEXT NOT NULL, eligible INTEGER NOT NULL,
++                    stage TEXT NOT NULL, reason_code TEXT NOT NULL,
++                    entry_blocked INTEGER NOT NULL DEFAULT 0, review_reason TEXT,
++                    symbol_last_date TEXT, staleness_sessions INTEGER,
++                    successor_symbol TEXT, detail TEXT,
++                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
++                    PRIMARY KEY(symbol, market_date));
++                CREATE INDEX IF NOT EXISTS idx_tradeability_audit_reason
++                    ON tradeability_audit_v3(market_date, reason_code);
+             """)
+ 
++    def load_lifecycle_registry(self, *, seed_from_snapshot: bool = True):
++        """Return the corporate-lifecycle registry for gateway decisions.
++
++        Disposable CI runners rebuild the database from the git-backed CSV
++        store, and not every entry point calls ``restore_snapshots``.  When the
++        table is empty we therefore seed it from the normalized snapshot so a
++        terminal merger can never be silently forgotten by a runner that only
++        restored price data.
++        """
++        from .security_lifecycle import LifecycleRegistry, load_events, read_snapshot, upsert_events
++
++        with self.connect() as conn:
++            events = load_events(conn)
++            if not events and seed_from_snapshot:
++                events = read_snapshot()
++                if events:
++                    upsert_events(conn, events)
++        return LifecycleRegistry(events)
++
++    def save_tradeability_audit(self, market_date: str, results) -> None:
++        """Persist one gateway verdict per symbol so admissions are auditable."""
++        rows = []
++        for symbol, result in (results.items() if hasattr(results, "items") else results):
++            rows.append((
++                str(symbol), market_date, 1 if result.eligible else 0,
++                result.stage, result.reason_code,
++                1 if result.entry_blocked else 0, result.review_reason,
++                result.symbol_last_date, result.staleness_sessions,
++                result.successor_symbol, result.detail,
++            ))
++        if not rows:
++            return
++        with self.connect() as conn:
++            conn.executemany("""INSERT OR REPLACE INTO tradeability_audit_v3
++                (symbol, market_date, eligible, stage, reason_code, entry_blocked,
++                 review_reason, symbol_last_date, staleness_sessions,
++                 successor_symbol, detail)
++                VALUES (?,?,?,?,?,?,?,?,?,?,?)""", rows)
++
+     def load_fundamental_gates(self, trade_date: str, max_age_days: int = 120) -> dict[str, bool]:
+         from .fundamentals import FundamentalSnapshot, evaluate_fundamentals
+         with self.connect() as conn:
+@@ -171,9 +233,15 @@ class V2Database:
+         with self.connect() as conn:
+             names = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+             if "symbol_master_v2" not in names:
+-                return pd.DataFrame(columns=["symbol", "series", "active", "market_cap_cr", "market_cap_as_of", "market_cap_source"])
++                return pd.DataFrame(columns=[
++                    "symbol", "series", "active", "delisting_date",
++                    "market_cap_cr", "market_cap_as_of", "market_cap_source",
++                ])
+             available = {row[1] for row in conn.execute("PRAGMA table_info(symbol_master_v2)")}
+-            columns = [column for column in ("symbol", "series", "active", "market_cap_cr", "market_cap_as_of", "market_cap_source") if column in available]
++            columns = [column for column in (
++                "symbol", "series", "active", "delisting_date",
++                "market_cap_cr", "market_cap_as_of", "market_cap_source",
++            ) if column in available]
+             if "shareholding_patterns_v3" not in names:
+                 return pd.read_sql_query(f"SELECT {', '.join(columns)} FROM symbol_master_v2", conn)
+             cutoff = as_of_date or "9999-12-31"
+diff --git a/v2/security_lifecycle.py b/v2/security_lifecycle.py
+new file mode 100755
+index 0000000..4b2670a
+--- /dev/null
++++ b/v2/security_lifecycle.py
+@@ -0,0 +1,444 @@
++"""Authoritative corporate-lifecycle registry for the NSE scanner family.
++
++This module is the single source of truth for terminal corporate events —
++amalgamations, mergers, demergers, delistings and suspensions — that must remove
++a symbol from *current* scanning while leaving its price history and historical
++signals completely untouched.
++
++Design rules
++------------
++1.  A record is dated. ``terminal_from`` is derived, never guessed, so that a
++    historical replay of 2026-07-10 still sees ``JBCHEPHARM`` as tradeable while
++    a live scan on 2026-08-21 does not.
++2.  Non-terminal statuses (``ANNOUNCED``, ``APPROVED``) never delete a symbol.
++    They downgrade it to a review state so the scanner can display a warning and
++    withhold new READY entries.
++3.  Successor symbols and exchange ratios live here, so paper-portfolio
++    conversion is a lookup rather than a manual intervention.
++4.  The table is additive. Nothing in this module ever deletes price history.
++"""
++from __future__ import annotations
++
++import csv
++import sqlite3
++from dataclasses import asdict, dataclass
++from datetime import date, timedelta
++from pathlib import Path
++from typing import Iterable, Mapping, Sequence
++
++TABLE_NAME = "security_lifecycle_events"
++
++SNAPSHOT_PATH = Path("corporate_data/normalized/security_lifecycle_events.csv")
++
++SCHEMA_SQL = f"""
++CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
++    symbol              TEXT NOT NULL,
++    event_type          TEXT NOT NULL,
++    status              TEXT NOT NULL,
++    announcement_date   TEXT,
++    effective_date      TEXT,
++    record_date         TEXT,
++    last_trading_date   TEXT,
++    successor_symbol    TEXT,
++    exchange_ratio_from REAL,
++    exchange_ratio_to   REAL,
++    source              TEXT NOT NULL DEFAULT 'MANUAL',
++    terminal            INTEGER NOT NULL DEFAULT 0 CHECK(terminal IN (0, 1)),
++    notes               TEXT,
++    loaded_at           TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    PRIMARY KEY(symbol, event_type, status)
++);
++CREATE INDEX IF NOT EXISTS idx_security_lifecycle_symbol
++    ON {TABLE_NAME}(symbol);
++CREATE INDEX IF NOT EXISTS idx_security_lifecycle_terminal
++    ON {TABLE_NAME}(terminal, effective_date);
++"""
++
++FIELDS: tuple[str, ...] = (
++    "symbol",
++    "event_type",
++    "status",
++    "announcement_date",
++    "effective_date",
++    "record_date",
++    "last_trading_date",
++    "successor_symbol",
++    "exchange_ratio_from",
++    "exchange_ratio_to",
++    "source",
++    "terminal",
++    "notes",
++)
++
++# Event vocabulary -----------------------------------------------------------
++AMALGAMATION = "AMALGAMATION"
++MERGER = "MERGER"
++DEMERGER = "DEMERGER"
++DELISTING = "DELISTING"
++SUSPENSION = "SUSPENSION"
++SYMBOL_CHANGE = "SYMBOL_CHANGE"
++
++EVENT_TYPES = frozenset({
++    AMALGAMATION, MERGER, DEMERGER, DELISTING, SUSPENSION, SYMBOL_CHANGE,
++})
++
++ANNOUNCED = "ANNOUNCED"
++APPROVED = "APPROVED"
++EFFECTIVE = "EFFECTIVE"
++TERMINAL = "TERMINAL"
++CANCELLED = "CANCELLED"
++
++STATUSES = frozenset({ANNOUNCED, APPROVED, EFFECTIVE, TERMINAL, CANCELLED})
++
++#: Statuses at which the security has actually stopped being itself.
++TERMINAL_STATUSES = frozenset({EFFECTIVE, TERMINAL})
++
++#: Reason code emitted by the tradeability gateway per event type.
++_REASON_BY_EVENT = {
++    AMALGAMATION: "TERMINAL_MERGER",
++    MERGER: "TERMINAL_MERGER",
++    DEMERGER: "TERMINAL_MERGER",
++    SYMBOL_CHANGE: "TERMINAL_MERGER",
++    DELISTING: "DELISTED_SECURITY",
++    SUSPENSION: "SUSPENDED_SECURITY",
++}
++
++
++def _as_date(value: object) -> date | None:
++    """Parse an ISO date defensively; unparseable values become ``None``."""
++    if value is None:
++        return None
++    if isinstance(value, date):
++        return value
++    text = str(value).strip()
++    if not text or text.lower() in {"nan", "none", "null", "nat"}:
++        return None
++    try:
++        return date.fromisoformat(text[:10])
++    except ValueError:
++        return None
++
++
++def _as_float(value: object) -> float | None:
++    if value is None:
++        return None
++    text = str(value).strip()
++    if not text or text.lower() in {"nan", "none", "null"}:
++        return None
++    try:
++        return float(text)
++    except ValueError:
++        return None
++
++
++def _as_bool(value: object) -> bool:
++    if isinstance(value, bool):
++        return value
++    text = str(value).strip().lower()
++    return text in {"1", "true", "yes", "y", "t"}
++
++
++@dataclass(frozen=True)
++class LifecycleEvent:
++    """One dated corporate-lifecycle fact about one symbol."""
++
++    symbol: str
++    event_type: str
++    status: str
++    announcement_date: str | None = None
++    effective_date: str | None = None
++    record_date: str | None = None
++    last_trading_date: str | None = None
++    successor_symbol: str | None = None
++    exchange_ratio_from: float | None = None
++    exchange_ratio_to: float | None = None
++    source: str = "MANUAL"
++    terminal: bool = False
++    notes: str | None = None
++
++    # -- derived ---------------------------------------------------------
++    @property
++    def terminal_from(self) -> date | None:
++        """First market date on which the symbol must leave the live universe.
++
++        The last trading date is authoritative when known: a scheme can become
++        legally effective while the share still trades until the record date, as
++        happened with ``JBCHEPHARM`` (effective 2026-07-08, last traded
++        2026-07-16).  Using ``last_trading_date + 1`` keeps every historical bar
++        valid for the date it was observed.
++        """
++        if not (self.terminal or self.status in TERMINAL_STATUSES):
++            return None
++        last_traded = _as_date(self.last_trading_date)
++        if last_traded is not None:
++            return last_traded + timedelta(days=1)
++        return _as_date(self.effective_date)
++
++    @property
++    def reason_code(self) -> str:
++        return _REASON_BY_EVENT.get(self.event_type.upper(), "CORPORATE_ACTION_REVIEW")
++
++    @property
++    def conversion_ratio(self) -> float | None:
++        """Successor shares received per held share, e.g. 100 -> 51 gives 0.51."""
++        source = _as_float(self.exchange_ratio_from)
++        target = _as_float(self.exchange_ratio_to)
++        if not source or target is None:
++            return None
++        return target / source
++
++    def is_terminal_on(self, market_date: date | str) -> bool:
++        """True when this event has already removed the symbol by ``market_date``."""
++        boundary = self.terminal_from
++        if boundary is None:
++            return False
++        day = _as_date(market_date)
++        return day is not None and day >= boundary
++
++    def blocks_new_entries_on(self, market_date: date | str) -> bool:
++        """True when the event is credible enough to withhold a fresh entry.
++
++        ``ANNOUNCED`` is displayed but does not block; ``APPROVED`` blocks new
++        READY entries because the scheme is materially certain.
++        """
++        if self.is_terminal_on(market_date):
++            return True
++        if self.status != APPROVED:
++            return False
++        day = _as_date(market_date)
++        if day is None:
++            return False
++        announced = _as_date(self.announcement_date)
++        return announced is None or day >= announced
++
++    def is_active_review_on(self, market_date: date | str) -> bool:
++        """True when the symbol should carry a visible corporate-event warning."""
++        if self.status == CANCELLED or self.is_terminal_on(market_date):
++            return False
++        day = _as_date(market_date)
++        if day is None:
++            return False
++        announced = _as_date(self.announcement_date)
++        return announced is None or day >= announced
++
++    def to_dict(self) -> dict:
++        return asdict(self)
++
++    def to_row(self) -> tuple:
++        return (
++            self.symbol,
++            self.event_type,
++            self.status,
++            self.announcement_date,
++            self.effective_date,
++            self.record_date,
++            self.last_trading_date,
++            self.successor_symbol,
++            self.exchange_ratio_from,
++            self.exchange_ratio_to,
++            self.source,
++            1 if self.terminal else 0,
++            self.notes,
++        )
++
++    def describe(self) -> str:
++        """Operator-facing one-line diagnostic."""
++        parts = [f"{self.symbol} {self.event_type}/{self.status}"]
++        if self.effective_date:
++            parts.append(f"effective {self.effective_date}")
++        if self.last_trading_date:
++            parts.append(f"last traded {self.last_trading_date}")
++        if self.successor_symbol:
++            ratio = self.conversion_ratio
++            suffix = f" ({self.exchange_ratio_from:g}->{self.exchange_ratio_to:g})" if ratio else ""
++            parts.append(f"successor {self.successor_symbol}{suffix}")
++        return " | ".join(parts)
++
++
++def event_from_mapping(row: Mapping[str, object]) -> LifecycleEvent:
++    """Build an event from a CSV row, sqlite3.Row or plain dict."""
++    symbol = str(row.get("symbol", "") or "").strip().upper()
++    if not symbol:
++        raise ValueError("lifecycle event requires a symbol")
++    event_type = str(row.get("event_type", "") or "").strip().upper()
++    if event_type not in EVENT_TYPES:
++        raise ValueError(f"unknown lifecycle event_type {event_type!r} for {symbol}")
++    status = str(row.get("status", "") or "").strip().upper()
++    if status not in STATUSES:
++        raise ValueError(f"unknown lifecycle status {status!r} for {symbol}")
++
++    def text(key: str) -> str | None:
++        value = row.get(key)
++        if value is None:
++            return None
++        cleaned = str(value).strip()
++        return cleaned or None if cleaned.lower() not in {"nan", "none", "null", "nat"} else None
++
++    declared_terminal = _as_bool(row.get("terminal", 0))
++    successor = text("successor_symbol")
++    return LifecycleEvent(
++        symbol=symbol,
++        event_type=event_type,
++        status=status,
++        announcement_date=text("announcement_date"),
++        effective_date=text("effective_date"),
++        record_date=text("record_date"),
++        last_trading_date=text("last_trading_date"),
++        successor_symbol=successor.upper() if successor else None,
++        exchange_ratio_from=_as_float(row.get("exchange_ratio_from")),
++        exchange_ratio_to=_as_float(row.get("exchange_ratio_to")),
++        source=text("source") or "MANUAL",
++        terminal=declared_terminal or status in TERMINAL_STATUSES,
++        notes=text("notes"),
++    )
++
++
++class LifecycleRegistry:
++    """Read-side view of the lifecycle table, resolved for one market date."""
++
++    def __init__(self, events: Iterable[LifecycleEvent]) -> None:
++        self._by_symbol: dict[str, list[LifecycleEvent]] = {}
++        for event in events:
++            self._by_symbol.setdefault(event.symbol, []).append(event)
++        for records in self._by_symbol.values():
++            # Most decisive status first, so ``event_for`` short-circuits well.
++            records.sort(key=lambda item: (
++                0 if item.status in TERMINAL_STATUSES else 1,
++                item.effective_date or "9999-12-31",
++            ))
++
++    def __len__(self) -> int:
++        return sum(len(records) for records in self._by_symbol.values())
++
++    @property
++    def symbols(self) -> frozenset[str]:
++        return frozenset(self._by_symbol)
++
++    def events_for(self, symbol: str) -> tuple[LifecycleEvent, ...]:
++        return tuple(self._by_symbol.get(str(symbol).upper(), ()))
++
++    def event_for(self, symbol: str, market_date: date | str) -> LifecycleEvent | None:
++        """Return the most decisive event that is relevant on ``market_date``."""
++        candidates = self.events_for(symbol)
++        if not candidates:
++            return None
++        for event in candidates:
++            if event.is_terminal_on(market_date):
++                return event
++        for event in candidates:
++            if event.blocks_new_entries_on(market_date):
++                return event
++        for event in candidates:
++            if event.is_active_review_on(market_date):
++                return event
++        return None
++
++    def terminal_symbols(self, market_date: date | str) -> frozenset[str]:
++        return frozenset(
++            symbol
++            for symbol, records in self._by_symbol.items()
++            if any(event.is_terminal_on(market_date) for event in records)
++        )
++
++    def successor_map(self, market_date: date | str) -> dict[str, tuple[str, float | None]]:
++        """``{old_symbol: (successor_symbol, shares_per_share)}`` for conversions."""
++        mapping: dict[str, tuple[str, float | None]] = {}
++        for symbol, records in self._by_symbol.items():
++            for event in records:
++                if event.is_terminal_on(market_date) and event.successor_symbol:
++                    mapping[symbol] = (event.successor_symbol, event.conversion_ratio)
++                    break
++        return mapping
++
++    def diagnostics(self, market_date: date | str) -> dict[str, object]:
++        terminal = self.terminal_symbols(market_date)
++        review = {
++            symbol
++            for symbol, records in self._by_symbol.items()
++            if symbol not in terminal
++            and any(event.is_active_review_on(market_date) for event in records)
++        }
++        return {
++            "market_date": str(market_date),
++            "events": len(self),
++            "symbols": len(self._by_symbol),
++            "terminal_symbols": sorted(terminal),
++            "review_symbols": sorted(review),
++        }
++
++
++# --- persistence -----------------------------------------------------------
++
++def ensure_schema(conn: sqlite3.Connection) -> None:
++    conn.executescript(SCHEMA_SQL)
++
++
++def upsert_events(conn: sqlite3.Connection, events: Sequence[LifecycleEvent]) -> int:
++    if not events:
++        return 0
++    ensure_schema(conn)
++    placeholders = ",".join("?" for _ in FIELDS)
++    conn.executemany(
++        f"INSERT OR REPLACE INTO {TABLE_NAME} ({','.join(FIELDS)}) VALUES ({placeholders})",
++        [event.to_row() for event in events],
++    )
++    return len(events)
++
++
++def load_events(conn: sqlite3.Connection) -> list[LifecycleEvent]:
++    names = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
++    if TABLE_NAME not in names:
++        return []
++    previous_factory = conn.row_factory
++    conn.row_factory = sqlite3.Row
++    try:
++        rows = conn.execute(f"SELECT {','.join(FIELDS)} FROM {TABLE_NAME}").fetchall()
++    finally:
++        conn.row_factory = previous_factory
++    events: list[LifecycleEvent] = []
++    for row in rows:
++        try:
++            events.append(event_from_mapping({key: row[key] for key in FIELDS}))
++        except ValueError:
++            # A malformed stored row must never abort a scan; it is skipped and
++            # surfaced by the caller's diagnostics instead.
++            continue
++    return events
++
++
++def load_registry(conn: sqlite3.Connection) -> LifecycleRegistry:
++    return LifecycleRegistry(load_events(conn))
++
++
++def read_snapshot(path: str | Path = SNAPSHOT_PATH) -> list[LifecycleEvent]:
++    """Read the git-backed CSV snapshot used to seed disposable CI runners."""
++    target = Path(path)
++    if not target.exists():
++        return []
++    with target.open(newline="", encoding="utf-8") as handle:
++        rows = list(csv.DictReader(handle))
++    events: list[LifecycleEvent] = []
++    for row in rows:
++        try:
++            events.append(event_from_mapping(row))
++        except ValueError:
++            continue
++    return events
++
++
++def write_snapshot(events: Sequence[LifecycleEvent], path: str | Path = SNAPSHOT_PATH) -> int:
++    target = Path(path)
++    target.parent.mkdir(parents=True, exist_ok=True)
++    with target.open("w", newline="", encoding="utf-8") as handle:
++        writer = csv.DictWriter(handle, fieldnames=FIELDS, lineterminator="\n")
++        writer.writeheader()
++        for event in events:
++            record = event.to_dict()
++            record["terminal"] = 1 if event.terminal else 0
++            writer.writerow({key: "" if record[key] is None else record[key] for key in FIELDS})
++    return len(events)
++
++
++def restore_snapshot(conn: sqlite3.Connection, path: str | Path = SNAPSHOT_PATH) -> int:
++    """Load the CSV snapshot into sqlite. Safe to call on every run."""
++    return upsert_events(conn, read_snapshot(path))
+diff --git a/v2/tradeability.py b/v2/tradeability.py
+new file mode 100755
+index 0000000..c39f5d4
+--- /dev/null
++++ b/v2/tradeability.py
+@@ -0,0 +1,508 @@
++"""Pre-Scan Tradeability Gateway shared by every NSE scanner.
++
++The gateway answers exactly one question: *may this symbol be evaluated as a
++current candidate on this market date?*  It deliberately knows nothing about
++momentum, Hull averages, horizons or scoring, so V3, the Momentum Ladder, Hull
++Pine and the Penny Shadow scanner can each keep their own independent strategy
++logic while sharing one auditable admission decision.
++
++    Official NSE universe ─┐
++    Latest OHLCV date ─────┤──> Tradeability gateway ──> V3 / Ladder / Hull / Penny
++    Corporate lifecycle ───┘
++
++Why this exists
++---------------
++``JBCHEPHARM`` was amalgamated into ``TORNTPHARM`` effective 2026-07-08 and last
++traded on 2026-07-16, yet it kept appearing in scanner output a month later.  It
++slipped through every existing control because the old checks *fail open*: it
++has no ``symbol_master_v2`` row at all, so the series check defaulted to ``EQ``
++and the ``active`` check was skipped; it has no ``corporate_actions_v3`` row, so
++the +/-5/+14-day ex-date window found nothing; and its ~380 stale bars satisfied
++every ``min_sessions`` count.  This module fails *closed* instead, and it is not
++specific to one ticker: on 2026-08-20 there were 57 symbols with history but no
++recent bar.
++
++Historical integrity
++--------------------
++Nothing here deletes or rewrites history.  The gateway is evaluated per market
++date, so replaying 2026-07-10 still admits ``JBCHEPHARM`` exactly as it was
++legitimately admitted at the time.
++"""
++from __future__ import annotations
++
++from dataclasses import asdict, dataclass, field
++from datetime import date
++from pathlib import Path
++from typing import Iterable, Mapping, Sequence
++
++import pandas as pd
++
++from .security_lifecycle import LifecycleEvent, LifecycleRegistry
++
++# --- vocabulary -------------------------------------------------------------
++
++TRADEABLE = "TRADEABLE"
++
++#: Every rejection reason the gateway can emit.  Downstream Telegram and
++#: diagnostics code should switch on these and nothing else.
++REASON_CODES: tuple[str, ...] = (
++    "INACTIVE_SECURITY",
++    "NOT_IN_CURRENT_NSE_UNIVERSE",
++    "STALE_SYMBOL_PRICE",
++    "TERMINAL_MERGER",
++    "DELISTED_SECURITY",
++    "SUSPENDED_SECURITY",
++    "NON_EQ_SERIES",
++    "RESTRICTED_SECURITY",
++    "CORPORATE_ACTION_REVIEW",
++    "INVALID_LATEST_ROW",
++)
++
++STAGE_CORPORATE_LIFECYCLE = "CORPORATE_LIFECYCLE"
++STAGE_UNIVERSE = "UNIVERSE"
++STAGE_TRADEABILITY = "TRADEABILITY"
++STAGE_REGULATORY = "REGULATORY"
++STAGE_FRESHNESS = "FRESHNESS"
++STAGE_DATA_QUALITY = "DATA_QUALITY"
++
++_OHLC_COLUMNS = ("open", "high", "low", "close")
++
++_FALSE_TOKENS = frozenset({"0", "0.0", "false", "f", "no", "n", ""})
++
++
++def _flag_is_false(value: object) -> bool:
++    """Interpret a security-master boolean stored as int, float, str or bool.
++
++    CSV round-trips turn ``active=0`` into ``"0"`` and sometimes ``"0.0"``, both
++    of which are truthy strings in Python.  This normalises them.
++    """
++    if isinstance(value, bool):
++        return not value
++    if isinstance(value, (int, float)):
++        return float(value) == 0.0
++    return str(value).strip().lower() in _FALSE_TOKENS
++
++
++@dataclass(frozen=True)
++class TradeabilityResult:
++    """Per-symbol admission verdict for one market date."""
++
++    symbol: str
++    eligible: bool
++    reason_code: str
++    stage: str
++    market_date: str
++    symbol_last_date: str | None = None
++    staleness_sessions: int | None = None
++    #: Symbol may be evaluated and displayed, but must not receive a new entry.
++    entry_blocked: bool = False
++    #: Non-blocking corporate-event warning to surface on the card.
++    review_reason: str | None = None
++    successor_symbol: str | None = None
++    conversion_ratio: float | None = None
++    detail: str | None = None
++
++    @property
++    def terminal(self) -> bool:
++        return self.reason_code in {
++            "TERMINAL_MERGER", "DELISTED_SECURITY", "SUSPENDED_SECURITY",
++        }
++
++    def to_dict(self) -> dict:
++        return asdict(self)
++
++    def describe(self) -> str:
++        """Operator-facing block used in diagnostics and Telegram notices."""
++        lines = [
++            self.symbol,
++            f"Eligible: {'Yes' if self.eligible else 'No'}",
++            f"Stage: {self.stage}",
++            f"Reason: {self.reason_code}",
++        ]
++        if self.detail:
++            lines.append(self.detail)
++        if self.symbol_last_date:
++            lines.append(f"Last traded: {self.symbol_last_date}")
++        if self.successor_symbol:
++            lines.append(f"Successor: {self.successor_symbol}")
++        return "\n".join(lines)
++
++
++@dataclass(frozen=True)
++class UniverseVerdict:
++    """Aggregate gateway outcome for a whole scan."""
++
++    market_date: str
++    results: dict[str, TradeabilityResult] = field(default_factory=dict)
++
++    @property
++    def eligible_symbols(self) -> tuple[str, ...]:
++        return tuple(sorted(s for s, r in self.results.items() if r.eligible))
++
++    @property
++    def entry_permitted_symbols(self) -> tuple[str, ...]:
++        return tuple(sorted(
++            s for s, r in self.results.items() if r.eligible and not r.entry_blocked
++        ))
++
++    @property
++    def rejected(self) -> dict[str, TradeabilityResult]:
++        return {s: r for s, r in self.results.items() if not r.eligible}
++
++    def rejection_counts(self) -> dict[str, int]:
++        counts: dict[str, int] = {}
++        for result in self.results.values():
++            if not result.eligible:
++                counts[result.reason_code] = counts.get(result.reason_code, 0) + 1
++        return dict(sorted(counts.items(), key=lambda item: (-item[1], item[0])))
++
++    def is_eligible(self, symbol: str) -> bool:
++        result = self.results.get(str(symbol))
++        return bool(result and result.eligible)
++
++    def entry_permitted(self, symbol: str) -> bool:
++        result = self.results.get(str(symbol))
++        return bool(result and result.eligible and not result.entry_blocked)
++
++    def filter_frame(self, prices: pd.DataFrame, symbol_column: str = "symbol") -> pd.DataFrame:
++        """Drop every non-admitted symbol from a price/candidate frame."""
++        if prices.empty:
++            return prices
++        keep = set(self.eligible_symbols)
++        return prices[prices[symbol_column].astype(str).isin(keep)].copy()
++
++    def diagnostics(self) -> dict[str, object]:
++        return {
++            "market_date": self.market_date,
++            "evaluated": len(self.results),
++            "eligible": len(self.eligible_symbols),
++            "entry_permitted": len(self.entry_permitted_symbols),
++            "rejected": len(self.results) - len(self.eligible_symbols),
++            "rejection_counts": self.rejection_counts(),
++            "terminal_symbols": sorted(
++                s for s, r in self.results.items() if r.terminal
++            ),
++            "review_symbols": sorted(
++                s for s, r in self.results.items() if r.review_reason
++            ),
++        }
++
++
++def _iso(value: object) -> str | None:
++    if value is None:
++        return None
++    try:
++        stamp = pd.Timestamp(value)
++    except (ValueError, TypeError):
++        return None
++    if pd.isna(stamp):
++        return None
++    return stamp.date().isoformat()
++
++
++def _staleness_sessions(
++    symbol_last_date: str,
++    market_date: str,
++    session_calendar: Sequence[str] | None,
++) -> int:
++    """Sessions the symbol is behind the market.
++
++    A session calendar (the sorted distinct trade dates present in the universe)
++    is used when available, because calendar days over-count weekends and
++    holidays.  Without one, fall back to calendar days.
++    """
++    if session_calendar:
++        after = [day for day in session_calendar if symbol_last_date < day <= market_date]
++        return len(after)
++    return max(0, (pd.Timestamp(market_date) - pd.Timestamp(symbol_last_date)).days)
++
++
++def session_calendar_from_prices(prices: pd.DataFrame) -> tuple[str, ...]:
++    """Sorted distinct trade dates present in a universe price frame."""
++    if prices.empty or "trade_date" not in prices.columns:
++        return ()
++    days = pd.to_datetime(prices["trade_date"], errors="coerce").dropna()
++    return tuple(sorted({stamp.date().isoformat() for stamp in days}))
++
++
++def market_date_from_prices(prices: pd.DataFrame) -> str | None:
++    """The scanner's market date: the newest completed session in the universe."""
++    if prices.empty or "trade_date" not in prices.columns:
++        return None
++    return _iso(pd.to_datetime(prices["trade_date"], errors="coerce").max())
++
++
++def evaluate_tradeability(
++    symbol: str,
++    frame: pd.DataFrame,
++    *,
++    market_date: date | str,
++    master_row: Mapping[str, object] | None = None,
++    lifecycle_event: LifecycleEvent | None = None,
++    restricted_reason: str | None = None,
++    session_calendar: Sequence[str] | None = None,
++    max_staleness_sessions: int = 0,
++    require_universe_membership: bool = True,
++    require_series_eq: bool = True,
++    corporate_review_is_terminal: bool = False,
++) -> TradeabilityResult:
++    """Decide whether ``symbol`` may be evaluated as a current candidate.
++
++    Parameters
++    ----------
++    frame
++        The symbol's own price history, any order; must contain ``trade_date``.
++    market_date
++        The scanner's market date — the newest completed session across the
++        whole universe, *not* ``date.today()``.  Use
++        :func:`market_date_from_prices`.
++    master_row
++        The symbol's row from the current official NSE security master.
++        ``None`` means "not in the current universe" and, with
++        ``require_universe_membership``, is a rejection rather than a pass.
++    max_staleness_sessions
++        ``0`` demands the symbol traded in the market date's own session.  Raise
++        it only for deliberately tolerant research modes.
++    """
++    symbol = str(symbol)
++    market_iso = _iso(market_date) or str(market_date)
++
++    def reject(stage: str, code: str, *, detail: str | None = None, **extra) -> TradeabilityResult:
++        return TradeabilityResult(
++            symbol=symbol, eligible=False, reason_code=code, stage=stage,
++            market_date=market_iso, detail=detail, **extra,
++        )
++
++    # 1. Terminal corporate lifecycle is the most specific explanation, so it is
++    #    tested first: a merged symbol should report TERMINAL_MERGER, not the
++    #    incidental STALE_SYMBOL_PRICE or NOT_IN_CURRENT_NSE_UNIVERSE that also
++    #    happen to be true.
++    if lifecycle_event is not None and lifecycle_event.is_terminal_on(market_iso):
++        return reject(
++            STAGE_CORPORATE_LIFECYCLE,
++            lifecycle_event.reason_code,
++            detail=lifecycle_event.describe(),
++            symbol_last_date=lifecycle_event.last_trading_date,
++            successor_symbol=lifecycle_event.successor_symbol,
++            conversion_ratio=lifecycle_event.conversion_ratio,
++        )
++
++    # 2. Current official NSE security-master membership.
++    if master_row is None:
++        if require_universe_membership:
++            return reject(
++                STAGE_UNIVERSE, "NOT_IN_CURRENT_NSE_UNIVERSE",
++                detail="Symbol absent from the current NSE security master",
++            )
++        master_row = {}
++
++    # 3. Series and active flag — fail closed when the field is absent.
++    series_value = master_row.get("series")
++    series = str(series_value).strip().upper() if series_value is not None else ""
++    if require_series_eq and series != "EQ":
++        return reject(
++            STAGE_TRADEABILITY, "NON_EQ_SERIES",
++            detail=f"series={series or 'UNKNOWN'} required=EQ",
++        )
++    active_value = master_row.get("active")
++    if active_value is None:
++        if require_universe_membership:
++            return reject(
++                STAGE_TRADEABILITY, "INACTIVE_SECURITY",
++                detail="Active flag missing from the security master",
++            )
++    elif _flag_is_false(active_value):
++        return reject(STAGE_TRADEABILITY, "INACTIVE_SECURITY", detail=f"active={active_value}")
++
++    delisting_date = _iso(master_row.get("delisting_date"))
++    if delisting_date and delisting_date <= market_iso:
++        return reject(
++            STAGE_CORPORATE_LIFECYCLE, "DELISTED_SECURITY",
++            detail=f"Security master delisting_date={delisting_date}",
++        )
++
++    # 4. Current regulatory exclusion.
++    if restricted_reason:
++        return reject(
++            STAGE_REGULATORY, "RESTRICTED_SECURITY", detail=str(restricted_reason),
++        )
++
++    # 5. Per-symbol price freshness — the control that was missing entirely.
++    if frame is None or len(frame) == 0 or "trade_date" not in getattr(frame, "columns", ()):
++        return reject(STAGE_DATA_QUALITY, "INVALID_LATEST_ROW", detail="No price history")
++    dates = pd.to_datetime(frame["trade_date"], errors="coerce").dropna()
++    if dates.empty:
++        return reject(STAGE_DATA_QUALITY, "INVALID_LATEST_ROW", detail="No parseable trade dates")
++    symbol_last = dates.max().date().isoformat()
++    behind = _staleness_sessions(symbol_last, market_iso, session_calendar)
++    if symbol_last > market_iso:
++        return reject(
++            STAGE_FRESHNESS, "INVALID_LATEST_ROW",
++            detail=f"Latest bar {symbol_last} is after market date {market_iso}",
++            symbol_last_date=symbol_last,
++        )
++    if behind > max_staleness_sessions:
++        return reject(
++            STAGE_FRESHNESS, "STALE_SYMBOL_PRICE",
++            detail=f"Last traded {symbol_last}, {behind} session(s) behind {market_iso}",
++            symbol_last_date=symbol_last, staleness_sessions=behind,
++        )
++
++    # 6. The latest row must be a usable bar.
++    ordered = frame.sort_values("trade_date")
++    latest = ordered.iloc[-1]
++    missing = [column for column in _OHLC_COLUMNS if column not in ordered.columns]
++    if missing:
++        return reject(
++            STAGE_DATA_QUALITY, "INVALID_LATEST_ROW",
++            detail=f"Missing columns: {', '.join(missing)}",
++            symbol_last_date=symbol_last, staleness_sessions=behind,
++        )
++    values = {column: pd.to_numeric(latest[column], errors="coerce") for column in _OHLC_COLUMNS}
++    if any(pd.isna(value) or value <= 0 for value in values.values()):
++        return reject(
++            STAGE_DATA_QUALITY, "INVALID_LATEST_ROW",
++            detail="Latest bar has a missing or non-positive price",
++            symbol_last_date=symbol_last, staleness_sessions=behind,
++        )
++    if values["high"] < max(values["open"], values["low"], values["close"]) or \
++       values["low"] > min(values["open"], values["high"], values["close"]):
++        return reject(
++            STAGE_DATA_QUALITY, "INVALID_LATEST_ROW", detail="Latest bar fails OHLC sanity",
++            symbol_last_date=symbol_last, staleness_sessions=behind,
++        )
++    if "volume" in ordered.columns:
++        volume = pd.to_numeric(latest["volume"], errors="coerce")
++        if pd.isna(volume) or volume < 0:
++            return reject(
++                STAGE_DATA_QUALITY, "INVALID_LATEST_ROW", detail="Latest bar volume is invalid",
++                symbol_last_date=symbol_last, staleness_sessions=behind,
++            )
++
++    # 7. Non-terminal corporate events are displayed, not discarded.  An
++    #    APPROVED scheme is materially certain, so it withholds new entries
++    #    while leaving the symbol visible.
++    review_reason: str | None = None
++    entry_blocked = False
++    successor = None
++    ratio = None
++    if lifecycle_event is not None and lifecycle_event.is_active_review_on(market_iso):
++        review_reason = "CORPORATE_ACTION_REVIEW"
++        entry_blocked = lifecycle_event.blocks_new_entries_on(market_iso)
++        successor = lifecycle_event.successor_symbol
++        ratio = lifecycle_event.conversion_ratio
++        if corporate_review_is_terminal and entry_blocked:
++            return reject(
++                STAGE_CORPORATE_LIFECYCLE, "CORPORATE_ACTION_REVIEW",
++                detail=lifecycle_event.describe(),
++                symbol_last_date=symbol_last, successor_symbol=successor,
++                conversion_ratio=ratio,
++            )
++    corporate_action = master_row.get("corporate_action_type")
++    if review_reason is None and corporate_action:
++        review_reason = "CORPORATE_ACTION_REVIEW"
++        entry_blocked = True
++
++    return TradeabilityResult(
++        symbol=symbol, eligible=True, reason_code=TRADEABLE, stage=STAGE_TRADEABILITY,
++        market_date=market_iso, symbol_last_date=symbol_last, staleness_sessions=behind,
++        entry_blocked=entry_blocked, review_reason=review_reason,
++        successor_symbol=successor, conversion_ratio=ratio,
++    )
++
++
++def evaluate_universe(
++    prices: pd.DataFrame,
++    *,
++    market_date: date | str | None = None,
++    master: Mapping[str, Mapping[str, object]] | pd.DataFrame | None = None,
++    lifecycle: LifecycleRegistry | Iterable[LifecycleEvent] | None = None,
++    restricted: Mapping[str, str] | None = None,
++    symbols: Iterable[str] | None = None,
++    **options,
++) -> UniverseVerdict:
++    """Run the gateway across a whole universe price frame."""
++    resolved_date = _iso(market_date) if market_date is not None else market_date_from_prices(prices)
++    if resolved_date is None:
++        raise ValueError("cannot determine a market date; pass market_date explicitly")
++
++    if isinstance(master, pd.DataFrame):
++        master_map = {
++            str(row["symbol"]): row.to_dict() for _, row in master.iterrows()
++        } if not master.empty else {}
++    else:
++        master_map = dict(master or {})
++
++    if lifecycle is None:
++        registry = LifecycleRegistry(())
++    elif isinstance(lifecycle, LifecycleRegistry):
++        registry = lifecycle
++    else:
++        registry = LifecycleRegistry(lifecycle)
++
++    restricted_map = dict(restricted or {})
++    calendar = options.pop("session_calendar", None)
++    if calendar is None:
++        calendar = session_calendar_from_prices(prices)
++
++    wanted = {str(s) for s in symbols} if symbols is not None else None
++    results: dict[str, TradeabilityResult] = {}
++    grouped = prices.groupby("symbol") if not prices.empty else ()
++    for symbol, frame in grouped:
++        symbol = str(symbol)
++        if wanted is not None and symbol not in wanted:
++            continue
++        results[symbol] = evaluate_tradeability(
++            symbol, frame,
++            market_date=resolved_date,
++            master_row=master_map.get(symbol),
++            lifecycle_event=registry.event_for(symbol, resolved_date),
++            restricted_reason=restricted_map.get(symbol),
++            session_calendar=calendar,
++            **options,
++        )
++
++    # Symbols named by the caller but absent from the price frame still deserve
++    # an explicit verdict rather than silent omission.
++    if wanted is not None:
++        for symbol in sorted(wanted - set(results)):
++            results[symbol] = evaluate_tradeability(
++                symbol, pd.DataFrame(columns=["trade_date"]),
++                market_date=resolved_date,
++                master_row=master_map.get(symbol),
++                lifecycle_event=registry.event_for(symbol, resolved_date),
++                restricted_reason=restricted_map.get(symbol),
++                session_calendar=calendar,
++                **options,
++            )
++
++    return UniverseVerdict(market_date=resolved_date, results=results)
++
++
++def gateway_from_database(
++    db_path: str | Path,
++    prices: pd.DataFrame,
++    *,
++    market_date: date | str | None = None,
++    symbols: Iterable[str] | None = None,
++    **options,
++) -> UniverseVerdict:
++    """Convenience wrapper: pull master, lifecycle and restrictions, then gate.
++
++    Imported lazily so ``v2.database`` never depends on this module and the
++    gateway stays usable in pure-unit tests with no sqlite file present.
++    """
++    from .database import V2Database
++
++    resolved_date = _iso(market_date) if market_date is not None else market_date_from_prices(prices)
++    if resolved_date is None:
++        raise ValueError("cannot determine a market date; pass market_date explicitly")
++
++    database = V2Database(db_path)
++    master = database.load_symbol_master(resolved_date)
++    restricted = database.load_restricted_symbols(resolved_date)
++    registry = database.load_lifecycle_registry()
++    return evaluate_universe(
++        prices, market_date=resolved_date, master=master,
++        lifecycle=registry, restricted=restricted, symbols=symbols, **options,
++    )
+-- 
+2.34.1
+

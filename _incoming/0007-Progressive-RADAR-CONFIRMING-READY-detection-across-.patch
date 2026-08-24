@@ -1,0 +1,1359 @@
+From ff4349aee076bf2476e92cdd9b2b5c8bc7ed8b8c Mon Sep 17 00:00:00 2001
+From: Jayesh Rathod <jayesh4.rathod@ril.com>
+Date: Fri, 21 Aug 2026 13:29:25 +0530
+Subject: [PATCH 07/14] Progressive RADAR / CONFIRMING / READY detection across
+ all three scanners
+
+Step 8 of the Cross-Scanner Eligibility and Corporate Lifecycle Sprint.
+
+The problem
+-----------
+When every criterion is compulsory from the first pass, a scanner can only find
+mature setups and structurally cannot see a move beginning. V3 showed this
+plainly: it loaded prices at min_sessions=260, so a stock with 150 sessions was
+invisible however strongly it was moving, and it rejected 1,522 of 2,157 symbols
+-- mostly on liquidity and delivery thresholds a stock satisfies only *after*
+participation has already expanded.
+
+The fix separates three questions that were collapsed into one:
+
+  RADAR       Is something starting?          flexible
+  CONFIRMING  Is the participation genuine?   moderate
+  READY       May we authorise an entry?      strict
+
+Nothing about READY is relaxed. Entry authorisation still requires the full
+260-session strict pass, so entry quality is unchanged; only visibility below it
+improves.
+
+Added v2/progressive_stages.py
+------------------------------
+Shared *vocabulary and progression only* -- no strategy logic, so each scanner
+keeps its own independent rules and thresholds. Score bands follow the
+specification (35-49 radar, 50-64 confirming, 65+ qualified, 70+ ready).
+Availability states (CIRCUIT_WATCH, CIRCUIT_LOCKED, POST_CIRCUIT_CONFIRMING,
+EXTENDED, CORPORATE_REVIEW, TERMINATED, OBSERVE_ONLY) sit *beside* the
+progression rather than inside it, so a circuit-locked or merged symbol is
+displayed with its score intact and simply cannot be entered -- NHCFOODS is
+detected even when it cannot be bought. A score is never an authorisation: a
+symbol scoring 95 with an outstanding gate is held at QUALIFIED.
+
+Added v2/tiered_eligibility.py
+------------------------------
+Reuses evaluate_eligibility unchanged, run at three tiers strictest-first:
+
+  READY            260 sessions, verified market cap and promoter holding
+  CONFIRMING       180 sessions, turnover and delivery confirmation
+  DISCOVERY_RADAR  120 sessions, liquidity floor only, card says DATA PENDING
+
+Relaxation is not a loophole: NON_EQ_SERIES and RESTRICTED_SECURITY reject at
+every tier, which is asserted.
+
+Wiring
+------
+* V3 loads the universe at MIN_TIER_SESSIONS instead of 260 -- otherwise RADAR
+  is unreachable by construction. run_daily gains progressive_stages=True,
+  stage_funnel, radar_symbols and confirming_symbols, and the admin message
+  gains a PROGRESSIVE FUNNEL section naming what holds symbols below READY.
+* Momentum Ladder: surviving discovery ranking is CONFIRMING, full Hull
+  alignment is QUALIFIED, alignment plus entry permission is READY.
+* Hull Pine: its own BUILD -> NEAR -> READY -> TRIGGERED -> ENTERED lifecycle
+  mapped onto the shared stages; overextended symbols carry the EXTENDED
+  availability state instead of vanishing.
+
+Measured on the real store at 2026-08-20, V3 now surfaces 208 symbols that were
+previously entirely absent from its output:
+
+  READY 713 | CONFIRMING 185 | RADAR 23
+  held below READY by: LOW_MEDIAN_VOLUME 652, LOW_PRICE 356,
+                       INSUFFICIENT_HISTORY 251, LOW_MEDIAN_TURNOVER 146
+
+The 23 RADAR names are mostly recent listings -- AMAGI, FRACTAL, ARIS, AYE,
+CLEANMAX, ALGOQUANT, ANTELOPUS -- young movers with under 260 sessions, which is
+precisely the population the old funnel could not see.
+
+Tests: 48 new. Suite 360 passed; the same 7 pre-existing Telegram copy-text
+failures as on main.
+---
+ old_nse_hull/engine.py           |  35 +++
+ pine_hull/engine.py              |  71 +++++-
+ tests/test_progressive_stages.py | 340 ++++++++++++++++++++++++++++
+ v2/orchestrator.py               |  93 +++++++-
+ v2/progressive_stages.py         | 376 +++++++++++++++++++++++++++++++
+ v2/tiered_eligibility.py         | 209 +++++++++++++++++
+ 6 files changed, 1112 insertions(+), 12 deletions(-)
+ create mode 100755 tests/test_progressive_stages.py
+ create mode 100755 v2/progressive_stages.py
+ create mode 100755 v2/tiered_eligibility.py
+
+diff --git a/old_nse_hull/engine.py b/old_nse_hull/engine.py
+index 04a2735..dd210aa 100644
+--- a/old_nse_hull/engine.py
++++ b/old_nse_hull/engine.py
+@@ -15,6 +15,15 @@ from .discovery import discover, load_market_data
+ from .multi_horizon.config import shadow_enabled
+ from .multi_horizon.engine import run_shadow
+ 
++from v2.progressive_stages import (
++    CONFIRMING as STAGE_CONFIRMING,
++    QUALIFIED as STAGE_QUALIFIED,
++    RADAR as STAGE_RADAR,
++    READY as STAGE_READY,
++    availability_from_gateway,
++    build_funnel,
++    classify,
++)
+ from v2.tradeability import gateway_from_database
+ 
+ 
+@@ -55,21 +64,47 @@ def run_local(db_path: str = "nse_scanner.db", as_of: str | None = None, top_n:
+     result = discover(prices, top_n=top_n, verdict=verdict)
+     rows = result.shortlist.to_dict(orient="records")
+     frames = {symbol: frame for symbol, frame in prices.groupby("symbol")}
++    stage_verdicts = []
+     for row in rows:
+         confirmation = alignment(frames[row["symbol"]])
+         entry_permitted = verdict.entry_permitted(row["symbol"])
++        # Named distinctly: `result` is the DiscoveryResult in this scope.
++        gateway_result = verdict.results.get(row["symbol"])
++        availability = availability_from_gateway(
++            eligible=True, reason_code="TRADEABLE",
++            entry_blocked=bool(gateway_result and gateway_result.entry_blocked),
++            review_reason=gateway_result.review_reason if gateway_result else None,
++            instrument_class=verdict.instrument_class(row["symbol"]),
++        ) if gateway_result else None
++        # Progressive stage, shared vocabulary, independent rules: surviving
++        # discovery ranking is participation evidence (CONFIRMING); full Hull
++        # alignment is QUALIFIED; alignment plus entry permission is READY.
++        if confirmation["state"] == "READY":
++            stage_score = 72.0 if entry_permitted else 66.0
++        else:
++            stage_score = 55.0
++        stage = classify(
++            row["symbol"], stage_score, availability=availability,
++            gates_cleared=confirmation["state"] == "READY" and entry_permitted,
++            evidence=(f"Discovery rank {row.get('discovery_rank')}",
++                      f"Hull {confirmation['state']}"),
++        )
+         row.update({"hull_state": confirmation["state"], "timeframes": confirmation["timeframes"],
+                     # READY alone no longer authorises a paper entry: the symbol
+                     # must also be currently enterable.
+                     "paper_entry_enabled": confirmation["state"] == "READY" and entry_permitted,
+                     "entry_permitted": entry_permitted,
+                     "instrument_class": verdict.instrument_class(row["symbol"]),
++                    "stage": stage.stage, "availability": stage.availability,
++                    "stage_badge": stage.badge, "next_action": stage.next_action,
+                     "reason": "python_hull_rules_active"})
++        stage_verdicts.append(stage)
+     report = {"system": "OLD_NSE_HULL_PAPER", "generated_at": datetime.now().astimezone().isoformat(),
+             "as_of_date": result.as_of_date, "parity": "PYTHON_RULES_ACTIVE", "paper_entries_enabled": True,
+             "eligible": result.eligible, "discovery_qualified": len(rows), "ready": sum(r["hull_state"] == "READY" for r in rows),
+             "watch": sum(r["hull_state"] == "WATCH" for r in rows), "rejected": result.rejected, "shortlist": rows,
+             "market_date": result.market_date, "tradeability": result.gateway,
++            "stage_funnel": build_funnel(result.market_date, stage_verdicts).to_dict(),
+             "entry_withheld": sorted(r["symbol"] for r in rows if not r["entry_permitted"]),
+             "state": "PAPER_EOD_ACTIVE"}
+     if shadow_enabled():
+diff --git a/pine_hull/engine.py b/pine_hull/engine.py
+index b257421..7cbb495 100644
+--- a/pine_hull/engine.py
++++ b/pine_hull/engine.py
+@@ -18,6 +18,12 @@ import pandas as pd
+ 
+ from v2.database import V2Database
+ from v2.indicators import atr, hma, kama, wma
++from v2.progressive_stages import (
++    EXTENDED as STATE_EXTENDED,
++    availability_from_gateway,
++    build_funnel,
++    classify,
++)
+ from v2.tradeability import gateway_from_database
+ from v2.universe_reconciliation import reconcile_positions
+ from .opportunity_lifecycle import timing_state as lifecycle_timing_state, weekly_transition
+@@ -257,6 +263,33 @@ def _update_position(position: dict, frame: pd.DataFrame, metrics: dict, trade_d
+     position["state"] = "TRAILING" if position["stop"] > _number(position["initial_stop"]) else "OPEN"
+ 
+ 
++#: Hull Pine's own five-step setup lifecycle, mapped onto the shared stages.
++SETUP_STAGE_BUILD = "BUILD"
++SETUP_STAGE_NEAR = "NEAR"
++SETUP_STAGE_READY = "READY"
++SETUP_STAGE_TRIGGERED = "TRIGGERED"
++SETUP_STAGE_ENTERED = "ENTERED"
++
++
++def _setup_stage(row: dict, *, has_pending: bool, is_held: bool) -> str:
++    """Where a symbol sits on BUILD -> NEAR -> READY -> TRIGGERED -> ENTERED."""
++    if is_held:
++        return SETUP_STAGE_ENTERED
++    if has_pending:
++        return SETUP_STAGE_READY
++    timing = str(row.get("timing_state", "WEAK"))
++    if row.get("state") == "READY":
++        return SETUP_STAGE_NEAR
++    if timing == "EARLY":
++        return SETUP_STAGE_BUILD
++    return SETUP_STAGE_BUILD if row.get("daily_bullish") else "WEAK"
++
++
++def _stage_score(row: dict) -> float:
++    """Map the existing 0-100 Hull score onto the shared bands unchanged."""
++    return _number(row.get("score"))
++
++
+ def _setup_event(state: dict, trade_date: str, setup: dict, event: str) -> None:
+     state["events"].append({"date": trade_date, "event": event, "setup_id": setup["setup_id"],
+                             "symbol": setup["symbol"], "state": setup["state"]})
+@@ -460,14 +493,50 @@ def run_daily(
+         ((symbol, row) for symbol, row in metrics.items() if row.get("timing_state") in {"EARLY", "EXTENDED"} and symbol not in active_symbols),
+         key=lambda item: (-_number(item[1].get("score")), item[0]),
+     )[:12]
++
++    # --- progressive staging -----------------------------------------------
++    # Shared vocabulary, Hull's own rules. EXTENDED and observe-only symbols
++    # stay visible under an availability state rather than being discarded.
++    pending_symbols = {setup["symbol"] for setup in state["pending"]}
++    held_symbols = {position["symbol"] for position in open_positions}
++    stage_verdicts = []
++    stage_by_symbol: dict[str, dict] = {}
++    for symbol, row in metrics.items():
++        gateway_result = verdict.results.get(symbol)
++        availability = availability_from_gateway(
++            eligible=True, reason_code="TRADEABLE",
++            entry_blocked=bool(gateway_result and gateway_result.entry_blocked),
++            review_reason=gateway_result.review_reason if gateway_result else None,
++            instrument_class=verdict.instrument_class(symbol),
++        ) if gateway_result else None
++        if availability is None and row.get("overextended"):
++            availability = STATE_EXTENDED
++        setup_stage = _setup_stage(
++            row, has_pending=symbol in pending_symbols, is_held=symbol in held_symbols,
++        )
++        stage = classify(
++            symbol, _stage_score(row), availability=availability,
++            gates_cleared=setup_stage in {SETUP_STAGE_TRIGGERED, SETUP_STAGE_ENTERED},
++            evidence=(f"Hull {row.get('state')}", f"HTF {row.get('htf_state')}",
++                      f"Setup {setup_stage}"),
++        )
++        stage_verdicts.append(stage)
++        stage_by_symbol[symbol] = {
++            "stage": stage.stage, "availability": stage.availability,
++            "setup_stage": setup_stage, "badge": stage.badge,
++            "next_action": stage.next_action,
++        }
+     return {
+         "trade_date": trade_date, "market_date": trade_date,
+-        "created": created, "watch": [{"symbol": symbol, **row} for symbol, row in watch],
++        "created": [{**position, **stage_by_symbol.get(position["symbol"], {})} for position in created],
++        "watch": [{"symbol": symbol, **row, **stage_by_symbol.get(symbol, {})} for symbol, row in watch],
+         "pending": state["pending"], "expired_setups": expired, "reconciled": reconciled,
+         "positions": state["positions"], "open_positions": open_positions, "realised_pnl": round(realised, 2),
+         "unrealised_pnl": round(unrealised, 2), "total_pnl": round(realised + unrealised, 2),
+         "evaluated": len(metrics), "state_path": str(state_path),
+         "tradeability": verdict.diagnostics(),
++        "stage_funnel": build_funnel(trade_date, stage_verdicts).to_dict(),
++        "stages": stage_by_symbol,
+     }
+ 
+ 
+diff --git a/tests/test_progressive_stages.py b/tests/test_progressive_stages.py
+new file mode 100755
+index 0000000..db1b2f4
+--- /dev/null
++++ b/tests/test_progressive_stages.py
+@@ -0,0 +1,340 @@
++"""Step 8: progressive RADAR / CONFIRMING / READY detection.
++
++The point of the separation is that entry quality must not change while early
++visibility improves.  These tests assert both halves of that: a symbol below the
++strict bar becomes *visible*, and a symbol that is merely high-scoring does not
++become *enterable*.
++"""
++from __future__ import annotations
++
++from datetime import date, timedelta
++
++import pandas as pd
++import pytest
++
++from v2.progressive_stages import (
++    AVAILABILITY_STATES,
++    CIRCUIT_LOCKED,
++    CIRCUIT_WATCH,
++    CONFIRMING,
++    CORPORATE_REVIEW,
++    OBSERVE_ONLY,
++    PROGRESSION,
++    QUALIFIED,
++    RADAR,
++    READY,
++    TERMINATED,
++    UNQUALIFIED,
++    ScoreBands,
++    ScoreComponent,
++    StageVerdict,
++    availability_from_gateway,
++    build_funnel,
++    circuit_state,
++    classify,
++    compose_score,
++    highest,
++    is_at_least,
++    stage_rank,
++)
++from v2.tiered_eligibility import (
++    MIN_TIER_SESSIONS,
++    V3_TIERS,
++    evaluate_tiered_eligibility,
++    tier_funnel,
++)
++
++
++# --- vocabulary -------------------------------------------------------------
++
++def test_progression_is_strictly_ordered():
++    ranks = [stage_rank(stage) for stage in PROGRESSION]
++    assert ranks == sorted(ranks) == list(range(len(PROGRESSION)))
++
++
++def test_availability_states_rank_as_zero_and_never_imply_progress():
++    for state in AVAILABILITY_STATES:
++        assert stage_rank(state) == 0
++
++
++def test_is_at_least_and_highest():
++    assert is_at_least(READY, CONFIRMING)
++    assert not is_at_least(RADAR, CONFIRMING)
++    assert highest(RADAR, READY, CONFIRMING) == READY
++    assert highest() == UNQUALIFIED
++
++
++@pytest.mark.parametrize("score,expected", [
++    (10.0, UNQUALIFIED), (34.9, UNQUALIFIED),
++    (35.0, RADAR), (44.0, RADAR), (49.9, RADAR),
++    (50.0, CONFIRMING), (59.0, CONFIRMING), (64.9, CONFIRMING),
++    (65.0, QUALIFIED), (69.9, QUALIFIED),
++    (70.0, READY), (82.0, READY), (100.0, READY),
++])
++def test_score_bands_match_the_specification(score, expected):
++    assert ScoreBands().stage_for(score) == expected
++
++
++# --- classification ---------------------------------------------------------
++
++def test_high_score_without_cleared_gates_is_held_at_qualified():
++    """A score is not an authorisation."""
++    verdict = classify("XYZ", 82.0, gates_cleared=False,
++                       outstanding=["ENTRY_TRIGGER", "RISK_GEOMETRY"])
++    assert verdict.stage == QUALIFIED
++    assert verdict.entry_authorised is False
++    assert "ENTRY_TRIGGER" in verdict.outstanding
++
++
++def test_high_score_with_cleared_gates_is_ready():
++    verdict = classify("XYZ", 82.0, gates_cleared=True)
++    assert verdict.stage == READY
++    assert verdict.entry_authorised is True
++
++
++def test_data_pending_prevents_entry_even_at_a_ready_score():
++    verdict = classify("XYZ", 90.0, gates_cleared=True, data_pending=True)
++    assert verdict.stage == QUALIFIED
++    assert verdict.entry_authorised is False
++    assert "DATA PENDING" in verdict.describe()
++
++
++@pytest.mark.parametrize("state", sorted(
++    {CIRCUIT_LOCKED, TERMINATED, CORPORATE_REVIEW, OBSERVE_ONLY}))
++def test_availability_state_blocks_entry_at_any_score(state):
++    verdict = classify("XYZ", 95.0, gates_cleared=True, availability=state)
++    assert verdict.entry_authorised is False
++    assert verdict.display_state == state
++
++
++def test_card_leads_with_availability_but_keeps_the_stage():
++    verdict = classify("NHCFOODS", 82.0, gates_cleared=True, availability=CIRCUIT_LOCKED)
++    assert verdict.display_state == CIRCUIT_LOCKED
++    assert verdict.stage == READY, "progress is recorded even when unavailable"
++    body = verdict.describe()
++    assert "CIRCUIT_LOCKED" in body
++    assert "82/100" in body
++    assert "normal two-way trading" in body
++
++
++def test_radar_card_says_what_happens_next():
++    verdict = classify("ABC", 44.0, gates_cleared=False,
++                       evidence=["5D return +6.8%", "Turnover 1.8x normal"])
++    assert verdict.stage == RADAR
++    body = verdict.describe()
++    assert "🔵" in body and "RADAR" in body
++    assert "Turnover 1.8x normal" in body
++    assert "Next: Confirm sustained participation" in body
++
++
++# --- score composition ------------------------------------------------------
++
++def test_unmeasured_components_score_zero_and_are_reported_pending():
++    total, pending = compose_score([
++        ScoreComponent("early_momentum", 20, 20),
++        ScoreComponent("turnover_expansion", 18, 20),
++        ScoreComponent("delivery_participation", 10, 10, measured=False),
++    ])
++    assert total == 38.0
++    assert pending == ("delivery_participation",)
++
++
++def test_score_is_clamped_to_zero_and_one_hundred():
++    assert compose_score([ScoreComponent("a", 500, 100)])[0] == 100.0
++    assert compose_score([ScoreComponent("a", -50, 100)])[0] == 0.0
++
++
++# --- gateway to availability mapping ---------------------------------------
++
++def test_terminal_gateway_reason_maps_to_terminated():
++    assert availability_from_gateway(
++        eligible=False, reason_code="TERMINAL_MERGER", entry_blocked=True,
++        review_reason=None, instrument_class="EQUITY") == TERMINATED
++
++
++def test_unverified_instrument_maps_to_observe_only():
++    assert availability_from_gateway(
++        eligible=True, reason_code="TRADEABLE", entry_blocked=True,
++        review_reason=None, instrument_class="NON_EQ_UNVERIFIED") == OBSERVE_ONLY
++
++
++def test_pending_scheme_maps_to_corporate_review():
++    assert availability_from_gateway(
++        eligible=True, reason_code="TRADEABLE", entry_blocked=True,
++        review_reason="CORPORATE_ACTION_REVIEW", instrument_class="EQUITY",
++    ) == CORPORATE_REVIEW
++
++
++def test_a_healthy_equity_has_no_availability_state():
++    assert availability_from_gateway(
++        eligible=True, reason_code="TRADEABLE", entry_blocked=False,
++        review_reason=None, instrument_class="EQUITY") is None
++
++
++# --- circuit treatment ------------------------------------------------------
++
++def test_frozen_bar_is_circuit_locked():
++    assert circuit_state(high=120.0, low=120.0, prior_close=100.0) == CIRCUIT_LOCKED
++
++
++def test_two_way_trading_at_the_band_is_a_watch_not_a_lock():
++    assert circuit_state(high=120.0, low=112.0, prior_close=100.0) == CIRCUIT_WATCH
++
++
++def test_normal_bar_has_no_circuit_state():
++    assert circuit_state(high=104.0, low=98.0, prior_close=100.0) is None
++
++
++def test_resumed_trading_at_the_band_is_post_circuit_confirming():
++    state = circuit_state(high=120.0, low=112.0, prior_close=100.0,
++                          resumed_normal_trading=True)
++    assert state == "POST_CIRCUIT_CONFIRMING"
++
++
++# --- funnel -----------------------------------------------------------------
++
++def test_funnel_counts_stages_availability_and_authorisations():
++    funnel = build_funnel("2026-08-20", [
++        classify("A", 44.0, gates_cleared=False),
++        classify("B", 59.0, gates_cleared=False),
++        classify("C", 82.0, gates_cleared=True),
++        classify("D", 82.0, gates_cleared=True, availability=CIRCUIT_LOCKED),
++    ])
++    payload = funnel.to_dict()
++    assert payload["stages"] == {RADAR: 1, CONFIRMING: 1, READY: 2}
++    assert payload["availability"] == {CIRCUIT_LOCKED: 1}
++    assert payload["entry_authorised"] == 1, "the locked symbol must not count"
++    rendered = funnel.render()
++    assert "READY: 2" in rendered and "CIRCUIT_LOCKED: 1" in rendered
++
++
++# --- tiered V3 eligibility --------------------------------------------------
++
++def _history(rows: int, *, turnover_cr: float = 6.0, delivery: float = 55.0,
++             price: float = 400.0, volume: float = 500_000.0) -> pd.DataFrame:
++    days: list[str] = []
++    cursor = date(2026, 8, 20)
++    while len(days) < rows:
++        if cursor.weekday() < 5:
++            days.append(cursor.isoformat())
++        cursor -= timedelta(days=1)
++    days.sort()
++    closes = [price * (1.0 + 0.001 * i) for i in range(rows)]
++    return pd.DataFrame({
++        "symbol": "T", "trade_date": days, "close": closes,
++        "open": [c * 0.997 for c in closes], "high": [c * 1.008 for c in closes],
++        "low": [c * 0.992 for c in closes], "volume": volume,
++        "turnover_lacs": turnover_cr * 100.0, "delivery_pct": delivery,
++        "quality_status": "VALIDATED",
++    })
++
++
++META = {"symbol": "T", "series": "EQ", "active": 1, "market_cap_cr": 5_000.0,
++        "market_cap_as_of": "2026-08-20", "market_cap_source": "DIRECT_SNAPSHOT",
++        "promoter_holding_pct": 55.0, "promoter_holding_as_of": "2026-06-30",
++        "promoter_holding_available_date": "2026-07-15"}
++
++
++def test_a_mature_liquid_stock_reaches_ready():
++    result = evaluate_tiered_eligibility(
++        "T", _history(300), metadata=META, as_of_date="2026-08-20", strict=False)
++    assert result.stage == READY
++    assert result.entry_authorised is True
++    assert result.data_pending is False
++
++
++def test_a_150_session_stock_is_visible_at_radar_instead_of_invisible():
++    """The core fix: previously this symbol produced INSUFFICIENT_HISTORY."""
++    result = evaluate_tiered_eligibility(
++        "T", _history(150), metadata=META, as_of_date="2026-08-20", strict=False)
++    assert result.stage == RADAR
++    assert result.eligible is True
++    assert result.entry_authorised is False, "visible, but not enterable"
++    assert result.data_pending is True
++    assert "INSUFFICIENT_HISTORY" in result.outstanding
++
++
++def test_a_200_session_stock_reaches_confirming():
++    result = evaluate_tiered_eligibility(
++        "T", _history(200), metadata=META, as_of_date="2026-08-20", strict=False)
++    assert result.stage == CONFIRMING
++    assert result.entry_authorised is False
++
++
++def test_below_the_shallowest_tier_the_symbol_is_unqualified():
++    result = evaluate_tiered_eligibility(
++        "T", _history(100), metadata=META, as_of_date="2026-08-20", strict=False)
++    assert result.stage == UNQUALIFIED
++    assert result.eligible is False
++
++
++def test_thin_delivery_holds_a_mature_stock_below_ready_but_keeps_it_visible():
++    result = evaluate_tiered_eligibility(
++        "T", _history(300, delivery=5.0), metadata=META,
++        as_of_date="2026-08-20", strict=False)
++    assert result.stage == CONFIRMING
++    assert result.entry_authorised is False
++    assert any("DELIVERY" in code for code in result.outstanding)
++
++
++def test_the_ready_tier_is_not_relaxed():
++    """Every strict requirement must still appear on the READY tier."""
++    ready = next(tier for tier in V3_TIERS if tier.stage == READY)
++    assert ready.min_sessions == 260
++    assert ready.params["require_market_cap"] is True
++    assert ready.params["require_promoter_holding"] is True
++    assert ready.params["require_corporate_action_safety"] is True
++    assert ready.data_pending is False
++
++
++def test_lower_tiers_are_flagged_data_pending():
++    for tier in V3_TIERS:
++        if tier.stage != READY:
++            assert tier.data_pending is True
++            assert tier.params["require_market_cap"] is False
++
++
++def test_universe_must_be_loaded_to_the_shallowest_tier_depth():
++    assert MIN_TIER_SESSIONS == 120
++    assert MIN_TIER_SESSIONS == min(t.min_sessions for t in V3_TIERS)
++
++
++def test_regulatory_restriction_rejects_at_every_tier():
++    """Relaxation must not become a loophole around a hard control."""
++    result = evaluate_tiered_eligibility(
++        "T", _history(300), metadata=META, restricted_reason="ASM_STAGE_2",
++        as_of_date="2026-08-20", strict=False)
++    assert result.stage == UNQUALIFIED
++    assert set(result.outstanding) == {"RESTRICTED_SECURITY"}
++
++
++def test_non_eq_series_rejects_at_every_tier():
++    result = evaluate_tiered_eligibility(
++        "T", _history(300), metadata={**META, "series": "BE"},
++        as_of_date="2026-08-20", strict=False)
++    assert result.stage == UNQUALIFIED
++    assert set(result.outstanding) == {"NON_EQ_SERIES"}
++
++
++def test_tier_funnel_reports_stages_and_what_blocks_promotion():
++    results = {
++        "A": evaluate_tiered_eligibility("A", _history(300), metadata=META,
++                                         as_of_date="2026-08-20", strict=False),
++        "B": evaluate_tiered_eligibility("B", _history(150), metadata=META,
++                                         as_of_date="2026-08-20", strict=False),
++    }
++    funnel = tier_funnel(results)
++    assert funnel["stages"][READY] == 1
++    assert funnel["stages"][RADAR] == 1
++    assert funnel["entry_authorised"] == 1
++    assert "INSUFFICIENT_HISTORY" in funnel["ready_blockers"]
++
++
++def test_tiered_result_converts_to_a_stage_verdict():
++    result = evaluate_tiered_eligibility(
++        "T", _history(150), metadata=META, as_of_date="2026-08-20", strict=False)
++    verdict = result.to_stage_verdict(score=44.0, evidence=["EMA20 turning up"])
++    assert isinstance(verdict, StageVerdict)
++    assert verdict.stage == RADAR
++    assert verdict.entry_authorised is False
++    assert "EMA20 turning up" in verdict.describe()
+diff --git a/v2/orchestrator.py b/v2/orchestrator.py
+index 8a102f4..b33a10f 100644
+--- a/v2/orchestrator.py
++++ b/v2/orchestrator.py
+@@ -14,6 +14,16 @@ from .daily_portfolio import process_portfolio_day
+ from .database import V2Database
+ from .eligibility import EligibilityResult, evaluate_eligibility
+ from .freshness import FreshnessStatus, assess_freshness
++from .progressive_stages import (
++    READY as STAGE_READY,
++    availability_from_gateway,
++    build_funnel,
++)
++from .tiered_eligibility import (
++    MIN_TIER_SESSIONS,
++    evaluate_tiered_eligibility,
++    tier_funnel,
++)
+ from .tradeability import evaluate_universe, market_date_from_prices
+ from .lifecycle import new_position
+ from .portfolio_message import render_portfolio_message
+@@ -59,6 +69,11 @@ class DailyRunResult:
+     #: Displayed and scored, but withheld from a fresh paper entry because a
+     #: corporate event is pending against the symbol.
+     entry_blocked_symbols: tuple[str, ...] = ()
++    #: RADAR / CONFIRMING / READY counts and what is blocking promotion.
++    stage_funnel: dict | None = None
++    #: Symbols visible at RADAR or CONFIRMING but not authorised for entry.
++    radar_symbols: tuple[str, ...] = ()
++    confirming_symbols: tuple[str, ...] = ()
+ 
+     def to_dict(self) -> dict:
+         return asdict(self)
+@@ -93,11 +108,16 @@ def run_daily(
+     portfolio_config: PortfolioConfig = PortfolioConfig(),
+     diagnostics_output_dir: str | Path = "output",
+     strict_v3_eligibility: bool = True,
++    progressive_stages: bool = True,
+ ) -> DailyRunResult:
+     run_date = pd.Timestamp(as_of or date.today()).date()
+     database = V2Database(db_path)
+     database.ensure_v3_schema()
+-    prices = database.load_prices(end_date=run_date.isoformat(), min_sessions=260)
++    # The universe is loaded to the *shallowest* tier depth. Loading at 260
++    # sessions made DISCOVERY_RADAR unreachable by construction: a stock with
++    # 150 sessions could never be seen, however strongly it was moving.
++    min_history = MIN_TIER_SESSIONS if progressive_stages else 260
++    prices = database.load_prices(end_date=run_date.isoformat(), min_sessions=min_history)
+     if prices.empty:
+         raise RuntimeError("No usable V2 price history")
+     market_date = market_date_from_prices(prices) or run_date.isoformat()
+@@ -142,6 +162,10 @@ def run_daily(
+     database.save_tradeability_audit(market_date, tradeability.results)
+ 
+     eligibility_results = {}
++    tiered_results: dict[str, object] = {}
++    stage_verdicts: list = []
++    radar_symbols: list[str] = []
++    confirming_symbols: list[str] = []
+     candidates = []
+     for symbol, frame in prices.groupby("symbol"):
+         symbol = str(symbol)
+@@ -164,16 +188,45 @@ def run_daily(
+                 },
+             )
+             continue
+-        eligibility = evaluate_eligibility(
+-            symbol, frame, metadata=metadata.get(symbol), restricted_reason=restricted.get(symbol),
+-            as_of_date=run_date.isoformat(),
+-            require_market_cap=strict_v3_eligibility,
+-            require_promoter_holding=strict_v3_eligibility,
+-            require_corporate_action_safety=strict_v3_eligibility,
+-        )
+-        eligibility_results[symbol] = eligibility
+-        if not eligibility.eligible:
+-            continue
++        if progressive_stages:
++            tiered = evaluate_tiered_eligibility(
++                symbol, frame, metadata=metadata.get(symbol),
++                restricted_reason=restricted.get(symbol),
++                as_of_date=run_date.isoformat(), strict=strict_v3_eligibility,
++            )
++            tiered_results[symbol] = tiered
++            eligibility = tiered.result
++            eligibility_results[symbol] = eligibility
++            if not tiered.eligible:
++                continue
++            stage_verdicts.append(tiered.to_stage_verdict(
++                availability=availability_from_gateway(
++                    eligible=True,
++                    reason_code=verdict.reason_code if verdict else "TRADEABLE",
++                    entry_blocked=bool(verdict and verdict.entry_blocked),
++                    review_reason=verdict.review_reason if verdict else None,
++                    instrument_class=verdict.instrument_class if verdict else "EQUITY",
++                ),
++            ))
++            # Only a full strict pass may proceed to entry authorisation; the
++            # lower tiers are observation surfaces.
++            if not tiered.entry_authorised:
++                if tiered.stage == "RADAR":
++                    radar_symbols.append(symbol)
++                else:
++                    confirming_symbols.append(symbol)
++                continue
++        else:
++            eligibility = evaluate_eligibility(
++                symbol, frame, metadata=metadata.get(symbol), restricted_reason=restricted.get(symbol),
++                as_of_date=run_date.isoformat(),
++                require_market_cap=strict_v3_eligibility,
++                require_promoter_holding=strict_v3_eligibility,
++                require_corporate_action_safety=strict_v3_eligibility,
++            )
++            eligibility_results[symbol] = eligibility
++            if not eligibility.eligible:
++                continue
+         previous = store.opportunity_state(symbol)
+         candidates.append(evaluate_candidate(
+             symbol, frame, regime, stale_data=freshness.prices_stale,
+@@ -187,6 +240,12 @@ def run_daily(
+         result.reason_code for result in eligibility_results.values() if not result.eligible
+     )
+     tradeability_funnel = tradeability.diagnostics()
++    stage_funnel = None
++    if progressive_stages:
++        stage_funnel = {
++            **build_funnel(market_date, stage_verdicts).to_dict(),
++            **tier_funnel(tiered_results),
++        }
+     eligibility_funnel = {
+         "mode": "V3_STRICT" if strict_v3_eligibility else "V2_COMPATIBLE",
+         "market_date": market_date,
+@@ -233,6 +292,15 @@ def run_daily(
+         )
+     for symbol in tradeability_funnel["review_symbols"][:10]:
+         funnel_lines.append(f"CORPORATE REVIEW {symbol}: entry withheld")
++    if stage_funnel:
++        funnel_lines.append("")
++        funnel_lines.append(f"PROGRESSIVE FUNNEL — {market_date}")
++        for stage, count in stage_funnel.get("stages", {}).items():
++            funnel_lines.append(f"{stage}: {count}")
++        funnel_lines.append(f"Entry authorised: {stage_funnel.get('entry_authorised', 0)}")
++        blockers = stage_funnel.get("ready_blockers", {})
++        for reason, count in list(blockers.items())[:6]:
++            funnel_lines.append(f"held by {reason}: {count}")
+     admin_message = "\n".join(funnel_lines) + "\n\n" + render_admin_diagnostics(diagnostics)
+ 
+     persisted_candidates = sorted(
+@@ -362,4 +430,7 @@ def run_daily(
+         eligibility_funnel=eligibility_funnel, market_date=market_date,
+         tradeability_funnel=tradeability_funnel,
+         entry_blocked_symbols=tuple(sorted(set(entry_blocked))),
++        stage_funnel=stage_funnel,
++        radar_symbols=tuple(sorted(radar_symbols)),
++        confirming_symbols=tuple(sorted(confirming_symbols)),
+     )
+diff --git a/v2/progressive_stages.py b/v2/progressive_stages.py
+new file mode 100755
+index 0000000..38cc692
+--- /dev/null
++++ b/v2/progressive_stages.py
+@@ -0,0 +1,376 @@
++"""Progressive detection stages shared in *shape* by every scanner.
++
++The problem this solves
++----------------------
++When every criterion is compulsory from the first pass, a scanner only ever
++identifies mature setups and structurally cannot see a move beginning.  V3 shows
++this plainly: on 2026-08-20 it admitted 2,157 symbols and rejected 1,522 of
++them, most for liquidity and delivery thresholds that a stock only satisfies
++*after* participation has already expanded.
++
++The fix is not to weaken the entry rules.  It is to separate three questions
++that were previously collapsed into one:
++
++===============  ==========================================  ==========
++Stage            Question                                    Strictness
++===============  ==========================================  ==========
++``RADAR``        Is something starting?                      Flexible
++``CONFIRMING``   Is the participation genuine?               Moderate
++``READY``        May we authorise an entry?                  Strict
++===============  ==========================================  ==========
++
++A symbol reaches Telegram at ``RADAR``.  Only ``READY`` authorises a paper
++entry.  Entry quality is therefore unchanged while early visibility improves.
++
++What is shared and what is not
++------------------------------
++Only the *vocabulary and progression* are shared.  Each scanner keeps its own
++independent strategy rules and its own thresholds — V3 stays a weekly
++relative-strength system, the Momentum Ladder stays a multi-horizon momentum
++ladder, Hull Pine stays a Hull/KAMA trend system.  This module deliberately
++contains no strategy logic.
++"""
++from __future__ import annotations
++
++from dataclasses import asdict, dataclass, field
++from typing import Mapping, Sequence
++
++# --- shared vocabulary ------------------------------------------------------
++
++#: Nothing is happening yet.
++UNQUALIFIED = "UNQUALIFIED"
++#: Movement is detectable; this is an observation, not a setup.
++RADAR = "RADAR"
++#: Participation is confirming; still not an entry.
++CONFIRMING = "CONFIRMING"
++#: Strategy conditions are met but an entry gate is still outstanding.
++QUALIFIED = "QUALIFIED"
++#: Every gate is satisfied; an entry may be authorised.
++READY = "READY"
++
++PROGRESSION: tuple[str, ...] = (UNQUALIFIED, RADAR, CONFIRMING, QUALIFIED, READY)
++
++#: Parallel states that describe *availability* rather than progress.  A symbol
++#: in one of these is displayed, never silently discarded, and never entered.
++CIRCUIT_WATCH = "CIRCUIT_WATCH"
++CIRCUIT_LOCKED = "CIRCUIT_LOCKED"
++POST_CIRCUIT_CONFIRMING = "POST_CIRCUIT_CONFIRMING"
++EXTENDED = "EXTENDED"
++CORPORATE_REVIEW = "CORPORATE_REVIEW"
++TERMINATED = "TERMINATED"
++OBSERVE_ONLY = "OBSERVE_ONLY"
++
++AVAILABILITY_STATES: frozenset[str] = frozenset({
++    CIRCUIT_WATCH, CIRCUIT_LOCKED, POST_CIRCUIT_CONFIRMING, EXTENDED,
++    CORPORATE_REVIEW, TERMINATED, OBSERVE_ONLY,
++})
++
++#: States in which no new entry may be authorised, whatever the score.
++ENTRY_BLOCKING_STATES: frozenset[str] = frozenset({
++    CIRCUIT_LOCKED, TERMINATED, CORPORATE_REVIEW, OBSERVE_ONLY, EXTENDED,
++})
++
++_STAGE_RANK = {stage: index for index, stage in enumerate(PROGRESSION)}
++
++#: Display prefix per stage, used by every scanner's Telegram card.
++STAGE_BADGE = {
++    UNQUALIFIED: "⚪",
++    RADAR: "🔵",
++    CONFIRMING: "🟡",
++    QUALIFIED: "🟢",
++    READY: "🟢",
++    EXTENDED: "🔴",
++    CIRCUIT_WATCH: "🟠",
++    CIRCUIT_LOCKED: "🔴",
++    POST_CIRCUIT_CONFIRMING: "🟡",
++    CORPORATE_REVIEW: "⚠️",
++    TERMINATED: "⛔",
++    OBSERVE_ONLY: "⬜",
++}
++
++#: The one-line "what happens next" shown under each card.
++STAGE_NEXT_ACTION = {
++    RADAR: "Confirm sustained participation",
++    CONFIRMING: "Await closed-bar confirmation",
++    QUALIFIED: "Await the entry trigger",
++    READY: "Entry authorised",
++    EXTENDED: "Too far extended; wait for a pullback or base",
++    CIRCUIT_WATCH: "Monitor; liquidity may be one-sided",
++    CIRCUIT_LOCKED: "Entry unavailable; wait for normal two-way trading",
++    POST_CIRCUIT_CONFIRMING: "Normal trading resumed; re-confirm participation",
++    CORPORATE_REVIEW: "Corporate event pending; entry withheld",
++    TERMINATED: "Security is terminal; excluded from current scanning",
++    OBSERVE_ONLY: "Unverified instrument; observation only",
++}
++
++
++def stage_rank(stage: str) -> int:
++    """Ordinal position in the progression; availability states rank as 0."""
++    return _STAGE_RANK.get(stage, 0)
++
++
++def is_at_least(stage: str, minimum: str) -> bool:
++    return stage_rank(stage) >= stage_rank(minimum)
++
++
++def highest(*stages: str) -> str:
++    """The most advanced of several progression stages."""
++    candidates = [s for s in stages if s in _STAGE_RANK]
++    return max(candidates, key=stage_rank) if candidates else UNQUALIFIED
++
++
++@dataclass(frozen=True)
++class StageVerdict:
++    """A symbol's progression stage plus the availability state layered on it."""
++
++    symbol: str
++    stage: str
++    #: Availability state, when one applies. Displayed alongside the stage.
++    availability: str | None = None
++    #: Score on the scanner's own 0-100 scale, when it has one.
++    score: float | None = None
++    #: True when data needed for the strict gates is still missing.
++    data_pending: bool = False
++    #: Human-readable evidence for why this stage was reached.
++    evidence: tuple[str, ...] = ()
++    #: Gates that must still clear before READY.
++    outstanding: tuple[str, ...] = ()
++    detail: str | None = None
++
++    @property
++    def entry_authorised(self) -> bool:
++        """READY, verified, and not blocked by an availability state."""
++        if self.availability in ENTRY_BLOCKING_STATES:
++            return False
++        return self.stage == READY and not self.data_pending
++
++    @property
++    def display_state(self) -> str:
++        """What the card leads with."""
++        return self.availability or self.stage
++
++    @property
++    def badge(self) -> str:
++        return STAGE_BADGE.get(self.display_state, "⚪")
++
++    @property
++    def next_action(self) -> str:
++        return STAGE_NEXT_ACTION.get(self.display_state, "")
++
++    def to_dict(self) -> dict:
++        return asdict(self)
++
++    def describe(self) -> str:
++        """The card body, without scanner-specific numbers."""
++        header = f"{self.badge} {self.symbol} • {self.display_state}"
++        if self.score is not None:
++            header += f" • {self.score:.0f}/100"
++        lines = [header]
++        if self.data_pending:
++            lines.append("DATA PENDING — strict gates unverified")
++        lines.extend(f"• {item}" for item in self.evidence)
++        if self.outstanding:
++            lines.append("Outstanding: " + ", ".join(self.outstanding))
++        if self.next_action:
++            lines.append(f"Next: {self.next_action}")
++        return "\n".join(lines)
++
++
++# --- score-based classification --------------------------------------------
++
++@dataclass(frozen=True)
++class ScoreBands:
++    """Score thresholds separating the progression stages.
++
++    Defaults follow the sprint specification: 35-49 radar, 50-64 confirming,
++    65+ qualified for review, 70+ with every gate cleared for ready.
++    """
++
++    radar: float = 35.0
++    confirming: float = 50.0
++    qualified: float = 65.0
++    ready: float = 70.0
++
++    def stage_for(self, score: float) -> str:
++        if score >= self.ready:
++            return READY
++        if score >= self.qualified:
++            return QUALIFIED
++        if score >= self.confirming:
++            return CONFIRMING
++        if score >= self.radar:
++            return RADAR
++        return UNQUALIFIED
++
++
++DEFAULT_BANDS = ScoreBands()
++
++
++@dataclass(frozen=True)
++class ScoreComponent:
++    """One weighted contribution to a scanner's 0-100 score."""
++
++    name: str
++    points: float
++    max_points: float
++    #: False when the component could not be measured, so it scores zero but is
++    #: reported as pending rather than as a failure.
++    measured: bool = True
++
++    @property
++    def earned(self) -> float:
++        return max(0.0, min(self.points, self.max_points)) if self.measured else 0.0
++
++
++#: The component weights from the sprint specification.  A scanner supplies its
++#: own measurements; the weighting is shared so scores stay comparable.
++COMPONENT_WEIGHTS: Mapping[str, float] = {
++    "early_momentum": 20.0,
++    "turnover_expansion": 20.0,
++    "trend_formation": 15.0,
++    "base_or_breakout_quality": 15.0,
++    "relative_strength": 10.0,
++    "delivery_participation": 10.0,
++    "executability": 10.0,
++}
++
++
++def compose_score(components: Sequence[ScoreComponent]) -> tuple[float, tuple[str, ...]]:
++    """Total a component list and name the components that could not be measured."""
++    total = sum(component.earned for component in components)
++    pending = tuple(c.name for c in components if not c.measured)
++    return round(min(100.0, max(0.0, total)), 2), pending
++
++
++def classify(
++    symbol: str,
++    score: float,
++    *,
++    bands: ScoreBands = DEFAULT_BANDS,
++    availability: str | None = None,
++    gates_cleared: bool = True,
++    data_pending: bool = False,
++    evidence: Sequence[str] = (),
++    outstanding: Sequence[str] = (),
++    detail: str | None = None,
++) -> StageVerdict:
++    """Turn a score plus gate outcomes into a stage verdict.
++
++    ``gates_cleared`` is the scanner's own strict entry check — trigger, risk
++    geometry, regime permission, executability.  A symbol may score above the
++    ready band and still be held at ``QUALIFIED`` because a gate is outstanding;
++    that is the point of the separation.
++    """
++    stage = bands.stage_for(score)
++    if stage == READY and not (gates_cleared and not data_pending):
++        stage = QUALIFIED
++    return StageVerdict(
++        symbol=symbol, stage=stage, availability=availability, score=score,
++        data_pending=data_pending, evidence=tuple(evidence),
++        outstanding=tuple(outstanding), detail=detail,
++    )
++
++
++# --- availability resolution -------------------------------------------------
++
++def availability_from_gateway(
++    *,
++    eligible: bool,
++    reason_code: str,
++    entry_blocked: bool,
++    review_reason: str | None,
++    instrument_class: str,
++) -> str | None:
++    """Map a tradeability verdict onto an availability state.
++
++    Keeps the gateway's vocabulary and the display vocabulary separate, so the
++    gateway can stay strategy-agnostic while cards stay readable.
++    """
++    if not eligible:
++        if reason_code in {"TERMINAL_MERGER", "DELISTED_SECURITY", "SUSPENDED_SECURITY"}:
++            return TERMINATED
++        return None
++    if instrument_class != "EQUITY":
++        return OBSERVE_ONLY
++    if review_reason == "CORPORATE_ACTION_REVIEW":
++        return CORPORATE_REVIEW
++    if entry_blocked:
++        return CORPORATE_REVIEW
++    return None
++
++
++def circuit_state(
++    *,
++    high: float,
++    low: float,
++    prior_close: float,
++    band_pct: float = 20.0,
++    resumed_normal_trading: bool = False,
++) -> str | None:
++    """Classify circuit behaviour from a single bar.
++
++    A bar with no range at the band edge is locked; a bar that reaches the band
++    but still trades two-way is a watch.  Circuit symbols are displayed under
++    these states rather than dropped, so a mover is never invisible merely
++    because it is temporarily unbuyable.
++    """
++    if prior_close <= 0 or high < low:
++        return None
++    limit = prior_close * (1.0 + band_pct / 100.0)
++    floor_ = prior_close * (1.0 - band_pct / 100.0)
++    at_band = high >= limit * 0.999 or low <= floor_ * 1.001
++    frozen = high <= low
++    if frozen and at_band:
++        return CIRCUIT_LOCKED
++    if frozen:
++        return CIRCUIT_LOCKED
++    if at_band:
++        return POST_CIRCUIT_CONFIRMING if resumed_normal_trading else CIRCUIT_WATCH
++    return None
++
++
++# --- reporting --------------------------------------------------------------
++
++@dataclass
++class StageFunnel:
++    """Counts per stage and availability state, for diagnostics and Telegram."""
++
++    market_date: str
++    stages: dict[str, int] = field(default_factory=dict)
++    availability: dict[str, int] = field(default_factory=dict)
++    entry_authorised: int = 0
++
++    def add(self, verdict: StageVerdict) -> None:
++        self.stages[verdict.stage] = self.stages.get(verdict.stage, 0) + 1
++        if verdict.availability:
++            self.availability[verdict.availability] = \
++                self.availability.get(verdict.availability, 0) + 1
++        if verdict.entry_authorised:
++            self.entry_authorised += 1
++
++    def to_dict(self) -> dict:
++        return {
++            "market_date": self.market_date,
++            "stages": {stage: self.stages.get(stage, 0) for stage in PROGRESSION
++                       if self.stages.get(stage)},
++            "availability": dict(sorted(self.availability.items())),
++            "entry_authorised": self.entry_authorised,
++        }
++
++    def render(self, title: str = "PROGRESSIVE FUNNEL") -> str:
++        lines = [f"{title} — {self.market_date}"]
++        for stage in reversed(PROGRESSION):
++            count = self.stages.get(stage, 0)
++            if count:
++                lines.append(f"{STAGE_BADGE.get(stage, '')} {stage}: {count}")
++        for state, count in sorted(self.availability.items()):
++            lines.append(f"{STAGE_BADGE.get(state, '')} {state}: {count}")
++        lines.append(f"Entry authorised: {self.entry_authorised}")
++        return "\n".join(lines)
++
++
++def build_funnel(market_date: str, verdicts: Sequence[StageVerdict]) -> StageFunnel:
++    funnel = StageFunnel(market_date=market_date)
++    for verdict in verdicts:
++        funnel.add(verdict)
++    return funnel
+diff --git a/v2/tiered_eligibility.py b/v2/tiered_eligibility.py
+new file mode 100755
+index 0000000..f39f8ff
+--- /dev/null
++++ b/v2/tiered_eligibility.py
+@@ -0,0 +1,209 @@
++"""Tiered V3 eligibility: wide detection, progressive confirmation, strict entry.
++
++V3's eligibility was a single all-or-nothing test at 260 sessions with hard
++market-cap, turnover, delivery and promoter gates.  On 2026-08-20 that rejected
++1,522 of 2,157 admitted symbols, overwhelmingly for thresholds a stock only
++satisfies *after* participation has already expanded — which is exactly the
++phase we wanted to catch.
++
++This module reuses ``evaluate_eligibility`` unchanged and simply runs it at
++three strictness tiers, strictest first.  The first tier a symbol passes is its
++stage:
++
++===================  ========  =======================================
++Tier                 Sessions  Data requirements
++===================  ========  =======================================
++``READY``                 260  Verified market cap and promoter holding
++``CONFIRMING``            180  Turnover and delivery confirmation
++``DISCOVERY_RADAR``       120  Liquidity floor only; fundamentals may be
++                               absent, and the card says DATA PENDING
++===================  ========  =======================================
++
++Nothing about the ``READY`` tier is relaxed.  Entry authorisation still requires
++the full 260-session strict pass, so entry quality is unchanged; only visibility
++below it improves.
++"""
++from __future__ import annotations
++
++from dataclasses import dataclass
++from typing import Mapping, Sequence
++
++import pandas as pd
++
++from .eligibility import EligibilityResult, evaluate_eligibility
++from .progressive_stages import (
++    CONFIRMING,
++    RADAR,
++    READY,
++    UNQUALIFIED,
++    StageVerdict,
++)
++
++#: Stage name used in V3 reporting for the widest tier.
++DISCOVERY_RADAR = RADAR
++
++
++@dataclass(frozen=True)
++class Tier:
++    """One strictness level and the eligibility parameters that define it."""
++
++    stage: str
++    label: str
++    min_sessions: int
++    params: Mapping[str, object]
++    #: True when this tier does not require verified fundamental data, so a
++    #: symbol admitted here must be shown as DATA PENDING.
++    data_pending: bool = False
++
++
++#: Strictest first.  ``min_price`` and volume floors are held constant across
++#: tiers because they define the tradable universe rather than maturity; only
++#: maturity, participation and data-verification requirements relax.
++V3_TIERS: tuple[Tier, ...] = (
++    Tier(
++        stage=READY, label="READY", min_sessions=260,
++        params={
++            "min_sessions": 260,
++            "min_median_turnover_cr_20": 5.0,
++            "min_delivery_5": 30.0,
++            "min_delivery_20": 25.0,
++            "require_market_cap": True,
++            "require_promoter_holding": True,
++            "require_corporate_action_safety": True,
++        },
++    ),
++    Tier(
++        stage=CONFIRMING, label="CONFIRMING", min_sessions=180,
++        params={
++            "min_sessions": 180,
++            "min_median_turnover_cr_20": 0.5,
++            "min_delivery_5": 0.0,
++            "min_delivery_20": 0.0,
++            "require_market_cap": False,
++            "require_promoter_holding": False,
++            "require_corporate_action_safety": False,
++        },
++        data_pending=True,
++    ),
++    Tier(
++        stage=DISCOVERY_RADAR, label="DISCOVERY_RADAR", min_sessions=120,
++        params={
++            "min_sessions": 120,
++            "min_median_turnover_cr_20": 0.25,
++            "min_delivery_5": 0.0,
++            "min_delivery_20": 0.0,
++            "require_market_cap": False,
++            "require_promoter_holding": False,
++            "require_corporate_action_safety": False,
++        },
++        data_pending=True,
++    ),
++)
++
++#: The lowest session count any tier needs. Prices must be loaded to at least
++#: this depth or the radar tier can never be reached.
++MIN_TIER_SESSIONS = min(tier.min_sessions for tier in V3_TIERS)
++
++
++@dataclass(frozen=True)
++class TieredResult:
++    """The outcome of running every tier for one symbol."""
++
++    symbol: str
++    stage: str
++    #: The eligibility result of the tier that admitted the symbol, or of the
++    #: strictest tier attempted when none did.
++    result: EligibilityResult
++    data_pending: bool
++    #: Reason codes from the tiers the symbol failed, strictest first, so the
++    #: card can say what is still outstanding.
++    outstanding: tuple[str, ...] = ()
++    sessions: int = 0
++
++    @property
++    def eligible(self) -> bool:
++        return self.stage != UNQUALIFIED
++
++    @property
++    def entry_authorised(self) -> bool:
++        return self.stage == READY and not self.data_pending
++
++    def to_stage_verdict(
++        self, *, score: float | None = None, availability: str | None = None,
++        evidence: Sequence[str] = (),
++    ) -> StageVerdict:
++        return StageVerdict(
++            symbol=self.symbol, stage=self.stage, availability=availability,
++            score=score, data_pending=self.data_pending,
++            evidence=tuple(evidence), outstanding=self.outstanding,
++            detail=self.result.reason_code if not self.entry_authorised else None,
++        )
++
++
++def evaluate_tiered_eligibility(
++    symbol: str,
++    frame: pd.DataFrame,
++    *,
++    metadata: Mapping[str, object] | None = None,
++    restricted_reason: str | None = None,
++    as_of_date: str | None = None,
++    tiers: Sequence[Tier] = V3_TIERS,
++    strict: bool = True,
++    **overrides,
++) -> TieredResult:
++    """Return the most advanced tier ``symbol`` satisfies.
++
++    ``strict=False`` reproduces the previous V2-compatible behaviour for the
++    READY tier only; the lower tiers are unaffected because they already do not
++    require verified fundamental data.
++    """
++    sessions = 0
++    if frame is not None and "trade_date" in getattr(frame, "columns", ()):
++        sessions = int(pd.to_datetime(frame["trade_date"], errors="coerce").nunique())
++
++    outstanding: list[str] = []
++    strictest: EligibilityResult | None = None
++    for tier in tiers:
++        params = dict(tier.params)
++        if tier.stage == READY and not strict:
++            params.update({
++                "require_market_cap": False,
++                "require_promoter_holding": False,
++                "require_corporate_action_safety": False,
++            })
++        params.update(overrides)
++        result = evaluate_eligibility(
++            symbol, frame, metadata=metadata, restricted_reason=restricted_reason,
++            as_of_date=as_of_date, **params,
++        )
++        if strictest is None:
++            strictest = result
++        if result.eligible:
++            return TieredResult(
++                symbol=symbol, stage=tier.stage, result=result,
++                data_pending=tier.data_pending, outstanding=tuple(outstanding),
++                sessions=sessions,
++            )
++        outstanding.append(result.reason_code)
++
++    assert strictest is not None
++    return TieredResult(
++        symbol=symbol, stage=UNQUALIFIED, result=strictest, data_pending=True,
++        outstanding=tuple(outstanding), sessions=sessions,
++    )
++
++
++def tier_funnel(results: Mapping[str, TieredResult]) -> dict:
++    """Stage counts plus the reason a symbol stopped where it did."""
++    stages: dict[str, int] = {}
++    blocked_at_ready: dict[str, int] = {}
++    for result in results.values():
++        stages[result.stage] = stages.get(result.stage, 0) + 1
++        if result.stage != READY and result.outstanding:
++            code = result.outstanding[0]
++            blocked_at_ready[code] = blocked_at_ready.get(code, 0) + 1
++    return {
++        "stages": dict(sorted(stages.items(), key=lambda item: -item[1])),
++        "ready_blockers": dict(sorted(blocked_at_ready.items(), key=lambda item: -item[1])),
++        "entry_authorised": sum(1 for r in results.values() if r.entry_authorised),
++    }
+-- 
+2.34.1
+

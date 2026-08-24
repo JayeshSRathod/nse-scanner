@@ -1,0 +1,499 @@
+From 9137099e22633fc2c2c5082d182aadf742f8376b Mon Sep 17 00:00:00 2001
+From: Jayesh Rathod <jayesh4.rathod@ril.com>
+Date: Fri, 21 Aug 2026 12:52:16 +0530
+Subject: [PATCH 02/14] Apply the tradeability gateway to NSE Scanner V3
+
+Step 4 of the Cross-Scanner Eligibility and Corporate Lifecycle Sprint.
+
+V3 now runs the shared gateway before its own strategy logic, so a symbol that
+is not currently tradeable never reaches evaluate_candidate at all.
+
+Changes to v2/orchestrator.py
+----------------------------
+* market_date is derived from the newest completed session in the universe
+  rather than the calendar run date. On a weekend or exchange holiday the run
+  date runs ahead of the data, and gating a Sunday run against Sunday would
+  mark every symbol stale. Regulatory restrictions are read at the market date
+  for gateway purposes for the same reason.
+* The gateway runs once over the whole universe before the candidate loop.
+  Refusals are converted into EligibilityResult rows, so they flow through the
+  existing v3_eligibility_audit table and the existing funnel without a second
+  reporting path. Gateway verdicts are additionally persisted to
+  tradeability_audit_v3.
+* entry_blocked is enforced at position creation: a symbol under an APPROVED
+  corporate scheme stays ranked and displayed but cannot open a fresh paper
+  position. Terminal symbols are already gone by this point.
+* The admin message gains a TRADEABILITY GATEWAY section that names terminal
+  symbols with their successor and flags a run date that trails the data.
+* DailyRunResult gains market_date, tradeability_funnel and
+  entry_blocked_symbols.
+
+Verified against the real CSV store, market date 2026-08-20:
+
+  TRADEABILITY GATEWAY - market date 2026-08-20
+  Admitted: 1657 of 2157
+  NOT_IN_CURRENT_NSE_UNIVERSE: 265
+  NON_EQ_SERIES: 123
+  RESTRICTED_SECURITY: 111
+  TERMINAL_MERGER: 1
+  TERMINAL JBCHEPHARM: TERMINAL_MERGER -> TORNTPHARM
+  CORPORATE REVIEW KIRLPNU: entry withheld
+
+Historical replay is unaffected: a run at as_of=2026-07-16 still admits
+JBCHEPHARM as TRADEABLE, and its price history is untouched. Both are asserted
+in tests/test_v3_tradeability_wiring.py (12 tests).
+
+Suite: 253 passed. The 7 failures in tests/test_institutional_telegram.py,
+test_v2_sprint3.py and test_v2_sprint4_processor.py are stale Telegram
+copy-text assertions that fail identically on pristine main.
+
+Momentum Ladder and Hull Pine are not wired yet; those are steps 5 and 6.
+---
+ tests/test_v3_tradeability_wiring.py | 287 +++++++++++++++++++++++++++
+ v2/orchestrator.py                   |  73 ++++++-
+ 2 files changed, 358 insertions(+), 2 deletions(-)
+ create mode 100755 tests/test_v3_tradeability_wiring.py
+
+diff --git a/tests/test_v3_tradeability_wiring.py b/tests/test_v3_tradeability_wiring.py
+new file mode 100755
+index 0000000..d5ccb9f
+--- /dev/null
++++ b/tests/test_v3_tradeability_wiring.py
+@@ -0,0 +1,287 @@
++"""Step 4: the Pre-Scan Tradeability Gateway must govern NSE Scanner V3.
++
++These tests drive ``run_daily`` end to end against a synthetic database so the
++gateway's effect on the real V3 funnel is observable: a merged symbol never
++reaches candidate evaluation, a stale symbol never reaches candidate evaluation,
++and a symbol under a pending corporate event is still displayed but cannot open
++a paper position.
++"""
++from __future__ import annotations
++
++import sqlite3
++from datetime import date, timedelta
++from pathlib import Path
++
++import pandas as pd
++import pytest
++
++from v2.database import V2Database
++from v2.orchestrator import run_daily
++from v2.security_lifecycle import LifecycleEvent, upsert_events
++
++MARKET_DATE = "2026-08-20"
++SESSIONS = 320
++
++
++def _weekdays(count: int, end: str) -> list[str]:
++    days: list[str] = []
++    cursor = date.fromisoformat(end)
++    while len(days) < count:
++        if cursor.weekday() < 5:
++            days.append(cursor.isoformat())
++        cursor -= timedelta(days=1)
++    return sorted(days)
++
++
++def _series(symbol: str, days: list[str], base: float, drift: float) -> pd.DataFrame:
++    """A clean, steadily rising series so the symbol is a plausible candidate."""
++    closes = [base * (1.0 + drift) ** index for index in range(len(days))]
++    frame = pd.DataFrame({
++        "symbol": symbol,
++        "trade_date": days,
++        "close": closes,
++    })
++    frame["open"] = frame["close"] * 0.995
++    frame["high"] = frame["close"] * 1.012
++    frame["low"] = frame["close"] * 0.988
++    frame["prev_close"] = frame["close"].shift(1).fillna(frame["close"])
++    frame["last_price"] = frame["close"]
++    frame["avg_price"] = frame["close"]
++    frame["volume"] = 900_000
++    frame["turnover_lacs"] = frame["close"] * 9_000
++    frame["trades"] = 40_000
++    frame["delivery_qty"] = 500_000
++    frame["delivery_pct"] = 55.0
++    frame["quality_status"] = "VALIDATED"
++    return frame
++
++
++FRESH_DAYS = _weekdays(SESSIONS, MARKET_DATE)
++STALE_DAYS = _weekdays(SESSIONS, "2026-07-16")
++
++#: symbol -> (days, base price, per-session drift)
++UNIVERSE = {
++    "GOODCO": (FRESH_DAYS, 400.0, 0.0022),
++    "ALSOGOOD": (FRESH_DAYS, 650.0, 0.0018),
++    "PENDCO": (FRESH_DAYS, 520.0, 0.0020),
++    "JBCHEPHARM": (STALE_DAYS, 1800.0, 0.0021),
++    "STALECO": (STALE_DAYS, 300.0, 0.0019),
++}
++
++JBCHEPHARM_EVENT = LifecycleEvent(
++    symbol="JBCHEPHARM", event_type="AMALGAMATION", status="EFFECTIVE",
++    effective_date="2026-07-08", record_date="2026-07-17",
++    last_trading_date="2026-07-16", successor_symbol="TORNTPHARM",
++    exchange_ratio_from=100.0, exchange_ratio_to=51.0,
++    source="TORRENT_PHARMA_EXCHANGE_FILING", terminal=True,
++)
++
++PENDCO_EVENT = LifecycleEvent(
++    symbol="PENDCO", event_type="AMALGAMATION", status="APPROVED",
++    announcement_date="2026-05-01", effective_date="2026-11-01",
++    successor_symbol="BIGCO", exchange_ratio_from=4.0, exchange_ratio_to=3.0,
++    source="TEST", terminal=False,
++)
++
++
++@pytest.fixture()
++def database(tmp_path: Path) -> Path:
++    path = tmp_path / "nse_scanner.db"
++    with sqlite3.connect(path) as conn:
++        conn.execute("""CREATE TABLE daily_prices_v2 (
++            symbol TEXT NOT NULL, trade_date TEXT NOT NULL, prev_close REAL,
++            open REAL, high REAL, low REAL, last_price REAL, close REAL,
++            avg_price REAL, volume REAL, turnover_lacs REAL, trades REAL,
++            delivery_qty REAL, delivery_pct REAL,
++            quality_status TEXT NOT NULL DEFAULT 'VALIDATED',
++            PRIMARY KEY(symbol, trade_date))""")
++        conn.execute("""CREATE TABLE symbol_master_v2 (
++            symbol TEXT PRIMARY KEY, isin TEXT, company_name TEXT, series TEXT,
++            sector TEXT, industry TEXT, listing_date TEXT, delisting_date TEXT,
++            active INTEGER NOT NULL DEFAULT 1,
++            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
++            market_cap_cr REAL, market_cap_as_of TEXT, market_cap_source TEXT)""")
++        # Matches nse_loader.init_database so load_indices() sees a real schema.
++        conn.execute("""CREATE TABLE index_perf (
++            id INTEGER PRIMARY KEY AUTOINCREMENT,
++            index_name TEXT NOT NULL, date DATE NOT NULL,
++            open REAL, high REAL, low REAL, close REAL,
++            change_pct REAL, volume INTEGER,
++            pe REAL, pb REAL, div_yield REAL,
++            UNIQUE(index_name, date))""")
++
++        columns = ["symbol", "trade_date", "prev_close", "open", "high", "low",
++                   "last_price", "close", "avg_price", "volume", "turnover_lacs",
++                   "trades", "delivery_qty", "delivery_pct", "quality_status"]
++        frames = [_series(symbol, *spec) for symbol, spec in UNIVERSE.items()]
++        rows = pd.concat(frames, ignore_index=True)[columns]
++        conn.executemany(
++            f"INSERT INTO daily_prices_v2 ({','.join(columns)}) "
++            f"VALUES ({','.join('?' * len(columns))})",
++            [tuple(row) for row in rows.itertuples(index=False)],
++        )
++        # Every symbol is a well-formed active EQ member of the master, so the
++        # only thing that can reject one is the gateway's own reasoning.
++        conn.executemany(
++            "INSERT INTO symbol_master_v2 (symbol, series, active, market_cap_cr,"
++            " market_cap_as_of, market_cap_source) VALUES (?,?,?,?,?,?)",
++            [(symbol, "EQ", 1, 5_000.0, MARKET_DATE, "DIRECT_SNAPSHOT")
++             for symbol in UNIVERSE],
++        )
++    V2Database(path).ensure_v3_schema()
++    with sqlite3.connect(path) as conn:
++        upsert_events(conn, [JBCHEPHARM_EVENT, PENDCO_EVENT])
++    return path
++
++
++def _run(database: Path, **kwargs):
++    return run_daily(
++        database, as_of=MARKET_DATE, send_telegram=False,
++        send_admin_telegram=False, strict_v3_eligibility=False,
++        diagnostics_output_dir=database.parent / "output", **kwargs,
++    )
++
++
++def _audit(database: Path, market_date: str = MARKET_DATE) -> dict[str, str]:
++    with sqlite3.connect(database) as conn:
++        return dict(conn.execute(
++            "SELECT symbol, reason_code FROM v3_eligibility_audit WHERE trade_date=?",
++            (market_date,)).fetchall())
++
++
++# --- admission --------------------------------------------------------------
++
++def test_merged_symbol_never_reaches_candidate_evaluation(database):
++    result = _run(database)
++    audit = _audit(database)
++    assert audit["JBCHEPHARM"] == "TERMINAL_MERGER"
++    assert result.tradeability_funnel["terminal_symbols"] == ["JBCHEPHARM"]
++
++
++def test_stale_symbol_is_rejected_for_staleness_not_for_a_strategy_reason(database):
++    result = _run(database)
++    assert _audit(database)["STALECO"] == "STALE_SYMBOL_PRICE"
++    assert result.tradeability_funnel["rejection_counts"]["STALE_SYMBOL_PRICE"] == 1
++
++
++def test_clean_symbols_are_still_admitted(database):
++    result = _run(database)
++    audit = _audit(database)
++    for symbol in ("GOODCO", "ALSOGOOD", "PENDCO"):
++        assert audit[symbol] not in {
++            "TERMINAL_MERGER", "STALE_SYMBOL_PRICE", "NOT_IN_CURRENT_NSE_UNIVERSE",
++        }, f"{symbol} was wrongly refused by the gateway"
++    assert result.tradeability_funnel["eligible"] == 3
++
++
++def test_gateway_rejections_appear_in_the_v3_eligibility_funnel(database):
++    result = _run(database)
++    funnel = result.eligibility_funnel
++    assert funnel["market_date"] == MARKET_DATE
++    assert funnel["rejection_reasons"]["TERMINAL_MERGER"] == 1
++    assert funnel["rejection_reasons"]["STALE_SYMBOL_PRICE"] == 1
++    assert funnel["tradeability"]["evaluated"] == len(UNIVERSE)
++
++
++def test_gateway_verdicts_are_persisted_to_the_audit_table(database):
++    _run(database)
++    with sqlite3.connect(database) as conn:
++        rows = dict(conn.execute(
++            "SELECT symbol, reason_code FROM tradeability_audit_v3 WHERE market_date=?",
++            (MARKET_DATE,)).fetchall())
++        successor = conn.execute(
++            "SELECT successor_symbol FROM tradeability_audit_v3 WHERE symbol='JBCHEPHARM'"
++        ).fetchone()[0]
++    assert rows["JBCHEPHARM"] == "TERMINAL_MERGER"
++    assert rows["GOODCO"] == "TRADEABLE"
++    assert successor == "TORNTPHARM"
++
++
++# --- entry authorisation ----------------------------------------------------
++
++def _position_symbols(database: Path) -> set[str]:
++    with sqlite3.connect(database) as conn:
++        return {row[0] for row in conn.execute("SELECT symbol FROM v2_positions")}
++
++
++def test_pending_corporate_event_is_visible_but_cannot_open_a_position(database):
++    result = _run(database)
++    # PENDCO carries a visible warning...
++    assert "PENDCO" in result.tradeability_funnel["review_symbols"]
++    # ...is still admitted for evaluation and display...
++    assert _audit(database)["PENDCO"] not in {"TERMINAL_MERGER", "STALE_SYMBOL_PRICE"}
++    # ...and is excluded from entry authorisation, not from the scan.
++    assert "PENDCO" not in result.tradeability_funnel["terminal_symbols"]
++    assert "PENDCO" not in _position_symbols(database)
++
++
++def test_no_position_is_ever_opened_in_a_terminal_or_stale_symbol(database):
++    _run(database)
++    symbols = _position_symbols(database)
++    assert "JBCHEPHARM" not in symbols
++    assert "STALECO" not in symbols
++
++
++# --- market date vs run date ------------------------------------------------
++
++def test_market_date_is_the_last_session_not_the_calendar_run_date(database):
++    """A Sunday run must gate against Friday's session, not against Sunday."""
++    sunday = "2026-08-23"
++    result = run_daily(
++        database, as_of=sunday, send_telegram=False, send_admin_telegram=False,
++        strict_v3_eligibility=False, diagnostics_output_dir=database.parent / "output",
++    )
++    assert result.trade_date == sunday
++    assert result.market_date == MARKET_DATE
++    assert result.tradeability_funnel["market_date"] == MARKET_DATE
++    # GOODCO traded on the market date and must not be called stale merely
++    # because the operator ran the scanner two days later.
++    counts = result.tradeability_funnel["rejection_counts"]
++    assert counts.get("STALE_SYMBOL_PRICE", 0) == 1, counts
++    with sqlite3.connect(database) as conn:
++        rows = dict(conn.execute(
++            "SELECT symbol, reason_code FROM tradeability_audit_v3 WHERE market_date=?",
++            (MARKET_DATE,)).fetchall())
++    assert rows["GOODCO"] == "TRADEABLE"
++
++
++def test_historical_replay_before_the_merger_still_admits_the_symbol(database):
++    """Prior appearances stay reproducible; history is never rewritten."""
++    result = run_daily(
++        database, as_of="2026-07-16", send_telegram=False, send_admin_telegram=False,
++        strict_v3_eligibility=False, diagnostics_output_dir=database.parent / "output",
++    )
++    assert result.market_date == "2026-07-16"
++    assert result.tradeability_funnel["terminal_symbols"] == []
++    with sqlite3.connect(database) as conn:
++        rows = dict(conn.execute(
++            "SELECT symbol, reason_code FROM tradeability_audit_v3 WHERE market_date=?",
++            ("2026-07-16",)).fetchall())
++    assert rows["JBCHEPHARM"] == "TRADEABLE"
++
++
++def test_terminal_symbol_price_history_is_retained_after_a_gated_run(database):
++    before = V2Database(database).load_prices()
++    before_rows = len(before[before["symbol"] == "JBCHEPHARM"])
++    _run(database)
++    after = V2Database(database).load_prices()
++    after_rows = len(after[after["symbol"] == "JBCHEPHARM"])
++    assert after_rows == before_rows > 0
++
++
++# --- operator visibility ----------------------------------------------------
++
++def test_admin_message_names_the_gateway_and_the_terminal_symbol(database):
++    result = _run(database)
++    assert "TRADEABILITY GATEWAY" in result.admin_message
++    assert f"market date {MARKET_DATE}" in result.admin_message
++    assert "TERMINAL JBCHEPHARM: TERMINAL_MERGER -> TORNTPHARM" in result.admin_message
++    assert "CORPORATE REVIEW PENDCO" in result.admin_message
++
++
++def test_admin_message_flags_a_run_date_ahead_of_the_data(database):
++    result = run_daily(
++        database, as_of="2026-08-23", send_telegram=False, send_admin_telegram=False,
++        strict_v3_eligibility=False, diagnostics_output_dir=database.parent / "output",
++    )
++    assert "trails the last completed session" in result.admin_message
+diff --git a/v2/orchestrator.py b/v2/orchestrator.py
+index 3575e9d..8a102f4 100644
+--- a/v2/orchestrator.py
++++ b/v2/orchestrator.py
+@@ -12,8 +12,9 @@ from .candidate_diagnostics import build_scanner_diagnostics, render_admin_diagn
+ from .candidates import evaluate_candidate, rank_candidates, watch_candidates
+ from .daily_portfolio import process_portfolio_day
+ from .database import V2Database
+-from .eligibility import evaluate_eligibility
++from .eligibility import EligibilityResult, evaluate_eligibility
+ from .freshness import FreshnessStatus, assess_freshness
++from .tradeability import evaluate_universe, market_date_from_prices
+ from .lifecycle import new_position
+ from .portfolio_message import render_portfolio_message
+ from .portfolio_performance import build_portfolio_snapshot
+@@ -51,6 +52,13 @@ class DailyRunResult:
+     diagnostics_text_path: str = ""
+     admin_delivery: DeliveryResult = DeliveryResult(False, 0, "not_attempted")
+     eligibility_funnel: dict | None = None
++    #: The newest completed session in the universe. May trail ``trade_date``
++    #: when the scanner runs on a weekend or exchange holiday.
++    market_date: str = ""
++    tradeability_funnel: dict | None = None
++    #: Displayed and scored, but withheld from a fresh paper entry because a
++    #: corporate event is pending against the symbol.
++    entry_blocked_symbols: tuple[str, ...] = ()
+ 
+     def to_dict(self) -> dict:
+         return asdict(self)
+@@ -92,6 +100,7 @@ def run_daily(
+     prices = database.load_prices(end_date=run_date.isoformat(), min_sessions=260)
+     if prices.empty:
+         raise RuntimeError("No usable V2 price history")
++    market_date = market_date_from_prices(prices) or run_date.isoformat()
+     indices = database.load_indices(end_date=run_date.isoformat())
+     freshness = assess_freshness(prices, indices, run_date)
+ 
+@@ -118,10 +127,43 @@ def run_daily(
+     metadata = {str(row["symbol"]): row.to_dict() for _, row in master.iterrows()} if not master.empty else {}
+     restricted = database.load_restricted_symbols(run_date.isoformat())
+     fundamental_gates = database.load_fundamental_gates(run_date.isoformat())
++
++    # --- Pre-Scan Tradeability Gateway -------------------------------------
++    # Admission is decided against the market date (the newest completed
++    # session in the universe), never against the calendar run date, which runs
++    # ahead of the data on weekends and exchange holidays.  Restrictions are
++    # therefore also read at the market date for the gateway's purposes.
++    gateway_restricted = restricted if market_date == run_date.isoformat() \
++        else database.load_restricted_symbols(market_date)
++    tradeability = evaluate_universe(
++        prices, market_date=market_date, master=master,
++        lifecycle=database.load_lifecycle_registry(), restricted=gateway_restricted,
++    )
++    database.save_tradeability_audit(market_date, tradeability.results)
++
+     eligibility_results = {}
+     candidates = []
+     for symbol, frame in prices.groupby("symbol"):
+         symbol = str(symbol)
++        # A symbol the gateway refuses is never evaluated as a current
++        # candidate.  The refusal is recorded in the same eligibility audit as
++        # every other rejection so the funnel stays a single source of truth.
++        verdict = tradeability.results.get(symbol)
++        if verdict is not None and not verdict.eligible:
++            eligibility_results[symbol] = EligibilityResult(
++                symbol=symbol, eligible=False, reason_code=verdict.reason_code,
++                stage=verdict.stage, actual_value=verdict.symbol_last_date,
++                required_value=market_date,
++                metrics={
++                    "gateway": True,
++                    "detail": verdict.detail or "",
++                    "successor_symbol": verdict.successor_symbol or "",
++                    "staleness_sessions": (
++                        -1 if verdict.staleness_sessions is None else int(verdict.staleness_sessions)
++                    ),
++                },
++            )
++            continue
+         eligibility = evaluate_eligibility(
+             symbol, frame, metadata=metadata.get(symbol), restricted_reason=restricted.get(symbol),
+             as_of_date=run_date.isoformat(),
+@@ -144,12 +186,15 @@ def run_daily(
+     rejection_counts = Counter(
+         result.reason_code for result in eligibility_results.values() if not result.eligible
+     )
++    tradeability_funnel = tradeability.diagnostics()
+     eligibility_funnel = {
+         "mode": "V3_STRICT" if strict_v3_eligibility else "V2_COMPATIBLE",
++        "market_date": market_date,
+         "universe": len(eligibility_results),
+         "eligible": sum(result.eligible for result in eligibility_results.values()),
+         "rejected": sum(not result.eligible for result in eligibility_results.values()),
+         "rejection_reasons": dict(sorted(rejection_counts.items())),
++        "tradeability": tradeability_funnel,
+     }
+ 
+     ranked = rank_candidates(candidates, top_n=None)
+@@ -172,6 +217,22 @@ def run_daily(
+         f"Rejected: {eligibility_funnel['rejected']}",
+     ]
+     funnel_lines.extend(f"{reason}: {count}" for reason, count in rejection_counts.most_common())
++    funnel_lines.append("")
++    funnel_lines.append(f"TRADEABILITY GATEWAY — market date {market_date}")
++    if market_date != run_date.isoformat():
++        funnel_lines.append(f"Run date {run_date.isoformat()} trails the last completed session")
++    funnel_lines.append(f"Admitted: {tradeability_funnel['eligible']} of {tradeability_funnel['evaluated']}")
++    funnel_lines.extend(
++        f"{reason}: {count}" for reason, count in tradeability_funnel["rejection_counts"].items()
++    )
++    for symbol in tradeability_funnel["terminal_symbols"][:10]:
++        result = tradeability.results[symbol]
++        funnel_lines.append(
++            f"TERMINAL {symbol}: {result.reason_code}"
++            + (f" -> {result.successor_symbol}" if result.successor_symbol else "")
++        )
++    for symbol in tradeability_funnel["review_symbols"][:10]:
++        funnel_lines.append(f"CORPORATE REVIEW {symbol}: entry withheld")
+     admin_message = "\n".join(funnel_lines) + "\n\n" + render_admin_diagnostics(diagnostics)
+ 
+     persisted_candidates = sorted(
+@@ -185,11 +246,17 @@ def run_daily(
+     committed = store.open_positions()
+     committed_capital = sum(p.quantity * p.entry for p in committed)
+     committed_risk = sum(p.quantity * (p.entry - p.initial_stop) for p in committed)
++    entry_blocked: list[str] = []
+     for candidate in selected:
+         store.remember_candidate(candidate.symbol, candidate.horizon, candidate.trade_date, candidate.score)
+         key = (candidate.symbol, candidate.horizon)
+         if key in existing:
+             continue
++        # A pending corporate event keeps the card visible but must not open a
++        # new paper position against a security that is about to change.
++        if not tradeability.entry_permitted(candidate.symbol):
++            entry_blocked.append(candidate.symbol)
++            continue
+         allocation = allocate_long_position(
+             candidate.entry, candidate.stop, committed_capital=committed_capital,
+             committed_risk=committed_risk, committed_positions=len(committed), config=portfolio_config,
+@@ -292,5 +359,7 @@ def run_daily(
+         watch_count=len(watches), candidate_message_count=len(candidate_messages), diagnostics=diagnostics.to_dict(),
+         admin_message=admin_message, diagnostics_json_path=str(diagnostics_json),
+         diagnostics_text_path=str(diagnostics_text), admin_delivery=admin_delivery,
+-        eligibility_funnel=eligibility_funnel,
++        eligibility_funnel=eligibility_funnel, market_date=market_date,
++        tradeability_funnel=tradeability_funnel,
++        entry_blocked_symbols=tuple(sorted(set(entry_blocked))),
+     )
+-- 
+2.34.1
+

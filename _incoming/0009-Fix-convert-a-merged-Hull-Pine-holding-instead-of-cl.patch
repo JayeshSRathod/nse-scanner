@@ -1,0 +1,237 @@
+From 34902ef87755ceb5c6fc75c6945ad2e944a32901 Mon Sep 17 00:00:00 2001
+From: Jayesh Rathod <jayesh4.rathod@ril.com>
+Date: Fri, 21 Aug 2026 15:03:55 +0530
+Subject: [PATCH 09/14] Fix: convert a merged Hull Pine holding instead of
+ closing it
+
+Bug in the step 6/9 reconciliation loop. reconcile_positions correctly returns
+CORPORATE_CONVERSION with closes_position=False for a merged holding, but the
+Hull Pine loop called _close_position unconditionally. A merger would therefore
+have been booked as a trade exit at the last close -- inventing a profit or loss
+where the specification requires realised P&L of exactly zero. This defeated the
+JBCHEPHARM -> TORNTPHARM path the sprint exists to get right.
+
+Not reachable on current data, since no open position sits in a terminal symbol,
+but latent for the next merger.
+
+The old leg is now retired as CONVERTED with realised_pnl 0.0, and a successor
+leg opens holding the exchanged quantity. Entry, stop and targets divide by the
+conversion ratio so the cost basis is preserved: 100 shares at 2,000 become 51
+shares at 3,921.57, which is the same 200,000. Fractional entitlements are
+carried on the retired leg for the scheme to settle rather than rounded away.
+CONVERTED is distinguished from CLOSED so a conversion never reads as a trade
+result.
+
+Tests: 6 new asserting zero realised P&L, the 51-share exchange, cost-basis
+preservation, ratio-scaled stops and targets, and the event trail.
+---
+ pine_hull/engine.py                          |  61 ++++++++++-
+ tests/test_pine_hull_corporate_conversion.py | 103 +++++++++++++++++++
+ 2 files changed, 163 insertions(+), 1 deletion(-)
+ create mode 100644 tests/test_pine_hull_corporate_conversion.py
+
+diff --git a/pine_hull/engine.py b/pine_hull/engine.py
+index 7cbb495..72688da 100644
+--- a/pine_hull/engine.py
++++ b/pine_hull/engine.py
+@@ -25,7 +25,7 @@ from v2.progressive_stages import (
+     classify,
+ )
+ from v2.tradeability import gateway_from_database
+-from v2.universe_reconciliation import reconcile_positions
++from v2.universe_reconciliation import CORPORATE_CONVERSION, reconcile_positions
+ from .opportunity_lifecycle import timing_state as lifecycle_timing_state, weekly_transition
+ 
+ 
+@@ -211,6 +211,11 @@ def _active(position: dict) -> bool:
+     return position.get("state") in {"OPEN", "TRAILING"}
+ 
+ 
++def _retired(position: dict) -> bool:
++    """CLOSED ends a trade; CONVERTED ends a *symbol* at zero realised P&L."""
++    return position.get("state") in {"CLOSED", "CONVERTED"}
++
++
+ def _allocation(entry: float, stop: float, positions: list[dict], config: PineConfig) -> int:
+     active = [position for position in positions if _active(position)]
+     if len(active) >= config.max_open_positions or entry <= stop:
+@@ -366,6 +371,54 @@ def _position_from_setup(setup: dict, fill: float, quantity: int, trade_date: st
+     }
+ 
+ 
++def _convert_position(position: dict, action, trade_date: str, state: dict) -> dict | None:
++    """Carry a holding into its successor symbol at zero realised P&L.
++
++    A merger is not a trade result. The old leg is retired as CONVERTED with
++    realised P&L of exactly zero, and a successor leg opens holding the exchanged
++    quantity. Entry, stop and targets are divided by the conversion ratio so the
++    total cost basis is preserved: 100 shares at X become 51 shares at X/0.51,
++    which is the same money. Fractional entitlements are recorded for the scheme
++    to settle rather than rounded away.
++    """
++    ratio = action.conversion_ratio
++    quantity = action.successor_quantity
++    if not ratio or not action.successor_symbol or not quantity:
++        return None
++    position.update({
++        "state": "CONVERTED", "exit_date": trade_date,
++        "exit_price": _number(position.get("entry")), "exit_reason": CORPORATE_CONVERSION,
++        "realised_pnl": 0.0, "exit_detail": action.reason_code,
++        "successor_symbol": action.successor_symbol,
++        "conversion_ratio": ratio,
++        "fractional_entitlement": action.fractional_entitlement,
++    })
++    _position_event(state, trade_date, position, "CORPORATE_CONVERSION")
++    scale = 1.0 / ratio
++    successor = {
++        "trade_id": f"PINE-{trade_date.replace('-', '')}-{uuid4().hex[:8].upper()}",
++        "symbol": action.successor_symbol, "state": "OPEN",
++        "converted_from": position["symbol"], "converted_from_trade_id": position["trade_id"],
++        "signal_date": position.get("signal_date", position.get("entry_date")),
++        "entry_date": trade_date, "fill_rule": "CORPORATE_CONVERSION",
++        "entry": round(_number(position.get("entry")) * scale, 2),
++        "initial_stop": round(_number(position.get("initial_stop")) * scale, 2),
++        "stop": round(_number(position.get("stop")) * scale, 2),
++        "target1": round(_number(position.get("target1")) * scale, 2),
++        "target2": round(_number(position.get("target2")) * scale, 2),
++        "quantity": int(quantity), "last_price": round(_number(position.get("last_price")) * scale, 2),
++        "t1_hit": bool(position.get("t1_hit")), "t2_hit": bool(position.get("t2_hit")),
++        "prior_hma21": _number(position.get("prior_hma21")) * scale,
++        "realised_pnl": 0.0,
++        "htf_weekly_bullish": bool(position.get("htf_weekly_bullish")),
++        "htf_state": str(position.get("htf_state", "NEUTRAL")),
++        "timing_state": str(position.get("timing_state", "WEAK")),
++        "daily_hull_bullish": bool(position.get("daily_hull_bullish")),
++    }
++    _position_event(state, trade_date, successor, "CONVERSION_ENTRY")
++    return successor
++
++
+ def _close_position(position: dict, trade_date: str, price: float, reason: str, state: dict) -> None:
+     position.update({"state": "CLOSED", "exit_date": trade_date,
+                      "exit_price": round(price, 2), "exit_reason": reason})
+@@ -411,6 +464,12 @@ def run_daily(
+         for position in state["positions"]:
+             if position["symbol"] != action.symbol or not _active(position):
+                 continue
++            if not action.closes_position and action.action == CORPORATE_CONVERSION:
++                successor = _convert_position(position, action, trade_date, state)
++                if successor is not None:
++                    state["positions"].append(successor)
++                reconciled.append({**action.to_dict(), "trade_id": position["trade_id"]})
++                continue
+             price = action.exit_price if action.exit_price is not None else _number(position.get("last_price"))
+             _close_position(position, trade_date, price, action.action, state)
+             position["exit_detail"] = action.reason_code
+diff --git a/tests/test_pine_hull_corporate_conversion.py b/tests/test_pine_hull_corporate_conversion.py
+new file mode 100644
+index 0000000..396dfcb
+--- /dev/null
++++ b/tests/test_pine_hull_corporate_conversion.py
+@@ -0,0 +1,103 @@
++"""The JBCHEPHARM conversion path, end to end in Hull Pine."""
++from __future__ import annotations
++import json, sqlite3
++from pathlib import Path
++import numpy as np, pandas as pd, pytest
++from pine_hull.engine import PineConfig, load_state, run_daily
++from v2.database import V2Database
++from v2.security_lifecycle import LifecycleEvent, upsert_events
++
++CONFIG = PineConfig(capital_base=300_000.0)
++
++def _uptrend(rows=330, base=100.0, top=260.0):
++    dates = pd.bdate_range("2025-01-02", periods=rows)
++    close = pd.Series(np.linspace(base, top, rows))
++    return pd.DataFrame({"trade_date": dates, "open": close-0.3, "high": close+3.0,
++                         "low": close-3.0, "close": close, "volume": 150_000})
++
++def _write(path, frames, master, events):
++    with sqlite3.connect(path) as conn:
++        conn.execute("""CREATE TABLE daily_prices_v2 (symbol TEXT, trade_date TEXT,
++            open REAL, high REAL, low REAL, close REAL, volume REAL,
++            PRIMARY KEY(symbol, trade_date))""")
++        conn.execute("""CREATE TABLE symbol_master_v2 (symbol TEXT PRIMARY KEY, isin TEXT,
++            company_name TEXT, series TEXT, sector TEXT, industry TEXT, listing_date TEXT,
++            delisting_date TEXT, active INTEGER NOT NULL DEFAULT 1,
++            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
++        for sym, fr in frames.items():
++            out = fr.assign(symbol=sym)[["symbol","trade_date","open","high","low","close","volume"]].copy()
++            out["trade_date"] = out["trade_date"].dt.strftime("%Y-%m-%d")
++            out.to_sql("daily_prices_v2", conn, if_exists="append", index=False)
++        conn.executemany("INSERT INTO symbol_master_v2 (symbol,series,active) VALUES (?,?,?)",
++                         [(s,"EQ",1) for s in master])
++    V2Database(path).ensure_v3_schema()
++    with sqlite3.connect(path) as conn:
++        upsert_events(conn, events)
++
++@pytest.fixture()
++def merged(tmp_path):
++    frame = _uptrend()
++    last_traded = frame["trade_date"].iloc[-40].date().isoformat()
++    event = LifecycleEvent(symbol="JBCHEPHARM", event_type="AMALGAMATION", status="EFFECTIVE",
++        effective_date=frame["trade_date"].iloc[-45].date().isoformat(),
++        last_trading_date=last_traded, successor_symbol="TORNTPHARM",
++        exchange_ratio_from=100.0, exchange_ratio_to=51.0, terminal=True)
++    db, state = tmp_path/"p.db", tmp_path/"s.json"
++    _write(db, {"JBCHEPHARM": frame, "TORNTPHARM": frame}, ["TORNTPHARM"], [event])
++    state.write_text(json.dumps({"version":1,"capital_base":300_000.0,"last_run":None,
++        "events":[], "positions":[{"trade_id":"OLD-1","symbol":"JBCHEPHARM","state":"OPEN",
++        "entry_date":"2026-06-01","entry":2000.0,"quantity":100,"initial_stop":1800.0,
++        "stop":1850.0,"target1":2300.0,"target2":2600.0,"last_price":2408.9,
++        "realised_pnl":0.0}]}), encoding="utf-8")
++    return db, state
++
++def test_merged_holding_is_converted_not_closed(merged):
++    db, state = merged
++    r = run_daily(db, state_path=state, config=CONFIG)
++    old = [p for p in r["positions"] if p["trade_id"] == "OLD-1"][0]
++    assert old["state"] == "CONVERTED", "a merger is not a trade result"
++    assert old["realised_pnl"] == 0.0
++    assert old["exit_reason"] == "CORPORATE_CONVERSION"
++    assert old["successor_symbol"] == "TORNTPHARM"
++
++def test_successor_leg_holds_the_exchanged_quantity(merged):
++    db, state = merged
++    r = run_daily(db, state_path=state, config=CONFIG)
++    new = [p for p in r["positions"] if p.get("converted_from") == "JBCHEPHARM"]
++    assert len(new) == 1
++    leg = new[0]
++    assert leg["symbol"] == "TORNTPHARM"
++    assert leg["quantity"] == 51, "100 shares at 100->51 becomes 51"
++    assert leg["state"] == "OPEN"
++    assert leg["fill_rule"] == "CORPORATE_CONVERSION"
++
++def test_cost_basis_is_preserved_through_the_conversion(merged):
++    db, state = merged
++    r = run_daily(db, state_path=state, config=CONFIG)
++    leg = [p for p in r["positions"] if p.get("converted_from") == "JBCHEPHARM"][0]
++    # 100 x 2000 = 200,000 before; 51 x entry must be the same money
++    assert leg["entry"] == pytest.approx(2000.0 / 0.51, abs=0.01)
++    assert leg["quantity"] * leg["entry"] == pytest.approx(100 * 2000.0, rel=0.001)
++
++def test_stop_and_targets_scale_with_the_ratio(merged):
++    db, state = merged
++    r = run_daily(db, state_path=state, config=CONFIG)
++    leg = [p for p in r["positions"] if p.get("converted_from") == "JBCHEPHARM"][0]
++    assert leg["initial_stop"] == pytest.approx(1800.0 / 0.51, abs=0.01)
++    assert leg["target1"] == pytest.approx(2300.0 / 0.51, abs=0.01)
++    assert leg["stop"] < leg["entry"] < leg["target1"] < leg["target2"]
++
++def test_conversion_is_recorded_in_the_event_log(merged):
++    db, state = merged
++    run_daily(db, state_path=state, config=CONFIG)
++    events = [e["event"] for e in load_state(state)["events"]]
++    assert "CORPORATE_CONVERSION" in events
++    assert "CONVERSION_ENTRY" in events
++
++def test_reconciliation_report_names_the_conversion(merged):
++    db, state = merged
++    r = run_daily(db, state_path=state, config=CONFIG)
++    action = [a for a in r["reconciled"] if a["symbol"] == "JBCHEPHARM"][0]
++    assert action["action"] == "CORPORATE_CONVERSION"
++    assert action["successor_symbol"] == "TORNTPHARM"
++    assert action["successor_quantity"] == 51.0
+-- 
+2.34.1
+

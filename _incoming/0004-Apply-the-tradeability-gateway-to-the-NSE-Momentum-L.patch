@@ -1,0 +1,485 @@
+From df02ada153730476d6d2535411f483e86c1a5349 Mon Sep 17 00:00:00 2001
+From: Jayesh Rathod <jayesh4.rathod@ril.com>
+Date: Fri, 21 Aug 2026 13:11:23 +0530
+Subject: [PATCH 04/14] Apply the tradeability gateway to the NSE Momentum
+ Ladder
+
+Step 5 of the Cross-Scanner Eligibility and Corporate Lifecycle Sprint.
+
+The Ladder was the most exposed of the three. old_nse_hull.discovery.discover
+applied exactly three filters -- history >= 67 sessions, close >= 50, 20-day
+mean volume >= 50,000 -- with no series check, no security-master join, no
+blacklist and no per-symbol price freshness. Because its history requirement is
+only 67 sessions rather than V3's 260, far more dead symbols survived it.
+
+On the real CSV store at market date 2026-08-20 the gateway removed 112 stale
+symbols the Ladder was ranking on their final close, plus JBCHEPHARM, plus 223
+non-EQ series and 159 restricted symbols.
+
+Report dating bug
+-----------------
+DiscoveryResult.as_of_date was read off whichever symbol ranked first
+(result["as_of_date"].iloc[0] after sorting by score). A stale symbol that
+ranked highest therefore dated the entire report from its own last bar. It is
+now the universe's newest completed session, and DiscoveryResult carries an
+explicit market_date. Asserted both gated and ungated.
+
+Changes
+-------
+* old_nse_hull/discovery.py -- discover() accepts the verdict; gateway reason
+  codes are merged into the existing rejection counters rather than a parallel
+  report; shortlist rows carry entry_permitted and instrument_class.
+* old_nse_hull/engine.py -- run_local() runs the gateway once before any
+  strategy rule. paper_entry_enabled now requires READY *and* entry permission,
+  so an observe-only symbol can reach READY without becoming a paper entry.
+  The report gains market_date, tradeability and entry_withheld.
+* old_nse_hull/multi_horizon/engine.py -- run_shadow() drops non-admitted
+  symbols before latest_features, so a stale symbol cannot contribute a feature
+  row or distort a percentile rank. Observe-only symbols are added to
+  blocked_symbols so they stay visible without entering the paper ladder.
+
+The module-level claim of V2 isolation is narrowed to strategy and state: the
+gateway is data-layer admission control, and per docs/LEGACY_CODE_POLICY.md
+shared logic belongs under v2/. pine_hull already imports v2.database.
+
+Tests: 12 new; the 20 existing old_nse_hull tests still pass unchanged.
+---
+ old_nse_hull/discovery.py                |  55 +++++-
+ old_nse_hull/engine.py                   |  21 ++-
+ old_nse_hull/multi_horizon/engine.py     |  32 +++-
+ tests/test_ladder_tradeability_wiring.py | 216 +++++++++++++++++++++++
+ 4 files changed, 311 insertions(+), 13 deletions(-)
+ create mode 100755 tests/test_ladder_tradeability_wiring.py
+
+diff --git a/old_nse_hull/discovery.py b/old_nse_hull/discovery.py
+index c17cf91..c27818c 100644
+--- a/old_nse_hull/discovery.py
++++ b/old_nse_hull/discovery.py
+@@ -2,11 +2,13 @@
+ from __future__ import annotations
+ 
+ import sqlite3
+-from dataclasses import dataclass
++from dataclasses import dataclass, field
+ from pathlib import Path
+ 
+ import pandas as pd
+ 
++from v2.tradeability import UniverseVerdict
++
+ 
+ @dataclass(frozen=True)
+ class DiscoveryResult:
+@@ -14,10 +16,20 @@ class DiscoveryResult:
+     eligible: int
+     shortlist: pd.DataFrame
+     rejected: dict[str, int]
++    #: The universe's newest completed session.  Previously ``as_of_date`` was
++    #: read off whichever symbol happened to rank first, so a single stale
++    #: symbol could date the entire report.
++    market_date: str = ""
++    gateway: dict = field(default_factory=dict)
+ 
+ 
+ def load_market_data(db_path: str | Path, as_of: str | None = None) -> pd.DataFrame:
+-    """Read common price snapshots only; do not import V2/V3 code or state."""
++    """Read common price snapshots only.
++
++    This module still imports no V2/V3 *strategy* or state.  The shared
++    tradeability gateway is a data-layer admission control, not a strategy, and
++    per the legacy-code policy that shared logic lives under ``v2/``.
++    """
+     with sqlite3.connect(db_path) as conn:
+         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+         table = "daily_prices_v2" if "daily_prices_v2" in tables else "daily_prices"
+@@ -29,10 +41,31 @@ def load_market_data(db_path: str | Path, as_of: str | None = None) -> pd.DataFr
+     return frame.sort_values(["symbol", "trade_date"])
+ 
+ 
+-def discover(prices: pd.DataFrame, top_n: int = 25) -> DiscoveryResult:
+-    """Rank 22/44/66-session momentum; Hull receives this shortlist only."""
++def discover(
++    prices: pd.DataFrame,
++    top_n: int = 25,
++    *,
++    verdict: UniverseVerdict | None = None,
++) -> DiscoveryResult:
++    """Rank 22/44/66-session momentum; Hull receives this shortlist only.
++
++    ``verdict`` is the shared tradeability gateway's decision for the market
++    date.  Before it existed this function applied only three filters — history
++    >= 67 sessions, close >= 50 and 20-day mean volume >= 50,000 — with no
++    series check, no security-master join, no blacklist and no per-symbol price
++    freshness, so a merged or long-dead symbol ranked on its final close.
++    """
+     rows, rejected = [], {"insufficient_history": 0, "low_price": 0, "low_volume": 0}
++    market_date = ""
++    if not prices.empty:
++        market_date = pd.Timestamp(prices["trade_date"].max()).date().isoformat()
+     for symbol, frame in prices.groupby("symbol"):
++        symbol_key = str(symbol)
++        if verdict is not None and not verdict.is_eligible(symbol_key):
++            reason = verdict.results[symbol_key].reason_code if symbol_key in verdict.results \
++                else "NOT_EVALUATED"
++            rejected[reason] = rejected.get(reason, 0) + 1
++            continue
+         data = frame.sort_values("trade_date")
+         if len(data) < 67:
+             rejected["insufficient_history"] += 1; continue
+@@ -46,10 +79,20 @@ def discover(prices: pd.DataFrame, top_n: int = 25) -> DiscoveryResult:
+         rows.append({"symbol": str(symbol), "as_of_date": data["trade_date"].iloc[-1].date().isoformat(),
+                      "momentum_1m": returns[0], "momentum_2m": returns[1], "momentum_3m": returns[2],
+                      "volume_20d": float(volume.tail(20).mean())})
++    gateway = verdict.diagnostics() if verdict is not None else {}
+     result = pd.DataFrame(rows)
+     if result.empty:
+-        return DiscoveryResult("", 0, result, rejected)
++        return DiscoveryResult(market_date, 0, result, rejected,
++                               market_date=market_date, gateway=gateway)
+     result["discovery_score"] = (result["momentum_1m"].rank(pct=True) * 20 + result["momentum_2m"].rank(pct=True) * 30 + result["momentum_3m"].rank(pct=True) * 50)
+     result = result.sort_values(["discovery_score", "symbol"], ascending=[False, True]).reset_index(drop=True)
+     result["discovery_rank"] = result.index + 1
+-    return DiscoveryResult(str(result["as_of_date"].iloc[0]), len(result), result.head(top_n), rejected)
++    if verdict is not None:
++        result["entry_permitted"] = result["symbol"].map(verdict.entry_permitted)
++        result["instrument_class"] = result["symbol"].map(verdict.instrument_class)
++    else:
++        result["entry_permitted"] = True
++        result["instrument_class"] = "EQUITY"
++    # The report is dated by the market, not by whichever symbol ranked first.
++    return DiscoveryResult(market_date, len(result), result.head(top_n), rejected,
++                           market_date=market_date, gateway=gateway)
+diff --git a/old_nse_hull/engine.py b/old_nse_hull/engine.py
+index 5a5d050..04a2735 100644
+--- a/old_nse_hull/engine.py
++++ b/old_nse_hull/engine.py
+@@ -15,6 +15,8 @@ from .discovery import discover, load_market_data
+ from .multi_horizon.config import shadow_enabled
+ from .multi_horizon.engine import run_shadow
+ 
++from v2.tradeability import gateway_from_database
++
+ 
+ def _wma(series: pd.Series, length: int) -> pd.Series:
+     weights = list(range(1, length + 1))
+@@ -47,23 +49,36 @@ def run_local(db_path: str = "nse_scanner.db", as_of: str | None = None, top_n:
+               comparison_state_path: str | Path | None = None, paper_state_path: str | Path | None = None) -> dict:
+     """Run the frozen baseline; optionally attach a non-delivered shadow comparison."""
+     prices = load_market_data(db_path, as_of)
+-    result = discover(prices, top_n=top_n)
++    # Shared Pre-Scan Tradeability Gateway. Admission is decided once, against
++    # the market date, before any Old-NSE strategy rule runs.
++    verdict = gateway_from_database(db_path, prices)
++    result = discover(prices, top_n=top_n, verdict=verdict)
+     rows = result.shortlist.to_dict(orient="records")
+     frames = {symbol: frame for symbol, frame in prices.groupby("symbol")}
+     for row in rows:
+         confirmation = alignment(frames[row["symbol"]])
++        entry_permitted = verdict.entry_permitted(row["symbol"])
+         row.update({"hull_state": confirmation["state"], "timeframes": confirmation["timeframes"],
+-                    "paper_entry_enabled": confirmation["state"] == "READY",
++                    # READY alone no longer authorises a paper entry: the symbol
++                    # must also be currently enterable.
++                    "paper_entry_enabled": confirmation["state"] == "READY" and entry_permitted,
++                    "entry_permitted": entry_permitted,
++                    "instrument_class": verdict.instrument_class(row["symbol"]),
+                     "reason": "python_hull_rules_active"})
+     report = {"system": "OLD_NSE_HULL_PAPER", "generated_at": datetime.now().astimezone().isoformat(),
+             "as_of_date": result.as_of_date, "parity": "PYTHON_RULES_ACTIVE", "paper_entries_enabled": True,
+             "eligible": result.eligible, "discovery_qualified": len(rows), "ready": sum(r["hull_state"] == "READY" for r in rows),
+             "watch": sum(r["hull_state"] == "WATCH" for r in rows), "rejected": result.rejected, "shortlist": rows,
++            "market_date": result.market_date, "tradeability": result.gateway,
++            "entry_withheld": sorted(r["symbol"] for r in rows if not r["entry_permitted"]),
+             "state": "PAPER_EOD_ACTIVE"}
+     if shadow_enabled():
+         # The report artifact is the comparison surface during the 20-session
+         # evaluation. It never changes the baseline shortlist or Telegram UX.
+-        report["multi_horizon_shadow"] = run_shadow(prices, db_path, [row["symbol"] for row in rows], comparison_state_path, paper_state_path)
++        report["multi_horizon_shadow"] = run_shadow(
++            prices, db_path, [row["symbol"] for row in rows],
++            comparison_state_path, paper_state_path, verdict=verdict,
++        )
+     return report
+ 
+ 
+diff --git a/old_nse_hull/multi_horizon/engine.py b/old_nse_hull/multi_horizon/engine.py
+index 1c94207..0c10473 100644
+--- a/old_nse_hull/multi_horizon/engine.py
++++ b/old_nse_hull/multi_horizon/engine.py
+@@ -14,16 +14,39 @@ from .trade_levels import build_levels
+ from .market_context import load_context
+ from .data_health import evaluate as evaluate_data_health
+ 
++from v2.tradeability import UniverseVerdict
++
+ 
+ def run_shadow(prices: pd.DataFrame, db_path: str | Path, baseline_symbols: list[str] | None = None,
+-               comparison_state_path: str | Path | None = None, paper_state_path: str | Path | None = None) -> dict:
+-    """Run the upgrade beside baseline and return data only; never sends Telegram."""
++               comparison_state_path: str | Path | None = None, paper_state_path: str | Path | None = None,
++               verdict: UniverseVerdict | None = None) -> dict:
++    """Run the upgrade beside baseline and return data only; never sends Telegram.
++
++    ``verdict`` is the shared tradeability gateway's decision.  Non-admitted
++    symbols are dropped from the price frame before features are computed, so a
++    stale or terminal symbol cannot contribute a feature row, distort a
++    percentile rank, or set the report's as-of date.  Symbols that are admitted
++    but not entry-permitted are additionally blocked from paper admission.
++    """
++    gateway: dict = {}
++    if verdict is not None:
++        gateway = verdict.diagnostics()
++        prices = verdict.filter_frame(prices)
++        if prices.empty:
++            return {"mode": "SHADOW", "candidates": [], "eligible": 0, "qualified": 0,
++                    "comparison": {}, "gateway": gateway}
+     features = latest_features(prices)
+     health = evaluate_data_health(db_path, features)
+     context = load_context(db_path, features)
+-    scored = score(features, context.get("benchmark_returns"), context.get("regime", "AWAITING_DATA"), set(health["blocked_symbols"]))
++    blocked = set(health["blocked_symbols"])
++    if verdict is not None:
++        # Observe-only symbols stay visible in the shadow report but must never
++        # be admitted to the paper ladder.
++        blocked |= {s for s in verdict.results if not verdict.entry_permitted(s)}
++    scored = score(features, context.get("benchmark_returns"), context.get("regime", "AWAITING_DATA"), blocked)
+     if scored.empty:
+-        return {"mode": "SHADOW", "candidates": [], "eligible": 0, "qualified": 0, "comparison": {}}
++        return {"mode": "SHADOW", "candidates": [], "eligible": 0, "qualified": 0,
++                "comparison": {}, "gateway": gateway}
+     completed_dates = pd.to_datetime(prices["trade_date"]).dropna().sort_values().unique()
+     prior_scored = pd.DataFrame()
+     if len(completed_dates) >= 2:
+@@ -48,6 +71,7 @@ def run_shadow(prices: pd.DataFrame, db_path: str | Path, baseline_symbols: list
+         "comparison": {"observed_symbols": int(len(scored)), "principal_buckets": scored["principal_bucket"].value_counts().to_dict()},
+         "market_context": context,
+         "data_health": health,
++        "gateway": gateway,
+     }
+     if comparison_state_path:
+         payload["comparison_summary"] = update_summary(comparison_state_path, payload["as_of_date"], baseline_symbols or [], payload["candidates"])
+diff --git a/tests/test_ladder_tradeability_wiring.py b/tests/test_ladder_tradeability_wiring.py
+new file mode 100755
+index 0000000..b4f82dd
+--- /dev/null
++++ b/tests/test_ladder_tradeability_wiring.py
+@@ -0,0 +1,216 @@
++"""Step 5: the gateway must govern the Momentum Ladder.
++
++Before this, ``old_nse_hull.discovery.discover`` applied exactly three filters —
++history >= 67 sessions, close >= 50, 20-day mean volume >= 50,000 — with no
++series check, no security-master join, no blacklist and no per-symbol price
++freshness.  On real data that let 112 stale symbols and JBCHEPHARM rank on their
++final close.  Its report was also dated by whichever symbol ranked first.
++"""
++from __future__ import annotations
++
++import sqlite3
++from datetime import date, timedelta
++from pathlib import Path
++
++import pandas as pd
++import pytest
++
++from old_nse_hull.discovery import discover, load_market_data
++from old_nse_hull.engine import run_local
++from v2.database import V2Database
++from v2.security_lifecycle import LifecycleEvent, upsert_events
++from v2.tradeability import evaluate_universe
++
++MARKET_DATE = "2026-08-20"
++
++
++def _weekdays(count: int, end: str) -> list[str]:
++    days: list[str] = []
++    cursor = date.fromisoformat(end)
++    while len(days) < count:
++        if cursor.weekday() < 5:
++            days.append(cursor.isoformat())
++        cursor -= timedelta(days=1)
++    return sorted(days)
++
++
++FRESH = _weekdays(90, MARKET_DATE)
++STALE = _weekdays(90, "2026-07-16")
++
++
++def _frame(symbol: str, days: list[str], base: float, drift: float) -> pd.DataFrame:
++    closes = [base * (1.0 + drift) ** i for i in range(len(days))]
++    return pd.DataFrame({
++        "symbol": symbol, "trade_date": pd.to_datetime(days),
++        "open": [c * 0.995 for c in closes], "high": [c * 1.01 for c in closes],
++        "low": [c * 0.99 for c in closes], "close": closes, "volume": 400_000,
++    })
++
++
++def _master(symbol: str) -> dict:
++    return {"symbol": symbol, "series": "EQ", "active": 1}
++
++
++JBCHEPHARM_EVENT = LifecycleEvent(
++    symbol="JBCHEPHARM", event_type="AMALGAMATION", status="EFFECTIVE",
++    effective_date="2026-07-08", record_date="2026-07-17",
++    last_trading_date="2026-07-16", successor_symbol="TORNTPHARM",
++    exchange_ratio_from=100.0, exchange_ratio_to=51.0, terminal=True,
++)
++
++#: LEADER is the strongest mover but is stale, so it used to rank first and
++#: date the whole report from 2026-07-16.
++UNIVERSE = {
++    "STALELEADER": (STALE, 100.0, 0.020),
++    "JBCHEPHARM": (STALE, 1800.0, 0.015),
++    "GOODCO": (FRESH, 300.0, 0.010),
++    "ALSOGOOD": (FRESH, 450.0, 0.008),
++    "GOLDBEES": (FRESH, 80.0, 0.012),      # ETF: absent from the EQ master
++}
++
++
++def _prices() -> pd.DataFrame:
++    return pd.concat(
++        [_frame(sym, *spec) for sym, spec in UNIVERSE.items()], ignore_index=True,
++    ).sort_values(["symbol", "trade_date"])
++
++
++def _verdict(prices: pd.DataFrame):
++    return evaluate_universe(
++        prices, market_date=MARKET_DATE,
++        master={s: _master(s) for s in ("STALELEADER", "GOODCO", "ALSOGOOD")},
++        lifecycle=[JBCHEPHARM_EVENT],
++    )
++
++
++# --- discovery --------------------------------------------------------------
++
++def test_ungated_discovery_still_ranks_the_stale_leader():
++    """Baseline behaviour, kept as evidence of what the gateway fixes."""
++    result = discover(_prices(), top_n=25)
++    assert "STALELEADER" in set(result.shortlist["symbol"])
++    assert "JBCHEPHARM" in set(result.shortlist["symbol"])
++
++
++def test_gated_discovery_drops_stale_and_terminal_symbols():
++    prices = _prices()
++    result = discover(prices, top_n=25, verdict=_verdict(prices))
++    symbols = set(result.shortlist["symbol"])
++    assert "STALELEADER" not in symbols
++    assert "JBCHEPHARM" not in symbols
++    assert {"GOODCO", "ALSOGOOD"} <= symbols
++
++
++def test_gateway_reason_codes_appear_in_the_rejection_counters():
++    prices = _prices()
++    result = discover(prices, top_n=25, verdict=_verdict(prices))
++    assert result.rejected["TERMINAL_MERGER"] == 1
++    assert result.rejected["STALE_SYMBOL_PRICE"] == 1
++    # the original strategy counters survive
++    assert {"insufficient_history", "low_price", "low_volume"} <= set(result.rejected)
++
++
++def test_report_is_dated_by_the_market_not_by_the_top_ranked_symbol():
++    prices = _prices()
++    ungated = discover(prices, top_n=25)
++    assert ungated.as_of_date == MARKET_DATE, "market date must not come from a symbol"
++    gated = discover(prices, top_n=25, verdict=_verdict(prices))
++    assert gated.as_of_date == MARKET_DATE
++    assert gated.market_date == MARKET_DATE
++
++
++def test_etf_is_shortlisted_but_marked_observe_only():
++    prices = _prices()
++    result = discover(prices, top_n=25, verdict=_verdict(prices))
++    row = result.shortlist.set_index("symbol").loc["GOLDBEES"]
++    assert row["instrument_class"] == "NON_EQ_UNVERIFIED"
++    assert bool(row["entry_permitted"]) is False
++
++
++def test_equities_remain_entry_permitted():
++    prices = _prices()
++    result = discover(prices, top_n=25, verdict=_verdict(prices))
++    row = result.shortlist.set_index("symbol").loc["GOODCO"]
++    assert row["instrument_class"] == "EQUITY"
++    assert bool(row["entry_permitted"]) is True
++
++
++def test_gateway_diagnostics_are_carried_on_the_result():
++    prices = _prices()
++    result = discover(prices, top_n=25, verdict=_verdict(prices))
++    assert result.gateway["terminal_symbols"] == ["JBCHEPHARM"]
++    assert result.gateway["market_date"] == MARKET_DATE
++
++
++def test_empty_price_frame_is_survivable():
++    empty = pd.DataFrame(columns=["symbol", "trade_date", "close", "volume"])
++    result = discover(empty, top_n=25)
++    assert result.eligible == 0
++    assert result.shortlist.empty
++
++
++# --- run_local end to end ---------------------------------------------------
++
++@pytest.fixture()
++def database(tmp_path: Path) -> Path:
++    path = tmp_path / "nse_scanner.db"
++    prices = _prices()
++    with sqlite3.connect(path) as conn:
++        conn.execute("""CREATE TABLE daily_prices_v2 (
++            symbol TEXT NOT NULL, trade_date TEXT NOT NULL, open REAL, high REAL,
++            low REAL, close REAL, volume REAL, PRIMARY KEY(symbol, trade_date))""")
++        conn.execute("""CREATE TABLE symbol_master_v2 (
++            symbol TEXT PRIMARY KEY, isin TEXT, company_name TEXT, series TEXT,
++            sector TEXT, industry TEXT, listing_date TEXT, delisting_date TEXT,
++            active INTEGER NOT NULL DEFAULT 1,
++            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
++        rows = prices.copy()
++        rows["trade_date"] = rows["trade_date"].dt.strftime("%Y-%m-%d")
++        conn.executemany(
++            "INSERT INTO daily_prices_v2 (symbol,trade_date,open,high,low,close,volume)"
++            " VALUES (?,?,?,?,?,?,?)",
++            [tuple(r) for r in rows[["symbol", "trade_date", "open", "high",
++                                     "low", "close", "volume"]].itertuples(index=False)],
++        )
++        conn.executemany(
++            "INSERT INTO symbol_master_v2 (symbol, series, active) VALUES (?,?,?)",
++            [(s, "EQ", 1) for s in ("STALELEADER", "GOODCO", "ALSOGOOD")],
++        )
++    V2Database(path).ensure_v3_schema()
++    with sqlite3.connect(path) as conn:
++        upsert_events(conn, [JBCHEPHARM_EVENT])
++    return path
++
++
++def test_run_local_gates_the_shortlist_and_dates_the_report(database):
++    report = run_local(str(database), as_of=MARKET_DATE, top_n=25)
++    symbols = {row["symbol"] for row in report["shortlist"]}
++    assert "JBCHEPHARM" not in symbols
++    assert "STALELEADER" not in symbols
++    assert report["market_date"] == MARKET_DATE
++    assert report["as_of_date"] == MARKET_DATE
++    assert report["tradeability"]["terminal_symbols"] == ["JBCHEPHARM"]
++
++
++def test_ready_alone_no_longer_authorises_a_paper_entry(database):
++    """An observe-only symbol may reach READY but must not be paper-enabled."""
++    report = run_local(str(database), as_of=MARKET_DATE, top_n=25)
++    for row in report["shortlist"]:
++        if not row["entry_permitted"]:
++            assert row["paper_entry_enabled"] is False
++        if row["paper_entry_enabled"]:
++            assert row["hull_state"] == "READY" and row["entry_permitted"]
++
++
++def test_entry_withheld_symbols_are_named_in_the_report(database):
++    report = run_local(str(database), as_of=MARKET_DATE, top_n=25)
++    shortlisted = {row["symbol"] for row in report["shortlist"]}
++    if "GOLDBEES" in shortlisted:
++        assert "GOLDBEES" in report["entry_withheld"]
++
++
++def test_historical_replay_before_the_merger_still_ranks_the_symbol(database):
++    report = run_local(str(database), as_of="2026-07-16", top_n=25)
++    assert report["market_date"] == "2026-07-16"
++    assert report["tradeability"]["terminal_symbols"] == []
++    assert "JBCHEPHARM" in {row["symbol"] for row in report["shortlist"]}
+-- 
+2.34.1
+

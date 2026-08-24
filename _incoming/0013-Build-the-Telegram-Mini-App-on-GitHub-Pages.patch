@@ -1,0 +1,2348 @@
+From 6cb42a1d028977f59e94af11b6a2a06f321704ee Mon Sep 17 00:00:00 2001
+From: Jayesh Rathod <jayesh4.rathod@ril.com>
+Date: Fri, 21 Aug 2026 17:44:25 +0530
+Subject: [PATCH 13/14] Build the Telegram Mini App on GitHub Pages
+
+A Mini App is a web page, not a server, which is why it fits this architecture:
+the daily run writes a static JSON feed, Pages serves the page, nothing runs in
+between.
+
+The existing nse_miniapp.html is left alone. It was written for the V1 scanner
+shape -- situation, weekly_tier, strike, acc_days -- none of which exists in the
+V2/V3, Ladder or Hull output, and it loads no Telegram SDK, so it is a plain web
+page rather than a Mini App. V1 is frozen, so this is a separate build.
+
+v2/miniapp_feed.py
+  Normalises all four scanners' run files into one flat item list, so the page
+  has a single shape to render regardless of how the scanners' internals differ.
+  Adding a fifth scanner is one adapter plus one line in SCANNER_SOURCES; the
+  page needs no change.
+
+  Two properties are deliberate and pinned by tests:
+  * Absent data is omitted, never defaulted. A missing price renders as a dash,
+    not 0.00, because a zero reads as real information.
+  * Availability is kept distinct from stage, so a circuit-locked or merged
+    symbol stays visible and clearly unbuyable rather than disappearing.
+
+  It is defensive by construction: a corrupt or missing scanner file cannot empty
+  the feed, and each scanner's own market date is carried so the page can warn
+  when one has fallen behind the others.
+
+docs/index.html
+  Single file, no build step, no bundler, no CDN beyond Telegram's own SDK -- a
+  test enforces that. Telegram theme and dark mode, haptics, filter chips by
+  scanner and stage, tap for the full plan, TradingView link.
+
+  Internal reason codes never reach the screen. STALE_SYMBOL_PRICE reads
+  "Hasn't traded recently", TERMINAL_MERGER reads "Merged into another company",
+  NOT_IN_CURRENT_NSE_UNIVERSE reads "Not a listed company (fund or ETF)". A test
+  asserts every code has a translation, so adding a code without plain wording
+  fails the build.
+
+.github/workflows/pages.yml
+  Publishes docs/ on pushes that touch it, and refuses to publish when the feed
+  is missing or not valid JSON. Requires one setting: Pages source = GitHub
+  Actions.
+
+pipeline.yml builds and commits the feed after the scanners run. The step is
+continue-on-error, so a feed problem can never fail the scan.
+
+v2/scanner_notices.render_miniapp_link appends the link to the Ladder and Hull
+Pine cards. MINI_APP_TELEGRAM_LINK (a BotFather /newapp link) opens inside
+Telegram; MINI_APP_URL opens in the browser and is labelled as such. Neither set
+means no link and nothing breaks. nse_output.py is untouched, but reads the same
+MINI_APP_URL, so setting it repoints the old V1 button too.
+
+Verified against the real store: 42 items from two scanners -- 25 Ladder, 17 Hull
+Pine, 5 of them open positions. A node check confirmed every item field the page
+reads is one the builder can emit.
+
+docs/MINIAPP_SETUP.md covers the four setup steps and states the limits plainly:
+end-of-day only, read-only, and the feed is publicly readable because the repo
+is public.
+
+Tests: 23 new. Suite 446 passed.
+---
+ .github/workflows/pages.yml    |  47 ++
+ .github/workflows/pipeline.yml |   6 +
+ docs/MINIAPP_SETUP.md          | 140 +++++
+ docs/data/feed.json            | 947 +++++++++++++++++++++++++++++++++
+ docs/index.html                | 351 ++++++++++++
+ old_nse_hull/engine.py         |   8 +-
+ pine_hull/preview.py           |   2 +
+ scripts/build_miniapp_feed.py  |  55 ++
+ tests/test_miniapp_feed.py     | 251 +++++++++
+ v2/miniapp_feed.py             | 316 +++++++++++
+ v2/scanner_notices.py          |  25 +
+ 11 files changed, 2147 insertions(+), 1 deletion(-)
+ create mode 100644 .github/workflows/pages.yml
+ create mode 100755 docs/MINIAPP_SETUP.md
+ create mode 100644 docs/data/feed.json
+ create mode 100755 docs/index.html
+ create mode 100644 scripts/build_miniapp_feed.py
+ create mode 100755 tests/test_miniapp_feed.py
+ create mode 100755 v2/miniapp_feed.py
+
+diff --git a/.github/workflows/pages.yml b/.github/workflows/pages.yml
+new file mode 100644
+index 0000000..d276e04
+--- /dev/null
++++ b/.github/workflows/pages.yml
+@@ -0,0 +1,47 @@
++name: Publish Mini App to GitHub Pages
++
++# The Mini App is a static page plus a static JSON feed, so it needs hosting but
++# no server. This publishes docs/ whenever the daily pipeline commits a new feed.
++#
++# One-time setup: Settings -> Pages -> Build and deployment -> Source:
++# "GitHub Actions". Then note the published URL and set MINI_APP_URL.
++
++on:
++  push:
++    branches: [main]
++    paths:
++      - 'docs/**'
++      - '.github/workflows/pages.yml'
++  workflow_dispatch:
++
++permissions:
++  contents: read
++  pages: write
++  id-token: write
++
++# Never cancel a publish midway; let one finish before the next starts.
++concurrency:
++  group: pages
++  cancel-in-progress: false
++
++jobs:
++  deploy:
++    runs-on: ubuntu-latest
++    environment:
++      name: github-pages
++      url: ${{ steps.deployment.outputs.page_url }}
++    steps:
++      - uses: actions/checkout@v4
++      - name: Fail early if the feed is missing
++        run: |
++          test -f docs/index.html || { echo "docs/index.html missing"; exit 1; }
++          test -f docs/data/feed.json || { echo "docs/data/feed.json missing"; exit 1; }
++          python -c "import json,sys; d=json.load(open('docs/data/feed.json')); \
++            print('feed items:', d.get('totals',{}).get('items')); \
++            sys.exit(0 if 'items' in d else 1)"
++      - uses: actions/configure-pages@v5
++      - uses: actions/upload-pages-artifact@v3
++        with:
++          path: docs
++      - id: deployment
++        uses: actions/deploy-pages@v4
+diff --git a/.github/workflows/pipeline.yml b/.github/workflows/pipeline.yml
+index 61b92f4..e45f488 100644
+--- a/.github/workflows/pipeline.yml
++++ b/.github/workflows/pipeline.yml
+@@ -54,6 +54,11 @@ jobs:
+           NSE_MARKET_CAP_URL: ${{ vars.NSE_MARKET_CAP_URL }}
+         run: python main_pipeline.py
+ 
++      - name: Build the Mini App feed
++        # Static feed for GitHub Pages; failure here must not fail the scan.
++        continue-on-error: true
++        run: python scripts/build_miniapp_feed.py
++
+       - name: Persist market history and reports
+         shell: bash
+         run: |
+@@ -69,6 +74,7 @@ jobs:
+           git add portfolio.json 2>/dev/null || true
+           git add v2_portfolio_state.json 2>/dev/null || true
+           git add output/v2_daily_run.json 2>/dev/null || true
++          git add docs/data/feed.json docs/data/feed_previous.json 2>/dev/null || true
+           if git diff --cached --quiet; then
+             echo "No scanner state changes to commit."
+           else
+diff --git a/docs/MINIAPP_SETUP.md b/docs/MINIAPP_SETUP.md
+new file mode 100755
+index 0000000..17d621b
+--- /dev/null
++++ b/docs/MINIAPP_SETUP.md
+@@ -0,0 +1,140 @@
++# Mini App — setup and how it works
++
++A Telegram Mini App is a web page, not a server. That is why this fits GitHub
++Actions: the daily run writes a static JSON file, GitHub Pages serves the page,
++and nothing needs to be running in between.
++
++```
++06:00 IST pipeline  ─┬─>  scanners write output/*_daily*.json
++                     └─>  scripts/build_miniapp_feed.py  ->  docs/data/feed.json
++                                                              (committed)
++                                        │
++                     push to main ──> pages.yml ──> GitHub Pages
++                                                        │
++                                          docs/index.html reads data/feed.json
++```
++
++The old `nse_miniapp.html` is untouched. It was built for the V1 scanner shape
++(`situation`, `weekly_tier`, `strike`) and uses no Telegram SDK, so it is a plain
++web page rather than a Mini App. V1 is frozen, so this is a separate build.
++
++---
++
++## Step 1 — Turn on GitHub Pages
++
++Repository → **Settings** → **Pages** → **Build and deployment** → Source:
++**GitHub Actions**.
++
++That is the only click required. `pages.yml` publishes `docs/` on every push to
++`main` that touches it, and refuses to publish if the feed is missing or is not
++valid JSON.
++
++Your URL will be:
++
++```
++https://jayeshsrathod.github.io/nse-scanner/
++```
++
++## Step 2 — Check it loads
++
++Open that URL in a normal browser first. You should see the scan with filter
++chips across the top. If you see "Could not load the scan", the feed has not been
++committed yet — run the pipeline once, or generate one locally:
++
++```bash
++python scripts/build_miniapp_feed.py
++```
++
++## Step 3 — Register it as a Mini App (optional but worth it)
++
++Without this, the link in your Telegram message opens the phone's browser. With
++it, the app opens *inside* Telegram.
++
++In **@BotFather**:
++
++```
++/newapp
++```
++
++- Choose the bot you want it attached to
++- **Title**: `NSE Scanner`
++- **Short description**: `Daily paper scan across all scanners`
++- **Photo**: 640×360
++- **Web App URL**: `https://jayeshsrathod.github.io/nse-scanner/`
++- **Short name**: `scan`
++
++You get back a link like `https://t.me/your_bot/scan`.
++
++## Step 4 — Point the messages at it
++
++Add one repository secret:
++
++| Secret | Value | Effect |
++|---|---|---|
++| `MINI_APP_TELEGRAM_LINK` | `https://t.me/your_bot/scan` | opens inside Telegram |
++| `MINI_APP_URL` | `https://jayeshsrathod.github.io/nse-scanner/` | opens in the browser |
++
++Set the Telegram one if you did Step 3. If neither is set, no link is added and
++nothing breaks. Pass whichever you use into the daily workflows alongside the
++existing `*_TELEGRAM_*` secrets.
++
++Setting `MINI_APP_URL` also happens to repoint the old V1 button, since
++`nse_output.py` reads the same variable.
++
++---
++
++## What the app shows
++
++Two rows of filters. The first picks a scanner, the second a stage.
++
++| Chip | Means |
++|---|---|
++| Holding | open paper positions |
++| Ready | a plan exists and entry is authorised |
++| Almost ready | a plan exists, a gate is outstanding |
++| Confirming | participation building, no plan yet |
++| Early | movement detected, observation only |
++| Can't buy | circuit-locked, merged, extended, or a fund |
++
++Tap any row for the full plan — buy zone, stop, targets, risk, and a chart link.
++
++At the bottom, **"Why stocks were skipped"** is collapsed by default and shows
++the gateway's reasons in plain words. Internal codes never reach the screen; a
++test enforces that every code has a translation.
++
++Two deliberate behaviours:
++
++- **Absent data is absent.** No price shows as `₹—`, not `₹0.00`. A test pins
++  this, because a zero would read as real information.
++- **A lagging scanner is called out.** If Hull Pine ran on an older session than
++  the Ladder, a banner says so rather than silently mixing dates.
++
++---
++
++## Limits, honestly
++
++- **End of day only.** No live prices. The feed changes once a day.
++- **Read-only.** Tapping cannot record a decision, because that needs something
++  listening on the other end. GitHub Actions cannot host a webhook.
++- **Your repo is public**, so `docs/data/feed.json` is publicly readable. It
++  already was — `telegram_last_scan.json` has been public all along. If you want
++  it private, Cloudflare Pages serves free from a private repo.
++- **Mini App origin rules tightened on 20 July 2026.** Serve the page from one
++  fixed domain; GitHub Pages satisfies this.
++
++---
++
++## Adding a fifth scanner
++
++One adapter in `v2/miniapp_feed.py`, one line in `SCANNER_SOURCES`. The page
++needs no change — it renders whatever the feed contains.
++
++## When the feed looks wrong
++
++```bash
++python scripts/build_miniapp_feed.py     # prints per-scanner status
++```
++
++`MISSING` means that scanner's run file was absent or unreadable. The feed is
++built defensively: one broken scanner cannot empty the others, and the build step
++is `continue-on-error`, so a feed problem can never fail the scan itself.
+diff --git a/docs/data/feed.json b/docs/data/feed.json
+new file mode 100644
+index 0000000..e930c8f
+--- /dev/null
++++ b/docs/data/feed.json
+@@ -0,0 +1,947 @@
++{
++  "feed_version": 2,
++  "generated_at": "2026-08-21T12:09:56+00:00",
++  "market_date": "2026-08-20",
++  "scanner_dates": {
++    "v3": null,
++    "ladder": "2026-08-20",
++    "hull": "2026-08-20",
++    "penny": null
++  },
++  "totals": {
++    "items": 42,
++    "held": 5,
++    "by_stage": {
++      "CONFIRMING": 17,
++      "READY": 13,
++      "RADAR": 12
++    },
++    "by_scanner": {
++      "v3": 0,
++      "ladder": 25,
++      "hull": 17,
++      "penny": 0
++    }
++  },
++  "scanners": [
++    {
++      "key": "v3",
++      "name": "NSE Scanner V3",
++      "status": "MISSING",
++      "items": []
++    },
++    {
++      "key": "ladder",
++      "name": "Momentum Ladder",
++      "status": "OK",
++      "market_date": "2026-08-20",
++      "items": [
++        {
++          "symbol": "BHAGYANGR",
++          "scanner": "ladder",
++          "stage": "CONFIRMING",
++          "score": 99.96191926884997,
++          "instrument_class": "EQUITY",
++          "next_action": "Await closed-bar confirmation",
++          "notes": [
++            "Hull WATCH"
++          ]
++        },
++        {
++          "symbol": "INDOTECH",
++          "scanner": "ladder",
++          "stage": "CONFIRMING",
++          "score": 99.85529322162986,
++          "instrument_class": "EQUITY",
++          "next_action": "Await closed-bar confirmation",
++          "notes": [
++            "Hull WATCH"
++          ]
++        },
++        {
++          "symbol": "DEEDEV",
++          "scanner": "ladder",
++          "stage": "CONFIRMING",
++          "score": 99.81721249047982,
++          "instrument_class": "EQUITY",
++          "next_action": "Await closed-bar confirmation",
++          "notes": [
++            "Hull WATCH"
++          ]
++        },
++        {
++          "symbol": "IDEAFORGE",
++          "scanner": "ladder",
++          "stage": "CONFIRMING",
++          "score": 99.64965727341965,
++          "instrument_class": "EQUITY",
++          "next_action": "Await closed-bar confirmation",
++          "notes": [
++            "Hull WATCH"
++          ]
++        },
++        {
++          "symbol": "TFCILTD",
++          "scanner": "ladder",
++          "stage": "READY",
++          "score": 99.55064737242955,
++          "instrument_class": "EQUITY",
++          "next_action": "Entry authorised",
++          "notes": [
++            "Hull READY"
++          ]
++        },
++        {
++          "symbol": "OMAXAUTO",
++          "scanner": "ladder",
++          "stage": "CONFIRMING",
++          "score": 99.3069306930693,
++          "instrument_class": "EQUITY",
++          "next_action": "Await closed-bar confirmation",
++          "notes": [
++            "Hull WATCH"
++          ]
++        },
++        {
++          "symbol": "MAWANASUG",
++          "scanner": "ladder",
++          "stage": "READY",
++          "score": 99.18507235338919,
++          "instrument_class": "EQUITY",
++          "next_action": "Entry authorised",
++          "notes": [
++            "Hull READY"
++          ]
++        },
++        {
++          "symbol": "CNL",
++          "scanner": "ladder",
++          "stage": "CONFIRMING",
++          "score": 99.13175932977913,
++          "instrument_class": "EQUITY",
++          "next_action": "Await closed-bar confirmation",
++          "notes": [
++            "Hull WATCH"
++          ]
++        },
++        {
++          "symbol": "PAUSHAKLTD",
++          "scanner": "ladder",
++          "stage": "CONFIRMING",
++          "score": 99.13175932977913,
++          "instrument_class": "EQUITY",
++          "next_action": "Await closed-bar confirmation",
++          "notes": [
++            "Hull WATCH"
++          ]
++        },
++        {
++          "symbol": "ZIMLAB",
++          "scanner": "ladder",
++          "stage": "READY",
++          "score": 99.08606245239908,
++          "instrument_class": "EQUITY",
++          "next_action": "Entry authorised",
++          "notes": [
++            "Hull READY"
++          ]
++        },
++        {
++          "symbol": "DIVGIITTS",
++          "scanner": "ladder",
++          "stage": "CONFIRMING",
++          "score": 98.88804265041888,
++          "instrument_class": "EQUITY",
++          "next_action": "Await closed-bar confirmation",
++          "notes": [
++            "Hull WATCH"
++          ]
++        },
++        {
++          "symbol": "HAPPYFORGE",
++          "scanner": "ladder",
++          "stage": "READY",
++          "score": 98.80426504188881,
++          "instrument_class": "EQUITY",
++          "next_action": "Entry authorised",
++          "notes": [
++            "Hull READY"
++          ]
++        },
++        {
++          "symbol": "KPL",
++          "scanner": "ladder",
++          "stage": "CONFIRMING",
++          "score": 98.58339680121858,
++          "instrument_class": "EQUITY",
++          "next_action": "Await closed-bar confirmation",
++          "notes": [
++            "Hull WATCH"
++          ]
++        },
++        {
++          "symbol": "NILKAMAL",
++          "scanner": "ladder",
++          "stage": "CONFIRMING",
++          "score": 98.28636709824829,
++          "instrument_class": "EQUITY",
++          "next_action": "Await closed-bar confirmation",
++          "notes": [
++            "Hull WATCH"
++          ]
++        },
++        {
++          "symbol": "SHILPAMED",
++          "scanner": "ladder",
++          "stage": "CONFIRMING",
++          "score": 98.14927646610815,
++          "instrument_class": "EQUITY",
++          "next_action": "Await closed-bar confirmation",
++          "notes": [
++            "Hull WATCH"
++          ]
++        },
++        {
++          "symbol": "IRISDOREME",
++          "scanner": "ladder",
++          "stage": "CONFIRMING",
++          "score": 97.86747905559787,
++          "instrument_class": "EQUITY",
++          "next_action": "Await closed-bar confirmation",
++          "notes": [
++            "Hull WATCH"
++          ]
++        },
++        {
++          "symbol": "RPEL",
++          "scanner": "ladder",
++          "stage": "READY",
++          "score": 97.53236862147753,
++          "instrument_class": "EQUITY",
++          "next_action": "Entry authorised",
++          "notes": [
++            "Hull READY"
++          ]
++        },
++        {
++          "symbol": "UFLEX",
++          "scanner": "ladder",
++          "stage": "READY",
++          "score": 97.40289413556741,
++          "instrument_class": "EQUITY",
++          "next_action": "Entry authorised",
++          "notes": [
++            "Hull READY"
++          ]
++        },
++        {
++          "symbol": "JKIPL",
++          "scanner": "ladder",
++          "stage": "CONFIRMING",
++          "score": 97.37242955064738,
++          "instrument_class": "EQUITY",
++          "next_action": "Await closed-bar confirmation",
++          "notes": [
++            "Hull WATCH"
++          ]
++        },
++        {
++          "symbol": "CYIENTDLM",
++          "scanner": "ladder",
++          "stage": "CONFIRMING",
++          "score": 97.31911652703732,
++          "instrument_class": "EQUITY",
++          "next_action": "Await closed-bar confirmation",
++          "notes": [
++            "Hull WATCH"
++          ]
++        },
++        {
++          "symbol": "SBCL",
++          "scanner": "ladder",
++          "stage": "CONFIRMING",
++          "score": 97.25818735719726,
++          "instrument_class": "EQUITY",
++          "next_action": "Await closed-bar confirmation",
++          "notes": [
++            "Hull WATCH"
++          ]
++        },
++        {
++          "symbol": "JGCHEM",
++          "scanner": "ladder",
++          "stage": "CONFIRMING",
++          "score": 97.05255140898706,
++          "instrument_class": "EQUITY",
++          "next_action": "Await closed-bar confirmation",
++          "notes": [
++            "Hull WATCH"
++          ]
++        },
++        {
++          "symbol": "RATNAVEER",
++          "scanner": "ladder",
++          "stage": "READY",
++          "score": 97.01447067783701,
++          "instrument_class": "EQUITY",
++          "next_action": "Entry authorised",
++          "notes": [
++            "Hull READY"
++          ]
++        },
++        {
++          "symbol": "PRICOLLTD",
++          "scanner": "ladder",
++          "stage": "CONFIRMING",
++          "score": 96.9002284843869,
++          "instrument_class": "EQUITY",
++          "next_action": "Await closed-bar confirmation",
++          "notes": [
++            "Hull WATCH"
++          ]
++        },
++        {
++          "symbol": "DALMIASUG",
++          "scanner": "ladder",
++          "stage": "READY",
++          "score": 96.83168316831683,
++          "instrument_class": "EQUITY",
++          "next_action": "Entry authorised",
++          "notes": [
++            "Hull READY"
++          ]
++        }
++      ],
++      "stages": {
++        "CONFIRMING": 17,
++        "READY": 8
++      },
++      "gateway": {
++        "evaluated": 2965,
++        "eligible": 2470,
++        "observe_only": 345,
++        "rejections": {
++          "NON_EQ_SERIES": 223,
++          "RESTRICTED_SECURITY": 159,
++          "STALE_SYMBOL_PRICE": 112,
++          "TERMINAL_MERGER": 1
++        },
++        "terminal": {
++          "JBCHEPHARM": {
++            "reason_code": "TERMINAL_MERGER",
++            "successor_symbol": "TORNTPHARM",
++            "conversion_ratio": 0.51,
++            "symbol_last_date": "2026-07-16"
++          }
++        }
++      },
++      "pnl": {}
++    },
++    {
++      "key": "hull",
++      "name": "Hull Pine",
++      "status": "OK",
++      "market_date": "2026-08-20",
++      "items": [
++        {
++          "symbol": "ABB",
++          "scanner": "hull",
++          "stage": "RADAR",
++          "score": 90.0,
++          "cmp": 7479.0
++        },
++        {
++          "symbol": "FEDERALBNK",
++          "scanner": "hull",
++          "stage": "RADAR",
++          "score": 90.0,
++          "cmp": 355.3
++        },
++        {
++          "symbol": "HDFCSML250",
++          "scanner": "hull",
++          "stage": "RADAR",
++          "score": 90.0,
++          "cmp": 185.25
++        },
++        {
++          "symbol": "JBCHEPHARM",
++          "scanner": "hull",
++          "stage": "RADAR",
++          "score": 90.0,
++          "cmp": 2408.9
++        },
++        {
++          "symbol": "MONEXT50",
++          "scanner": "hull",
++          "stage": "RADAR",
++          "score": 90.0,
++          "cmp": 74.34
++        },
++        {
++          "symbol": "AUTOIETF",
++          "scanner": "hull",
++          "stage": "RADAR",
++          "score": 85.0,
++          "cmp": 30.4
++        },
++        {
++          "symbol": "EICHERMOT",
++          "scanner": "hull",
++          "stage": "RADAR",
++          "score": 85.0,
++          "cmp": 8042.0
++        },
++        {
++          "symbol": "EVIETF",
++          "scanner": "hull",
++          "stage": "RADAR",
++          "score": 85.0,
++          "cmp": 33.94
++        },
++        {
++          "symbol": "EVINDIA",
++          "scanner": "hull",
++          "stage": "RADAR",
++          "score": 85.0,
++          "cmp": 33.91
++        },
++        {
++          "symbol": "GULFOILLUB",
++          "scanner": "hull",
++          "stage": "RADAR",
++          "score": 85.0,
++          "cmp": 1151.3
++        },
++        {
++          "symbol": "HDFCGROWTH",
++          "scanner": "hull",
++          "stage": "RADAR",
++          "score": 85.0,
++          "cmp": 121.17
++        },
++        {
++          "symbol": "IDFCFIRSTB",
++          "scanner": "hull",
++          "stage": "RADAR",
++          "score": 85.0,
++          "cmp": 85.84
++        },
++        {
++          "symbol": "GSEC10IETF",
++          "scanner": "hull",
++          "stage": "READY",
++          "cmp": 266.38,
++          "entry_low": 267.26,
++          "stop": 261.5,
++          "target1": 271.02,
++          "target2": 272.27,
++          "next_action": "Holding",
++          "held": true,
++          "entry_date": "2026-08-11",
++          "unrealised_pct": -0.33
++        },
++        {
++          "symbol": "MOMENTUM50",
++          "scanner": "hull",
++          "stage": "READY",
++          "cmp": 54.07,
++          "entry_low": 54.38,
++          "stop": 52.16,
++          "target1": 55.88,
++          "target2": 56.38,
++          "next_action": "Holding",
++          "held": true,
++          "entry_date": "2026-08-17",
++          "unrealised_pct": -0.57
++        },
++        {
++          "symbol": "ABSLNN50ET",
++          "scanner": "hull",
++          "stage": "READY",
++          "cmp": 78.29,
++          "entry_low": 78.29,
++          "stop": 76.22,
++          "target1": 80.05,
++          "target2": 80.78,
++          "next_action": "Holding",
++          "held": true,
++          "entry_date": "2026-08-20",
++          "unrealised_pct": 0.0
++        },
++        {
++          "symbol": "BERGEPAINT",
++          "scanner": "hull",
++          "stage": "READY",
++          "cmp": 528.55,
++          "entry_low": 528.55,
++          "stop": 509.56,
++          "target1": 552.7,
++          "target2": 560.74,
++          "next_action": "Holding",
++          "held": true,
++          "entry_date": "2026-08-20",
++          "unrealised_pct": 0.0
++        },
++        {
++          "symbol": "FOSECOIND",
++          "scanner": "hull",
++          "stage": "READY",
++          "cmp": 5506.0,
++          "entry_low": 5506.0,
++          "stop": 5172.44,
++          "target1": 5817.81,
++          "target2": 6004.9,
++          "next_action": "Holding",
++          "held": true,
++          "entry_date": "2026-08-20",
++          "unrealised_pct": 0.0
++        }
++      ],
++      "stages": {},
++      "gateway": {},
++      "pnl": {
++        "realised": -853.16,
++        "unrealised": -539.05,
++        "total": -1392.21
++      }
++    },
++    {
++      "key": "penny",
++      "name": "Penny & Microcap",
++      "status": "MISSING",
++      "items": []
++    }
++  ],
++  "items": [
++    {
++      "symbol": "BHAGYANGR",
++      "scanner": "ladder",
++      "stage": "CONFIRMING",
++      "score": 99.96191926884997,
++      "instrument_class": "EQUITY",
++      "next_action": "Await closed-bar confirmation",
++      "notes": [
++        "Hull WATCH"
++      ]
++    },
++    {
++      "symbol": "INDOTECH",
++      "scanner": "ladder",
++      "stage": "CONFIRMING",
++      "score": 99.85529322162986,
++      "instrument_class": "EQUITY",
++      "next_action": "Await closed-bar confirmation",
++      "notes": [
++        "Hull WATCH"
++      ]
++    },
++    {
++      "symbol": "DEEDEV",
++      "scanner": "ladder",
++      "stage": "CONFIRMING",
++      "score": 99.81721249047982,
++      "instrument_class": "EQUITY",
++      "next_action": "Await closed-bar confirmation",
++      "notes": [
++        "Hull WATCH"
++      ]
++    },
++    {
++      "symbol": "IDEAFORGE",
++      "scanner": "ladder",
++      "stage": "CONFIRMING",
++      "score": 99.64965727341965,
++      "instrument_class": "EQUITY",
++      "next_action": "Await closed-bar confirmation",
++      "notes": [
++        "Hull WATCH"
++      ]
++    },
++    {
++      "symbol": "TFCILTD",
++      "scanner": "ladder",
++      "stage": "READY",
++      "score": 99.55064737242955,
++      "instrument_class": "EQUITY",
++      "next_action": "Entry authorised",
++      "notes": [
++        "Hull READY"
++      ]
++    },
++    {
++      "symbol": "OMAXAUTO",
++      "scanner": "ladder",
++      "stage": "CONFIRMING",
++      "score": 99.3069306930693,
++      "instrument_class": "EQUITY",
++      "next_action": "Await closed-bar confirmation",
++      "notes": [
++        "Hull WATCH"
++      ]
++    },
++    {
++      "symbol": "MAWANASUG",
++      "scanner": "ladder",
++      "stage": "READY",
++      "score": 99.18507235338919,
++      "instrument_class": "EQUITY",
++      "next_action": "Entry authorised",
++      "notes": [
++        "Hull READY"
++      ]
++    },
++    {
++      "symbol": "CNL",
++      "scanner": "ladder",
++      "stage": "CONFIRMING",
++      "score": 99.13175932977913,
++      "instrument_class": "EQUITY",
++      "next_action": "Await closed-bar confirmation",
++      "notes": [
++        "Hull WATCH"
++      ]
++    },
++    {
++      "symbol": "PAUSHAKLTD",
++      "scanner": "ladder",
++      "stage": "CONFIRMING",
++      "score": 99.13175932977913,
++      "instrument_class": "EQUITY",
++      "next_action": "Await closed-bar confirmation",
++      "notes": [
++        "Hull WATCH"
++      ]
++    },
++    {
++      "symbol": "ZIMLAB",
++      "scanner": "ladder",
++      "stage": "READY",
++      "score": 99.08606245239908,
++      "instrument_class": "EQUITY",
++      "next_action": "Entry authorised",
++      "notes": [
++        "Hull READY"
++      ]
++    },
++    {
++      "symbol": "DIVGIITTS",
++      "scanner": "ladder",
++      "stage": "CONFIRMING",
++      "score": 98.88804265041888,
++      "instrument_class": "EQUITY",
++      "next_action": "Await closed-bar confirmation",
++      "notes": [
++        "Hull WATCH"
++      ]
++    },
++    {
++      "symbol": "HAPPYFORGE",
++      "scanner": "ladder",
++      "stage": "READY",
++      "score": 98.80426504188881,
++      "instrument_class": "EQUITY",
++      "next_action": "Entry authorised",
++      "notes": [
++        "Hull READY"
++      ]
++    },
++    {
++      "symbol": "KPL",
++      "scanner": "ladder",
++      "stage": "CONFIRMING",
++      "score": 98.58339680121858,
++      "instrument_class": "EQUITY",
++      "next_action": "Await closed-bar confirmation",
++      "notes": [
++        "Hull WATCH"
++      ]
++    },
++    {
++      "symbol": "NILKAMAL",
++      "scanner": "ladder",
++      "stage": "CONFIRMING",
++      "score": 98.28636709824829,
++      "instrument_class": "EQUITY",
++      "next_action": "Await closed-bar confirmation",
++      "notes": [
++        "Hull WATCH"
++      ]
++    },
++    {
++      "symbol": "SHILPAMED",
++      "scanner": "ladder",
++      "stage": "CONFIRMING",
++      "score": 98.14927646610815,
++      "instrument_class": "EQUITY",
++      "next_action": "Await closed-bar confirmation",
++      "notes": [
++        "Hull WATCH"
++      ]
++    },
++    {
++      "symbol": "IRISDOREME",
++      "scanner": "ladder",
++      "stage": "CONFIRMING",
++      "score": 97.86747905559787,
++      "instrument_class": "EQUITY",
++      "next_action": "Await closed-bar confirmation",
++      "notes": [
++        "Hull WATCH"
++      ]
++    },
++    {
++      "symbol": "RPEL",
++      "scanner": "ladder",
++      "stage": "READY",
++      "score": 97.53236862147753,
++      "instrument_class": "EQUITY",
++      "next_action": "Entry authorised",
++      "notes": [
++        "Hull READY"
++      ]
++    },
++    {
++      "symbol": "UFLEX",
++      "scanner": "ladder",
++      "stage": "READY",
++      "score": 97.40289413556741,
++      "instrument_class": "EQUITY",
++      "next_action": "Entry authorised",
++      "notes": [
++        "Hull READY"
++      ]
++    },
++    {
++      "symbol": "JKIPL",
++      "scanner": "ladder",
++      "stage": "CONFIRMING",
++      "score": 97.37242955064738,
++      "instrument_class": "EQUITY",
++      "next_action": "Await closed-bar confirmation",
++      "notes": [
++        "Hull WATCH"
++      ]
++    },
++    {
++      "symbol": "CYIENTDLM",
++      "scanner": "ladder",
++      "stage": "CONFIRMING",
++      "score": 97.31911652703732,
++      "instrument_class": "EQUITY",
++      "next_action": "Await closed-bar confirmation",
++      "notes": [
++        "Hull WATCH"
++      ]
++    },
++    {
++      "symbol": "SBCL",
++      "scanner": "ladder",
++      "stage": "CONFIRMING",
++      "score": 97.25818735719726,
++      "instrument_class": "EQUITY",
++      "next_action": "Await closed-bar confirmation",
++      "notes": [
++        "Hull WATCH"
++      ]
++    },
++    {
++      "symbol": "JGCHEM",
++      "scanner": "ladder",
++      "stage": "CONFIRMING",
++      "score": 97.05255140898706,
++      "instrument_class": "EQUITY",
++      "next_action": "Await closed-bar confirmation",
++      "notes": [
++        "Hull WATCH"
++      ]
++    },
++    {
++      "symbol": "RATNAVEER",
++      "scanner": "ladder",
++      "stage": "READY",
++      "score": 97.01447067783701,
++      "instrument_class": "EQUITY",
++      "next_action": "Entry authorised",
++      "notes": [
++        "Hull READY"
++      ]
++    },
++    {
++      "symbol": "PRICOLLTD",
++      "scanner": "ladder",
++      "stage": "CONFIRMING",
++      "score": 96.9002284843869,
++      "instrument_class": "EQUITY",
++      "next_action": "Await closed-bar confirmation",
++      "notes": [
++        "Hull WATCH"
++      ]
++    },
++    {
++      "symbol": "DALMIASUG",
++      "scanner": "ladder",
++      "stage": "READY",
++      "score": 96.83168316831683,
++      "instrument_class": "EQUITY",
++      "next_action": "Entry authorised",
++      "notes": [
++        "Hull READY"
++      ]
++    },
++    {
++      "symbol": "ABB",
++      "scanner": "hull",
++      "stage": "RADAR",
++      "score": 90.0,
++      "cmp": 7479.0
++    },
++    {
++      "symbol": "FEDERALBNK",
++      "scanner": "hull",
++      "stage": "RADAR",
++      "score": 90.0,
++      "cmp": 355.3
++    },
++    {
++      "symbol": "HDFCSML250",
++      "scanner": "hull",
++      "stage": "RADAR",
++      "score": 90.0,
++      "cmp": 185.25
++    },
++    {
++      "symbol": "JBCHEPHARM",
++      "scanner": "hull",
++      "stage": "RADAR",
++      "score": 90.0,
++      "cmp": 2408.9
++    },
++    {
++      "symbol": "MONEXT50",
++      "scanner": "hull",
++      "stage": "RADAR",
++      "score": 90.0,
++      "cmp": 74.34
++    },
++    {
++      "symbol": "AUTOIETF",
++      "scanner": "hull",
++      "stage": "RADAR",
++      "score": 85.0,
++      "cmp": 30.4
++    },
++    {
++      "symbol": "EICHERMOT",
++      "scanner": "hull",
++      "stage": "RADAR",
++      "score": 85.0,
++      "cmp": 8042.0
++    },
++    {
++      "symbol": "EVIETF",
++      "scanner": "hull",
++      "stage": "RADAR",
++      "score": 85.0,
++      "cmp": 33.94
++    },
++    {
++      "symbol": "EVINDIA",
++      "scanner": "hull",
++      "stage": "RADAR",
++      "score": 85.0,
++      "cmp": 33.91
++    },
++    {
++      "symbol": "GULFOILLUB",
++      "scanner": "hull",
++      "stage": "RADAR",
++      "score": 85.0,
++      "cmp": 1151.3
++    },
++    {
++      "symbol": "HDFCGROWTH",
++      "scanner": "hull",
++      "stage": "RADAR",
++      "score": 85.0,
++      "cmp": 121.17
++    },
++    {
++      "symbol": "IDFCFIRSTB",
++      "scanner": "hull",
++      "stage": "RADAR",
++      "score": 85.0,
++      "cmp": 85.84
++    },
++    {
++      "symbol": "GSEC10IETF",
++      "scanner": "hull",
++      "stage": "READY",
++      "cmp": 266.38,
++      "entry_low": 267.26,
++      "stop": 261.5,
++      "target1": 271.02,
++      "target2": 272.27,
++      "next_action": "Holding",
++      "held": true,
++      "entry_date": "2026-08-11",
++      "unrealised_pct": -0.33
++    },
++    {
++      "symbol": "MOMENTUM50",
++      "scanner": "hull",
++      "stage": "READY",
++      "cmp": 54.07,
++      "entry_low": 54.38,
++      "stop": 52.16,
++      "target1": 55.88,
++      "target2": 56.38,
++      "next_action": "Holding",
++      "held": true,
++      "entry_date": "2026-08-17",
++      "unrealised_pct": -0.57
++    },
++    {
++      "symbol": "ABSLNN50ET",
++      "scanner": "hull",
++      "stage": "READY",
++      "cmp": 78.29,
++      "entry_low": 78.29,
++      "stop": 76.22,
++      "target1": 80.05,
++      "target2": 80.78,
++      "next_action": "Holding",
++      "held": true,
++      "entry_date": "2026-08-20",
++      "unrealised_pct": 0.0
++    },
++    {
++      "symbol": "BERGEPAINT",
++      "scanner": "hull",
++      "stage": "READY",
++      "cmp": 528.55,
++      "entry_low": 528.55,
++      "stop": 509.56,
++      "target1": 552.7,
++      "target2": 560.74,
++      "next_action": "Holding",
++      "held": true,
++      "entry_date": "2026-08-20",
++      "unrealised_pct": 0.0
++    },
++    {
++      "symbol": "FOSECOIND",
++      "scanner": "hull",
++      "stage": "READY",
++      "cmp": 5506.0,
++      "entry_low": 5506.0,
++      "stop": 5172.44,
++      "target1": 5817.81,
++      "target2": 6004.9,
++      "next_action": "Holding",
++      "held": true,
++      "entry_date": "2026-08-20",
++      "unrealised_pct": 0.0
++    }
++  ]
++}
+diff --git a/docs/index.html b/docs/index.html
+new file mode 100755
+index 0000000..80b7096
+--- /dev/null
++++ b/docs/index.html
+@@ -0,0 +1,351 @@
++<!DOCTYPE html>
++<html lang="en">
++<head>
++<meta charset="utf-8">
++<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
++<title>NSE Scanner</title>
++<script src="https://telegram.org/js/telegram-web-app.js"></script>
++<style>
++  :root{
++    --bg:#ffffff; --fg:#111418; --muted:#6b7280; --line:#e5e7eb; --card:#f9fafb;
++    --accent:#2563eb; --ok:#15803d; --warn:#b45309; --bad:#b91c1c; --chip:#f3f4f6;
++  }
++  body.tg-dark{
++    --bg:#17212b; --fg:#f1f5f9; --muted:#9aa8b6; --line:#2b3947; --card:#1d2b38;
++    --accent:#5b9cf6; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --chip:#243342;
++  }
++  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
++  body{margin:0;background:var(--bg);color:var(--fg);
++    font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
++    padding:0 0 88px}
++  header{position:sticky;top:0;z-index:20;background:var(--bg);
++    border-bottom:1px solid var(--line);padding:12px 14px 10px}
++  h1{margin:0;font-size:17px;font-weight:650;letter-spacing:-.01em}
++  .sub{color:var(--muted);font-size:12.5px;margin-top:2px}
++  .row{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-top:10px}
++  .row::-webkit-scrollbar{display:none}
++  .chip{flex:0 0 auto;padding:6px 11px;border-radius:999px;background:var(--chip);
++    color:var(--fg);font-size:12.5px;border:1px solid transparent;cursor:pointer;
++    white-space:nowrap;user-select:none}
++  .chip[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
++  main{padding:12px 14px}
++  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
++    padding:11px 12px;margin-bottom:9px;cursor:pointer}
++  .card:active{opacity:.65}
++  .top{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
++  .sym{font-weight:650;font-size:15.5px;letter-spacing:-.01em}
++  .score{font-variant-numeric:tabular-nums;color:var(--muted);font-size:12.5px}
++  .tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
++  .tag{font-size:11px;padding:2.5px 7px;border-radius:6px;background:var(--chip);
++    color:var(--muted);font-weight:500}
++  .tag.stage{color:var(--accent)}
++  .tag.hold{color:var(--ok)}
++  .tag.block{color:var(--bad)}
++  .tag.watch{color:var(--warn)}
++  .nums{margin-top:7px;font-size:13px;color:var(--muted);
++    font-variant-numeric:tabular-nums;display:flex;flex-wrap:wrap;gap:4px 14px}
++  .nums b{color:var(--fg);font-weight:600}
++  .next{margin-top:6px;font-size:12.5px;color:var(--muted)}
++  .empty{text-align:center;color:var(--muted);padding:44px 20px;font-size:14px}
++  .banner{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--warn);
++    border-radius:8px;padding:9px 11px;margin-bottom:11px;font-size:12.5px;color:var(--muted)}
++  details{background:var(--card);border:1px solid var(--line);border-radius:10px;
++    padding:9px 11px;margin-top:14px;font-size:12.5px;color:var(--muted)}
++  summary{cursor:pointer;font-weight:600;color:var(--fg);font-size:13px}
++  details table{width:100%;border-collapse:collapse;margin-top:8px}
++  details td{padding:3px 0;border-bottom:1px solid var(--line)}
++  details td:last-child{text-align:right;font-variant-numeric:tabular-nums;color:var(--fg)}
++  .sheet{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.45);
++    display:none;align-items:flex-end}
++  .sheet.on{display:flex}
++  .panel{background:var(--bg);width:100%;border-radius:16px 16px 0 0;
++    padding:16px 16px calc(20px + env(safe-area-inset-bottom));max-height:86vh;overflow:auto}
++  .panel h2{margin:0 0 2px;font-size:19px;letter-spacing:-.02em}
++  .plan{margin-top:12px;border-top:1px solid var(--line)}
++  .plan div{display:flex;justify-content:space-between;padding:8px 0;
++    border-bottom:1px solid var(--line);font-size:13.5px}
++  .plan span:first-child{color:var(--muted)}
++  .plan span:last-child{font-variant-numeric:tabular-nums;font-weight:600}
++  .btn{display:block;text-align:center;margin-top:14px;padding:12px;border-radius:10px;
++    background:var(--accent);color:#fff;text-decoration:none;font-weight:600;font-size:14px}
++  .note{margin-top:10px;font-size:12.5px;color:var(--muted)}
++  .disclaimer{margin:18px 0 0;font-size:11.5px;color:var(--muted);text-align:center}
++</style>
++</head>
++<body>
++
++<header>
++  <h1>NSE Scanner</h1>
++  <div class="sub" id="sub">Loading…</div>
++  <div class="row" id="scanners"></div>
++  <div class="row" id="stages"></div>
++</header>
++
++<main>
++  <div id="banner"></div>
++  <div id="list"></div>
++  <details id="diag" hidden>
++    <summary>Why stocks were skipped</summary>
++    <div id="diagBody"></div>
++  </details>
++  <p class="disclaimer">Paper research only. Not trading advice.<br>
++     End-of-day data. Prices are not live.</p>
++</main>
++
++<div class="sheet" id="sheet"><div class="panel" id="panel"></div></div>
++
++<script>
++(function(){
++  "use strict";
++  var tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
++  if (tg) {
++    try {
++      tg.ready(); tg.expand();
++      if (tg.colorScheme === "dark") document.body.classList.add("tg-dark");
++      tg.onEvent("themeChanged", function(){
++        document.body.classList.toggle("tg-dark", tg.colorScheme === "dark");
++      });
++    } catch(e){}
++  } else if (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches) {
++    document.body.classList.add("tg-dark");
++  }
++
++  // Stage order is the progression; availability states sit outside it.
++  var STAGE_ORDER = ["READY","QUALIFIED","CONFIRMING","RADAR","UNQUALIFIED"];
++  var BLOCKING = ["CIRCUIT_LOCKED","TERMINATED","CORPORATE_REVIEW","OBSERVE_ONLY","EXTENDED"];
++  var LABEL = {
++    READY:"Ready", QUALIFIED:"Almost ready", CONFIRMING:"Confirming",
++    RADAR:"Early", UNQUALIFIED:"Not yet",
++    CIRCUIT_LOCKED:"Can't buy", TERMINATED:"Gone", CORPORATE_REVIEW:"On hold",
++    OBSERVE_ONLY:"Fund, watch only", EXTENDED:"Ran too far"
++  };
++  // Internal codes are never shown raw.
++  var PLAIN = {
++    STALE_SYMBOL_PRICE:"Hasn't traded recently",
++    TERMINAL_MERGER:"Merged into another company",
++    DELISTED_SECURITY:"Delisted",
++    SUSPENDED_SECURITY:"Suspended",
++    NON_EQ_SERIES:"Not a normal equity series",
++    RESTRICTED_SECURITY:"Under exchange restriction",
++    NOT_IN_CURRENT_NSE_UNIVERSE:"Not a listed company (fund or ETF)",
++    INVALID_LATEST_ROW:"Last day's prices look wrong",
++    CORPORATE_ACTION_REVIEW:"Company event pending",
++    INACTIVE_SECURITY:"No longer active"
++  };
++
++  var feed = null, scanner = "all", stage = "all";
++  var $ = function(id){ return document.getElementById(id); };
++
++  function money(v){
++    if (v === null || v === undefined) return "—";
++    return "₹" + Number(v).toLocaleString("en-IN",
++      {minimumFractionDigits:2, maximumFractionDigits:2});
++  }
++  function esc(s){
++    return String(s === null || s === undefined ? "" : s)
++      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
++      .replace(/"/g,"&quot;");
++  }
++  function state(it){ return it.availability || it.stage; }
++  function cls(s){
++    if (BLOCKING.indexOf(s) >= 0) return "block";
++    if (s === "READY" || s === "QUALIFIED") return "hold";
++    if (s === "CONFIRMING") return "watch";
++    return "stage";
++  }
++
++  function visible(){
++    return (feed.items || []).filter(function(it){
++      if (scanner !== "all" && it.scanner !== scanner) return false;
++      if (stage === "all") return true;
++      if (stage === "held") return !!it.held;
++      if (stage === "blocked") return BLOCKING.indexOf(state(it)) >= 0;
++      return state(it) === stage;
++    }).sort(function(a,b){
++      var ra = STAGE_ORDER.indexOf(a.stage), rb = STAGE_ORDER.indexOf(b.stage);
++      if (ra !== rb) return (ra < 0 ? 99 : ra) - (rb < 0 ? 99 : rb);
++      return (b.score || 0) - (a.score || 0);
++    });
++  }
++
++  function chips(host, options, current, onPick){
++    host.innerHTML = "";
++    options.forEach(function(o){
++      var b = document.createElement("button");
++      b.className = "chip";
++      b.setAttribute("aria-pressed", String(o.key === current));
++      b.textContent = o.label + (o.count !== undefined ? "  " + o.count : "");
++      b.onclick = function(){
++        if (tg && tg.HapticFeedback) { try { tg.HapticFeedback.selectionChanged(); } catch(e){} }
++        onPick(o.key);
++      };
++      host.appendChild(b);
++    });
++  }
++
++  function card(it){
++    var s = state(it);
++    var el = document.createElement("div");
++    el.className = "card";
++    var nums = [];
++    if (it.cmp !== undefined) nums.push("Price <b>" + money(it.cmp) + "</b>");
++    if (it.entry_low !== undefined) {
++      nums.push("Buy <b>" + money(it.entry_low) +
++        (it.entry_high !== undefined ? "–" + money(it.entry_high) : "") + "</b>");
++    }
++    if (it.stop !== undefined) nums.push("Stop <b>" + money(it.stop) + "</b>");
++    if (it.unrealised_pct !== undefined) {
++      nums.push("P&amp;L <b>" + (it.unrealised_pct > 0 ? "+" : "") +
++        it.unrealised_pct.toFixed(1) + "%</b>");
++    }
++    el.innerHTML =
++      '<div class="top"><span class="sym">' + esc(it.symbol) + '</span>' +
++      (it.score !== undefined ? '<span class="score">' + Math.round(it.score) + '</span>' : '') +
++      '</div>' +
++      '<div class="tags">' +
++        '<span class="tag ' + cls(s) + '">' + esc(LABEL[s] || s) + '</span>' +
++        '<span class="tag">' + esc((feed.scanners.filter(function(b){
++            return b.key === it.scanner; })[0] || {}).name || it.scanner) + '</span>' +
++        (it.held ? '<span class="tag hold">Holding</span>' : '') +
++      '</div>' +
++      (nums.length ? '<div class="nums">' + nums.join("") + '</div>' : '') +
++      (it.next_action ? '<div class="next">' + esc(it.next_action) + '</div>' : '');
++    el.onclick = function(){ openSheet(it); };
++    return el;
++  }
++
++  function openSheet(it){
++    var s = state(it);
++    var rows = [
++      ["Status", LABEL[s] || s],
++      ["Scanner", (feed.scanners.filter(function(b){ return b.key === it.scanner; })[0] || {}).name || it.scanner]
++    ];
++    if (it.score !== undefined) rows.push(["Score", Math.round(it.score) + " / 100"]);
++    if (it.cmp !== undefined) rows.push(["Last price", money(it.cmp)]);
++    if (it.entry_low !== undefined) {
++      rows.push(["Buy zone", money(it.entry_low) +
++        (it.entry_high !== undefined ? " – " + money(it.entry_high) : "")]);
++    }
++    if (it.stop !== undefined) rows.push(["Stop loss", money(it.stop)]);
++    if (it.target1 !== undefined) rows.push(["Target 1", money(it.target1)]);
++    if (it.target2 !== undefined) rows.push(["Target 2", money(it.target2)]);
++    if (it.risk_pct !== undefined) rows.push(["Risk if stopped", it.risk_pct.toFixed(2) + "%"]);
++    if (it.entry_date) rows.push(["Bought on", it.entry_date]);
++    if (it.unrealised_pct !== undefined) {
++      rows.push(["Open P&L", (it.unrealised_pct > 0 ? "+" : "") + it.unrealised_pct.toFixed(2) + "%"]);
++    }
++    if (it.instrument_class === "NON_EQ_UNVERIFIED") {
++      rows.push(["Note", "Fund or ETF — watch only"]);
++    }
++
++    $("panel").innerHTML =
++      '<h2>' + esc(it.symbol) + '</h2>' +
++      '<div class="sub">' + esc(LABEL[s] || s) +
++        (it.next_action ? " · " + esc(it.next_action) : "") + '</div>' +
++      '<div class="plan">' + rows.map(function(r){
++        return '<div><span>' + esc(r[0]) + '</span><span>' + esc(r[1]) + '</span></div>';
++      }).join("") + '</div>' +
++      (it.notes && it.notes.length
++        ? '<div class="note">' + it.notes.map(esc).join("<br>") + '</div>' : '') +
++      '<a class="btn" target="_blank" rel="noopener" href="https://www.tradingview.com/chart/?symbol=NSE%3A' +
++        encodeURIComponent(it.symbol) + '">Open chart</a>' +
++      '<div class="note">Paper research only. Check the chart before acting.</div>';
++    $("sheet").classList.add("on");
++    if (tg && tg.HapticFeedback) { try { tg.HapticFeedback.impactOccurred("light"); } catch(e){} }
++  }
++
++  $("sheet").onclick = function(e){
++    if (e.target === $("sheet")) $("sheet").classList.remove("on");
++  };
++
++  function diagnostics(){
++    var merged = {}, terminal = {};
++    feed.scanners.forEach(function(b){
++      var g = b.gateway || {};
++      Object.keys(g.rejections || {}).forEach(function(k){
++        merged[k] = (merged[k] || 0) + g.rejections[k];
++      });
++      Object.keys(g.terminal || {}).forEach(function(k){ terminal[k] = g.terminal[k]; });
++    });
++    var keys = Object.keys(merged).sort(function(a,b){ return merged[b] - merged[a]; });
++    if (!keys.length && !Object.keys(terminal).length) { $("diag").hidden = true; return; }
++    $("diag").hidden = false;
++    var html = '<table>' + keys.map(function(k){
++      return '<tr><td>' + esc(PLAIN[k] || k) + '</td><td>' + merged[k] + '</td></tr>';
++    }).join("") + '</table>';
++    Object.keys(terminal).forEach(function(sym){
++      var t = terminal[sym] || {};
++      html += '<div class="note"><b>' + esc(sym) + '</b> — ' +
++        esc(PLAIN[t.reason_code] || t.reason_code || "removed") +
++        (t.successor_symbol ? ", now " + esc(t.successor_symbol) : "") +
++        (t.symbol_last_date ? ". Last traded " + esc(t.symbol_last_date) + "." : "") +
++        " Past prices are kept.</div>";
++    });
++    $("diagBody").innerHTML = html;
++  }
++
++  function render(){
++    var t = feed.totals || {};
++    var counts = {};
++    (feed.items || []).forEach(function(it){
++      var s = state(it); counts[s] = (counts[s] || 0) + 1;
++    });
++
++    chips($("scanners"), [{key:"all", label:"All"}].concat(
++      feed.scanners.filter(function(b){ return b.items.length; }).map(function(b){
++        return {key:b.key, label:b.name, count:b.items.length};
++      })), scanner, function(k){ scanner = k; render(); });
++
++    var stageOpts = [{key:"all", label:"Everything"}];
++    if (t.held) stageOpts.push({key:"held", label:"Holding", count:t.held});
++    STAGE_ORDER.forEach(function(s){
++      if (counts[s]) stageOpts.push({key:s, label:LABEL[s] || s, count:counts[s]});
++    });
++    var blocked = BLOCKING.reduce(function(n,s){ return n + (counts[s] || 0); }, 0);
++    if (blocked) stageOpts.push({key:"blocked", label:"Can't buy", count:blocked});
++    chips($("stages"), stageOpts, stage, function(k){ stage = k; render(); });
++
++    var lagging = [];
++    var dates = feed.scanner_dates || {};
++    Object.keys(dates).forEach(function(k){
++      if (dates[k] && feed.market_date && dates[k] < feed.market_date) {
++        lagging.push(((feed.scanners.filter(function(b){ return b.key === k; })[0]) || {}).name || k);
++      }
++    });
++    $("banner").innerHTML = lagging.length
++      ? '<div class="banner">' + esc(lagging.join(", ")) +
++        ' last ran on an older session, so those rows may be out of date.</div>'
++      : "";
++
++    var rows = visible();
++    $("sub").textContent = (feed.market_date || "no date") + " close · " +
++      rows.length + " of " + (t.items || 0) + " shown";
++
++    var list = $("list");
++    list.innerHTML = "";
++    if (!rows.length) {
++      list.innerHTML = '<div class="empty">Nothing here today.<br>' +
++        'That is a normal outcome, not an error.</div>';
++    } else {
++      var frag = document.createDocumentFragment();
++      rows.forEach(function(it){ frag.appendChild(card(it)); });
++      list.appendChild(frag);
++    }
++    diagnostics();
++  }
++
++  fetch("data/feed.json?t=" + Date.now(), {cache:"no-store"})
++    .then(function(r){
++      if (!r.ok) throw new Error("HTTP " + r.status);
++      return r.json();
++    })
++    .then(function(d){ feed = d; render(); })
++    .catch(function(err){
++      $("sub").textContent = "Could not load today's data";
++      $("list").innerHTML = '<div class="empty">Could not load the scan.<br>' +
++        esc(err.message) + '<br><br>The daily run may not have finished yet.</div>';
++    });
++})();
++</script>
++</body>
++</html>
+diff --git a/old_nse_hull/engine.py b/old_nse_hull/engine.py
+index 70b1578..b93b976 100644
+--- a/old_nse_hull/engine.py
++++ b/old_nse_hull/engine.py
+@@ -24,7 +24,12 @@ from v2.progressive_stages import (
+     build_funnel,
+     classify,
+ )
+-from v2.scanner_notices import assemble, render_gateway_notice, render_stage_summary
++from v2.scanner_notices import (
++    assemble,
++    render_gateway_notice,
++    render_miniapp_link,
++    render_stage_summary,
++)
+ from v2.tradeability import gateway_from_database
+ 
+ 
+@@ -145,6 +150,7 @@ def render_radar(report: dict) -> str:
+         "\n".join(lines),
+         render_stage_summary(report.get("stage_funnel"), "LADDER STAGES"),
+         render_gateway_notice(report.get("tradeability")),
++        render_miniapp_link(),
+     )
+ 
+ 
+diff --git a/pine_hull/preview.py b/pine_hull/preview.py
+index d76e9bc..da1c210 100644
+--- a/pine_hull/preview.py
++++ b/pine_hull/preview.py
+@@ -7,6 +7,7 @@ from v2.scanner_notices import (
+     assemble,
+     render_expired_setups,
+     render_gateway_notice,
++    render_miniapp_link,
+     render_pending_setups,
+     render_reconciliation,
+     render_stage_summary,
+@@ -107,4 +108,5 @@ def render_daily_signals(result: dict) -> str:
+         render_reconciliation(result.get("reconciled") or []),
+         render_stage_summary(result.get("stage_funnel"), "PINE HULL STAGES"),
+         render_gateway_notice(result.get("tradeability")),
++        render_miniapp_link(),
+     )
+diff --git a/scripts/build_miniapp_feed.py b/scripts/build_miniapp_feed.py
+new file mode 100644
+index 0000000..d5201e6
+--- /dev/null
++++ b/scripts/build_miniapp_feed.py
+@@ -0,0 +1,55 @@
++#!/usr/bin/env python3
++"""Write the Mini App's static feed from whichever scanner runs are present.
++
++Run this at the end of the daily pipeline, after the scanners have written their
++own run files. The feed is committed to the repository and served by GitHub
++Pages, so the Mini App needs hosting but no server.
++
++    python scripts/build_miniapp_feed.py
++    python scripts/build_miniapp_feed.py --out docs/data/feed.json
++"""
++from __future__ import annotations
++
++import argparse
++import json
++import sys
++from pathlib import Path
++
++sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
++
++from v2.miniapp_feed import build_feed, write_feed  # noqa: E402
++
++
++def main(argv: list[str] | None = None) -> int:
++    parser = argparse.ArgumentParser(description=__doc__,
++                                     formatter_class=argparse.RawDescriptionHelpFormatter)
++    parser.add_argument("--root", default=".")
++    parser.add_argument("--out", default="docs/data/feed.json")
++    parser.add_argument("--history", default="docs/data/feed_previous.json",
++                        help="keep one prior feed so the app can show what changed")
++    args = parser.parse_args(argv)
++
++    out = Path(args.out)
++    if out.exists() and args.history:
++        history = Path(args.history)
++        history.parent.mkdir(parents=True, exist_ok=True)
++        history.write_text(out.read_text(encoding="utf-8"), encoding="utf-8")
++
++    feed = build_feed(root=args.root)
++    write_feed(feed, out)
++
++    totals = feed["totals"]
++    print(f"market date : {feed['market_date']}")
++    print(f"items       : {totals['items']} (held {totals['held']})")
++    for block in feed["scanners"]:
++        print(f"  {block['key']:8s} {block['status']:9s} {len(block['items']):>4} items"
++              f"  date={block.get('market_date') or '-'}")
++    print(f"by stage    : {json.dumps(totals['by_stage'])}")
++    print(f"written     : {out} ({out.stat().st_size / 1024:.1f} KB)")
++    if totals["items"] == 0:
++        print("\nWARNING: the feed is empty. Check that the scanners wrote their run files.")
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/tests/test_miniapp_feed.py b/tests/test_miniapp_feed.py
+new file mode 100755
+index 0000000..1cc5e71
+--- /dev/null
++++ b/tests/test_miniapp_feed.py
+@@ -0,0 +1,251 @@
++"""The Mini App feed contract.
++
++The app is a static page with no server, so the feed *is* the API. These tests
++pin the shape the page depends on, and the two properties that keep it honest:
++absent data is omitted rather than defaulted to zero, and a symbol that cannot be
++bought stays visible with that fact attached.
++"""
++from __future__ import annotations
++
++import json
++import re
++from pathlib import Path
++
++import pytest
++
++from v2.miniapp_feed import (
++    FEED_VERSION,
++    SCANNER_SOURCES,
++    FeedItem,
++    build_feed,
++    from_hull,
++    from_ladder,
++    from_penny,
++    from_v3,
++    write_feed,
++)
++
++REPO = Path(__file__).resolve().parents[1]
++
++
++# --- item shape -------------------------------------------------------------
++
++def test_absent_values_are_omitted_not_zeroed():
++    """A card showing 0.00 where there is no data would be a lie."""
++    payload = FeedItem(symbol="AAA", scanner="v3", stage="RADAR").to_dict()
++    assert payload == {"symbol": "AAA", "scanner": "v3", "stage": "RADAR"}
++    for absent in ("cmp", "entry_low", "stop", "score", "risk_pct", "notes", "held"):
++        assert absent not in payload
++
++
++def test_real_values_survive():
++    payload = FeedItem(symbol="AAA", scanner="hull", stage="READY", score=82.0,
++                       cmp=100.5, stop=95.0, held=True, notes=["x"]).to_dict()
++    assert payload["score"] == 82.0
++    assert payload["held"] is True
++    assert payload["notes"] == ["x"]
++
++
++def test_non_numeric_and_infinite_inputs_are_dropped():
++    from v2.miniapp_feed import _num
++    for bad in ("", "abc", None, True, False, float("inf"), float("nan")):
++        assert _num(bad) is None
++    assert _num("12.5") == 12.5
++    assert _num(3) == 3.0
++
++
++# --- adapters ---------------------------------------------------------------
++
++def test_hull_adapter_reads_setups_watch_and_holdings():
++    items = from_hull({
++        "pending": [{"symbol": "BERGEPAINT", "score": 85.0, "signal_close": 528.55,
++                     "entry_low": 539.55, "entry_high": 547.60, "initial_stop": 509.56,
++                     "sessions_waited": 2}],
++        "watch": [{"symbol": "ABB", "stage": "RADAR", "score": 70.0, "close": 7605.0,
++                   "setup_stage": "BUILD"}],
++        "open_positions": [{"symbol": "FOSECOIND", "entry": 5000.0, "last_price": 5500.0,
++                            "stop": 4800.0, "entry_date": "2026-08-20"}],
++    })
++    by_symbol = {i.symbol: i for i in items}
++    assert by_symbol["BERGEPAINT"].stage == "QUALIFIED"
++    assert by_symbol["BERGEPAINT"].entry_high == 547.60
++    assert "Waiting 2 session(s)" in by_symbol["BERGEPAINT"].notes
++    assert by_symbol["ABB"].stage == "RADAR"
++    held = by_symbol["FOSECOIND"]
++    assert held.held is True
++    assert held.unrealised_pct == 10.0
++
++
++def test_ladder_adapter_reads_shortlist_and_paper_watchlist():
++    items = from_ladder({
++        "shortlist": [{"symbol": "BHAGYANGR", "discovery_score": 99.9,
++                       "stage": "CONFIRMING", "hull_state": "WATCH",
++                       "instrument_class": "EQUITY"}],
++        "multi_horizon_shadow": {"paper_lifecycle": {"watchlist": {
++            "AUBANK": {"entry_trigger": 1090.4, "stop": 1039.69,
++                       "target_1": 1166.48, "target_2": 1217.19, "risk_pct": 4.65}}}},
++    })
++    by_symbol = {i.symbol: i for i in items}
++    assert by_symbol["BHAGYANGR"].stage == "CONFIRMING"
++    assert "Hull WATCH" in by_symbol["BHAGYANGR"].notes
++    assert by_symbol["AUBANK"].stage == "QUALIFIED"
++    assert by_symbol["AUBANK"].entry_low == 1090.4
++    assert by_symbol["AUBANK"].risk_pct == 4.65
++
++
++def test_v3_adapter_includes_radar_and_confirming_symbols_without_plans():
++    items = from_v3({"radar_symbols": ["AMAGI", "FRACTAL"],
++                     "confirming_symbols": ["ADFFOODS"], "diagnostics": {}})
++    stages = {i.symbol: i.stage for i in items}
++    assert stages == {"AMAGI": "RADAR", "FRACTAL": "RADAR", "ADFFOODS": "CONFIRMING"}
++    assert all(i.entry_low is None for i in items), "no plan yet, so no buy price"
++
++
++def test_penny_adapter_marks_unverified_instruments():
++    items = from_penny({"candidates": [
++        {"symbol": "ABC", "stage": "RADAR", "score": 44.0, "cmp": 8.42,
++         "market_cap_verified": False, "notes": ["thin volume"]},
++        {"symbol": "XYZ", "stage": "READY", "score": 74.0, "cmp": 33.1},
++    ]})
++    by_symbol = {i.symbol: i for i in items}
++    assert by_symbol["ABC"].instrument_class == "NON_EQ_UNVERIFIED"
++    assert by_symbol["ABC"].notes == ["thin volume"]
++    assert by_symbol["XYZ"].instrument_class is None
++
++
++def test_availability_is_preserved_separately_from_stage():
++    """A circuit-locked symbol must stay visible and clearly unbuyable."""
++    items = from_penny({"candidates": [
++        {"symbol": "NHCFOODS", "stage": "READY", "availability": "CIRCUIT_LOCKED",
++         "score": 82.0, "cmp": 1.63},
++    ]})
++    assert items[0].stage == "READY"
++    assert items[0].availability == "CIRCUIT_LOCKED"
++
++
++def test_a_row_without_a_symbol_is_skipped():
++    assert from_penny({"candidates": [{"score": 50.0}, {"symbol": "", "score": 1}]}) == []
++
++
++# --- assembly ---------------------------------------------------------------
++
++def test_missing_scanner_files_are_reported_not_fatal(tmp_path):
++    feed = build_feed(root=tmp_path)
++    assert feed["feed_version"] == FEED_VERSION
++    assert feed["totals"]["items"] == 0
++    assert {b["status"] for b in feed["scanners"]} == {"MISSING"}
++    assert len(feed["scanners"]) == len(SCANNER_SOURCES)
++
++
++def test_a_corrupt_scanner_file_does_not_empty_the_feed(tmp_path):
++    (tmp_path / "output").mkdir()
++    (tmp_path / "output" / "pine_hull_daily_run.json").write_text("{not json",
++                                                                  encoding="utf-8")
++    (tmp_path / "output" / "old_nse_hull_daily.json").write_text(json.dumps({
++        "market_date": "2026-08-20",
++        "shortlist": [{"symbol": "AAA", "discovery_score": 90.0, "stage": "CONFIRMING"}],
++    }), encoding="utf-8")
++    feed = build_feed(root=tmp_path)
++    assert feed["totals"]["items"] == 1
++    statuses = {b["key"]: b["status"] for b in feed["scanners"]}
++    assert statuses["hull"] == "MISSING"          # unreadable, treated as absent
++    assert statuses["ladder"] == "OK"
++
++
++def test_market_date_is_the_newest_any_scanner_reported(tmp_path):
++    out = tmp_path / "output"
++    out.mkdir()
++    (out / "old_nse_hull_daily.json").write_text(json.dumps({
++        "market_date": "2026-08-18", "shortlist": [{"symbol": "OLD"}]}), encoding="utf-8")
++    (out / "pine_hull_daily_run.json").write_text(json.dumps({
++        "market_date": "2026-08-20", "watch": [{"symbol": "NEW"}]}), encoding="utf-8")
++    feed = build_feed(root=tmp_path)
++    assert feed["market_date"] == "2026-08-20"
++    # ...and the lag is visible per scanner, so the app can warn.
++    assert feed["scanner_dates"]["ladder"] == "2026-08-18"
++
++
++def test_totals_count_stages_and_holdings(tmp_path):
++    out = tmp_path / "output"
++    out.mkdir()
++    (out / "pine_hull_daily_run.json").write_text(json.dumps({
++        "market_date": "2026-08-20",
++        "open_positions": [{"symbol": "HELD", "entry": 100.0, "last_price": 110.0}],
++        "watch": [{"symbol": "W1", "stage": "RADAR"}, {"symbol": "W2", "stage": "RADAR"}],
++    }), encoding="utf-8")
++    totals = build_feed(root=tmp_path)["totals"]
++    assert totals["items"] == 3
++    assert totals["held"] == 1
++    assert totals["by_stage"]["RADAR"] == 2
++    assert totals["by_scanner"]["hull"] == 3
++
++
++def test_feed_round_trips_to_disk(tmp_path):
++    path = write_feed(build_feed(root=tmp_path), tmp_path / "d" / "feed.json")
++    assert path.exists()
++    assert json.loads(path.read_text(encoding="utf-8"))["feed_version"] == FEED_VERSION
++
++
++# --- the page and the feed must agree --------------------------------------
++
++def test_the_page_only_reads_fields_the_feed_can_provide():
++    """Guards against the app drifting from the builder."""
++    html = (REPO / "docs" / "index.html").read_text(encoding="utf-8")
++    used = set(re.findall(r"\bit\.([a-z_][a-z0-9_]*)", html))
++    known = set(FeedItem(symbol="x", scanner="y", stage="z").__dict__)
++    unknown = used - known
++    assert not unknown, f"the page reads item fields the feed never emits: {unknown}"
++
++
++def test_the_page_reads_the_top_level_keys_the_builder_writes(tmp_path):
++    feed = build_feed(root=tmp_path)
++    for key in ("market_date", "scanner_dates", "scanners", "items", "totals"):
++        assert key in feed
++    for key in ("key", "name", "status", "items"):
++        assert key in feed["scanners"][0]
++
++
++def test_the_page_never_shows_a_raw_internal_reason_code():
++    """Gateway codes must be translated before a human sees them."""
++    html = (REPO / "docs" / "index.html").read_text(encoding="utf-8")
++    plain = html.split("var PLAIN = {", 1)[1].split("};", 1)[0]
++    for code in ("STALE_SYMBOL_PRICE", "TERMINAL_MERGER", "NOT_IN_CURRENT_NSE_UNIVERSE",
++                 "NON_EQ_SERIES", "RESTRICTED_SECURITY", "CORPORATE_ACTION_REVIEW"):
++        assert code in plain, f"{code} has no plain-language translation"
++
++
++def test_the_page_is_self_contained_apart_from_the_telegram_sdk():
++    """No build step, no bundler, no CDN beyond Telegram's own script."""
++    html = (REPO / "docs" / "index.html").read_text(encoding="utf-8")
++    external = re.findall(r'src="(https?://[^"]+)"', html)
++    assert external == ["https://telegram.org/js/telegram-web-app.js"], external
++
++
++@pytest.mark.parametrize("path", ["docs/index.html", "docs/data/feed.json"])
++def test_shipped_files_exist(path):
++    assert (REPO / path).exists(), f"{path} is required for GitHub Pages"
++
++
++# --- the Telegram link ------------------------------------------------------
++
++def test_telegram_link_is_preferred_because_it_opens_in_app(monkeypatch):
++    from v2.scanner_notices import render_miniapp_link
++    monkeypatch.setenv("MINI_APP_TELEGRAM_LINK", "https://t.me/b/app")
++    monkeypatch.setenv("MINI_APP_URL", "https://x.github.io/r/")
++    link = render_miniapp_link()
++    assert "t.me/b/app" in link
++    assert "browser" not in link
++
++
++def test_plain_url_is_marked_as_opening_in_the_browser(monkeypatch):
++    from v2.scanner_notices import render_miniapp_link
++    monkeypatch.delenv("MINI_APP_TELEGRAM_LINK", raising=False)
++    monkeypatch.setenv("MINI_APP_URL", "https://x.github.io/r/")
++    assert "opens in your browser" in render_miniapp_link()
++
++
++def test_no_link_when_nothing_is_configured(monkeypatch):
++    from v2.scanner_notices import render_miniapp_link
++    monkeypatch.delenv("MINI_APP_TELEGRAM_LINK", raising=False)
++    monkeypatch.delenv("MINI_APP_URL", raising=False)
++    assert render_miniapp_link() == ""
+diff --git a/v2/miniapp_feed.py b/v2/miniapp_feed.py
+new file mode 100755
+index 0000000..623cd24
+--- /dev/null
++++ b/v2/miniapp_feed.py
+@@ -0,0 +1,316 @@
++"""Collect every scanner's daily run into one uniform Mini App feed.
++
++Each scanner writes its own run file in its own shape:
++
++    output/v2_daily_run.json          V3
++    output/old_nse_hull_daily.json    Momentum Ladder
++    output/pine_hull_daily_run.json   Hull Pine
++    output/penny_shadow_daily.json    Penny & Microcap (when wired)
++
++This module normalises them into a single flat item list so the Mini App has one
++shape to render and one place to look, regardless of how many scanners exist or
++how their internals change. Adding a fifth scanner means adding one adapter here,
++not touching the app.
++
++The feed is a *static file*. It is written by the daily GitHub Actions run and
++committed, so the Mini App needs hosting but no server.
++
++Design rules
++------------
++* Missing data is omitted, never defaulted to zero. A card that shows nothing is
++  honest; a card showing 0.0% is a lie.
++* Every item carries the scanner it came from, so a Hull Pine setup can never be
++  mistaken for a V3 one.
++* Availability (circuit, terminal, observe-only) is preserved distinctly from
++  stage, so an unbuyable symbol stays visible and clearly unbuyable.
++"""
++from __future__ import annotations
++
++import json
++from dataclasses import asdict, dataclass, field
++from datetime import datetime, timezone
++from pathlib import Path
++from typing import Any, Iterable, Mapping, Sequence
++
++FEED_VERSION = 2
++
++#: Where each scanner writes its daily run, and its display name.
++SCANNER_SOURCES: tuple[tuple[str, str, str], ...] = (
++    ("v3", "NSE Scanner V3", "output/v2_daily_run.json"),
++    ("ladder", "Momentum Ladder", "output/old_nse_hull_daily.json"),
++    ("hull", "Hull Pine", "output/pine_hull_daily_run.json"),
++    ("penny", "Penny & Microcap", "output/penny_shadow_daily.json"),
++)
++
++
++def _num(value: Any) -> float | None:
++    """A number, or None. Never a silent zero."""
++    if value is None or isinstance(value, bool):
++        return None
++    try:
++        parsed = float(value)
++    except (TypeError, ValueError):
++        return None
++    return parsed if parsed == parsed and abs(parsed) != float("inf") else None
++
++
++def _text(value: Any) -> str | None:
++    if value is None:
++        return None
++    cleaned = str(value).strip()
++    return cleaned or None
++
++
++@dataclass
++class FeedItem:
++    """One row in the Mini App, uniform across every scanner."""
++
++    symbol: str
++    scanner: str
++    stage: str
++    availability: str | None = None
++    score: float | None = None
++    cmp: float | None = None
++    entry_low: float | None = None
++    entry_high: float | None = None
++    stop: float | None = None
++    target1: float | None = None
++    target2: float | None = None
++    risk_pct: float | None = None
++    instrument_class: str | None = None
++    next_action: str | None = None
++    notes: list[str] = field(default_factory=list)
++    #: Set when the item is an open paper position rather than a candidate.
++    held: bool = False
++    entry_date: str | None = None
++    unrealised_pct: float | None = None
++
++    def to_dict(self) -> dict:
++        # Omit empty values so the payload stays small and the app can rely on
++        # "key present means real data".
++        return {k: v for k, v in asdict(self).items()
++                if v is not None and v != [] and v is not False}
++
++
++def _reward_risk(entry: float | None, stop: float | None, target: float | None) -> float | None:
++    if entry is None or stop is None or target is None:
++        return None
++    risk = entry - stop
++    return round((target - entry) / risk, 2) if risk > 0 else None
++
++
++# --- per-scanner adapters ---------------------------------------------------
++
++def from_v3(payload: Mapping[str, Any]) -> list[FeedItem]:
++    """V3 writes a DailyRunResult dict."""
++    items: list[FeedItem] = []
++    diag = payload.get("diagnostics") or {}
++    for row in diag.get("candidates") or []:
++        symbol = _text(row.get("symbol"))
++        if not symbol:
++            continue
++        entry = _num(row.get("entry"))
++        items.append(FeedItem(
++            symbol=symbol, scanner="v3",
++            stage=_text(row.get("progression_stage")) or _text(row.get("classification")) or "RADAR",
++            score=_num(row.get("score")), cmp=_num(row.get("close")) or entry,
++            entry_low=entry, stop=_num(row.get("stop")),
++            target1=_num(row.get("target1")), target2=_num(row.get("target2")),
++            risk_pct=_num(row.get("risk_percent")),
++            next_action=_text(row.get("trade_plan_state")),
++        ))
++    # Symbols visible at the wider stages carry no plan yet, by design.
++    for stage, key in (("RADAR", "radar_symbols"), ("CONFIRMING", "confirming_symbols")):
++        for symbol in payload.get(key) or []:
++            items.append(FeedItem(symbol=str(symbol), scanner="v3", stage=stage,
++                                  next_action="Awaiting confirmation"))
++    return items
++
++
++def from_ladder(payload: Mapping[str, Any]) -> list[FeedItem]:
++    """The Ladder writes its radar report, with an optional shadow block."""
++    items: list[FeedItem] = []
++    for row in payload.get("shortlist") or []:
++        symbol = _text(row.get("symbol"))
++        if not symbol:
++            continue
++        items.append(FeedItem(
++            symbol=symbol, scanner="ladder",
++            stage=_text(row.get("stage")) or "CONFIRMING",
++            availability=_text(row.get("availability")),
++            score=_num(row.get("discovery_score")),
++            instrument_class=_text(row.get("instrument_class")),
++            next_action=_text(row.get("next_action")),
++            notes=[f"Hull {row.get('hull_state')}"] if row.get("hull_state") else [],
++        ))
++    shadow = payload.get("multi_horizon_shadow") or {}
++    watching = ((shadow.get("paper_lifecycle") or {}).get("watchlist")) or {}
++    if not isinstance(watching, dict):
++        watching = {}
++    for symbol, pending in watching.items():
++        if not isinstance(pending, Mapping):
++            continue
++        entry = _num(pending.get("entry_trigger"))
++        items.append(FeedItem(
++            symbol=str(symbol), scanner="ladder", stage="QUALIFIED",
++            entry_low=entry, stop=_num(pending.get("stop")),
++            target1=_num(pending.get("target_1")), target2=_num(pending.get("target_2")),
++            risk_pct=_num(pending.get("risk_pct")),
++            next_action="Await next-session trigger",
++        ))
++    return items
++
++
++def from_hull(payload: Mapping[str, Any]) -> list[FeedItem]:
++    """Hull Pine writes pending setups, watch rows and open positions."""
++    items: list[FeedItem] = []
++    for setup in payload.get("pending") or []:
++        symbol = _text(setup.get("symbol"))
++        if not symbol:
++            continue
++        items.append(FeedItem(
++            symbol=symbol, scanner="hull", stage="QUALIFIED",
++            score=_num(setup.get("score")), cmp=_num(setup.get("signal_close")),
++            entry_low=_num(setup.get("entry_low")), entry_high=_num(setup.get("entry_high")),
++            stop=_num(setup.get("initial_stop")),
++            target1=_num(setup.get("target1")), target2=_num(setup.get("target2")),
++            next_action="Await next-session trigger",
++            notes=[f"Waiting {setup.get('sessions_waited', 0)} session(s)"]
++            if setup.get("sessions_waited") else [],
++        ))
++    for row in payload.get("watch") or []:
++        symbol = _text(row.get("symbol"))
++        if not symbol:
++            continue
++        items.append(FeedItem(
++            symbol=symbol, scanner="hull",
++            stage=_text(row.get("stage")) or "RADAR",
++            availability=_text(row.get("availability")),
++            score=_num(row.get("score")), cmp=_num(row.get("close")),
++            instrument_class=_text(row.get("instrument_class")),
++            next_action=_text(row.get("next_action")),
++            notes=[n for n in (f"Setup {row.get('setup_stage')}" if row.get("setup_stage") else None,) if n],
++        ))
++    for position in payload.get("open_positions") or []:
++        symbol = _text(position.get("symbol"))
++        if not symbol:
++            continue
++        entry, last = _num(position.get("entry")), _num(position.get("last_price"))
++        items.append(FeedItem(
++            symbol=symbol, scanner="hull", stage="READY", held=True,
++            cmp=last, entry_low=entry, stop=_num(position.get("stop")),
++            target1=_num(position.get("target1")), target2=_num(position.get("target2")),
++            entry_date=_text(position.get("entry_date")),
++            unrealised_pct=round((last - entry) / entry * 100, 2)
++            if entry and last and entry > 0 else None,
++            next_action="Holding",
++        ))
++    return items
++
++
++def from_penny(payload: Mapping[str, Any]) -> list[FeedItem]:
++    """The penny scanner emits candidate dicts already close to feed shape."""
++    items: list[FeedItem] = []
++    for row in payload.get("candidates") or []:
++        symbol = _text(row.get("symbol"))
++        if not symbol:
++            continue
++        items.append(FeedItem(
++            symbol=symbol, scanner="penny",
++            stage=_text(row.get("stage")) or "RADAR",
++            availability=_text(row.get("availability")),
++            score=_num(row.get("score")), cmp=_num(row.get("cmp")) or _num(row.get("close")),
++            entry_low=_num(row.get("entry_low")), entry_high=_num(row.get("entry_high")),
++            stop=_num(row.get("stop")), risk_pct=_num(row.get("risk_pct")),
++            instrument_class=None if row.get("market_cap_verified") is not False
++            else "NON_EQ_UNVERIFIED",
++            next_action=_text(row.get("next_action")),
++            notes=[str(n) for n in (row.get("notes") or [])],
++        ))
++    return items
++
++
++ADAPTERS = {"v3": from_v3, "ladder": from_ladder, "hull": from_hull, "penny": from_penny}
++
++
++# --- assembly ---------------------------------------------------------------
++
++def _scanner_block(key: str, name: str, payload: Mapping[str, Any] | None) -> dict:
++    if payload is None:
++        return {"key": key, "name": name, "status": "MISSING", "items": []}
++    try:
++        items = ADAPTERS[key](payload)
++    except Exception as exc:            # one bad file must not empty the feed
++        return {"key": key, "name": name, "status": f"ERROR: {type(exc).__name__}",
++                "items": []}
++    gateway = payload.get("tradeability") or {}
++    return {
++        "key": key, "name": name, "status": "OK",
++        "market_date": _text(payload.get("market_date")) or _text(payload.get("trade_date"))
++        or _text(payload.get("as_of_date")),
++        "items": [item.to_dict() for item in items],
++        "stages": (payload.get("stage_funnel") or {}).get("stages") or {},
++        "gateway": {
++            "evaluated": gateway.get("evaluated"), "eligible": gateway.get("eligible"),
++            "observe_only": gateway.get("observe_only"),
++            "rejections": gateway.get("rejection_counts") or {},
++            "terminal": gateway.get("terminal_detail") or {},
++        } if gateway else {},
++        "pnl": {
++            "realised": _num(payload.get("realised_pnl")),
++            "unrealised": _num(payload.get("unrealised_pnl")),
++            "total": _num(payload.get("total_pnl")),
++        } if payload.get("total_pnl") is not None else {},
++    }
++
++
++def build_feed(
++    sources: Sequence[tuple[str, str, str]] = SCANNER_SOURCES,
++    *,
++    root: str | Path = ".",
++    generated_at: str | None = None,
++) -> dict:
++    """Read whichever scanner run files exist and return the feed payload."""
++    base = Path(root)
++    blocks = []
++    for key, name, relative in sources:
++        path = base / relative
++        payload = None
++        if path.exists():
++            try:
++                payload = json.loads(path.read_text(encoding="utf-8"))
++            except (ValueError, json.JSONDecodeError):
++                payload = None
++        blocks.append(_scanner_block(key, name, payload))
++
++    dates = [b["market_date"] for b in blocks if b.get("market_date")]
++    all_items: list[dict] = [item for b in blocks for item in b["items"]]
++    stage_totals: dict[str, int] = {}
++    for item in all_items:
++        stage = item.get("availability") or item.get("stage")
++        stage_totals[stage] = stage_totals.get(stage, 0) + 1
++
++    return {
++        "feed_version": FEED_VERSION,
++        "generated_at": generated_at or datetime.now(timezone.utc).isoformat(timespec="seconds"),
++        # The newest session any scanner reported, so the app can warn when a
++        # scanner is lagging the others.
++        "market_date": max(dates) if dates else None,
++        "scanner_dates": {b["key"]: b.get("market_date") for b in blocks},
++        "totals": {
++            "items": len(all_items),
++            "held": sum(1 for i in all_items if i.get("held")),
++            "by_stage": dict(sorted(stage_totals.items(), key=lambda kv: -kv[1])),
++            "by_scanner": {b["key"]: len(b["items"]) for b in blocks},
++        },
++        "scanners": blocks,
++        "items": all_items,
++    }
++
++
++def write_feed(payload: Mapping[str, Any], path: str | Path) -> Path:
++    target = Path(path)
++    target.parent.mkdir(parents=True, exist_ok=True)
++    target.write_text(json.dumps(payload, indent=2, sort_keys=False, default=str) + "\n",
++                      encoding="utf-8")
++    return target
+diff --git a/v2/scanner_notices.py b/v2/scanner_notices.py
+index d44d146..e5b28c4 100755
+--- a/v2/scanner_notices.py
++++ b/v2/scanner_notices.py
+@@ -15,6 +15,7 @@ Pine's state file.
+ """
+ from __future__ import annotations
+ 
++import os
+ from typing import Mapping, Sequence
+ 
+ from .progressive_stages import PROGRESSION, STAGE_BADGE
+@@ -186,6 +187,30 @@ def render_reconciliation(actions: Sequence[Mapping[str, object]],
+     return "\n".join(lines)
+ 
+ 
++def render_miniapp_link(label: str = "Open the scanner app") -> str:
++    """A link to the Mini App, when one is configured.
++
++    Two forms work, and they behave differently:
++
++    ``MINI_APP_TELEGRAM_LINK``
++        A ``https://t.me/<bot>/<short_name>`` link created with BotFather's
++        ``/newapp``. Opens *inside* Telegram, which is what you want from a group.
++
++    ``MINI_APP_URL``
++        The plain GitHub Pages URL. Opens in the phone's browser instead.
++
++    Returns an empty string when neither is set, so the caller can always append
++    it unconditionally.
++    """
++    telegram_link = os.getenv("MINI_APP_TELEGRAM_LINK", "").strip()
++    if telegram_link:
++        return f'📊 <a href="{telegram_link}">{label}</a>'
++    url = os.getenv("MINI_APP_URL", "").strip()
++    if url:
++        return f'📊 <a href="{url}">{label}</a> (opens in your browser)'
++    return ""
++
++
+ def assemble(*blocks: str, separator: str = "\n\n") -> str:
+     """Join only the non-empty notice blocks."""
+     return separator.join(block for block in blocks if block)
+-- 
+2.34.1
+

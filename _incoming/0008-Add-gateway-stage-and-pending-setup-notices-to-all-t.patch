@@ -1,0 +1,594 @@
+From c88eabd284bf90cadeb598766f72811f0ec46649 Mon Sep 17 00:00:00 2001
+From: Jayesh Rathod <jayesh4.rathod@ril.com>
+Date: Fri, 21 Aug 2026 13:36:50 +0530
+Subject: [PATCH 08/14] Add gateway, stage and pending-setup notices to all
+ three scanners
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Step 10 of the Cross-Scanner Eligibility and Corporate Lifecycle Sprint.
+
+Two of the earlier steps changed behaviour in ways that are invisible without
+reporting, which would be worse than the original defect:
+
+* A merged symbol now disappears from the output. Without a notice that reads as
+  a silent omission rather than a decision.
+* READY no longer opens a position. Without a pending-setup section a symbol
+  appears to qualify and then nothing happens.
+
+Added v2/scanner_notices.py, rendering once for all three scanners:
+
+  render_data_note        the market date, flagging a run date that trails it
+  render_gateway_notice   admission counts, and terminal symbols named with
+                          their successor, last trading date and ratio, plus
+                          "Price history retained"
+  render_stage_summary    RADAR/CONFIRMING/READY counts, availability states,
+                          and what is holding symbols below READY
+  render_pending_setups   "READY — NOT ENTERED" with the entry range, the stop,
+                          how long it has waited and "Await next-session trigger"
+  render_expired_setups   why a setup lapsed, so a non-entry is explained
+  render_reconciliation   conversions as zero-P&L events with the fractional
+                          entitlement spelled out, and universe exits with price
+
+UniverseVerdict.diagnostics() now carries terminal_detail, so a renderer holding
+only the diagnostics dict can still name a merger's successor rather than
+reporting a bare disappearance. Hull Pine hit exactly this: its card said only
+"JBCHEPHARM — TERMINAL" before.
+
+Rendered against the real store at 2026-08-20, the Hull Pine card now ends:
+
+  🛡️ TRADEABILITY
+  Admitted 1791 of 2015
+  Observe-only (unverified instrument): 229
+  • NON_EQ_SERIES: 103  • RESTRICTED_SECURITY: 101
+  • STALE_SYMBOL_PRICE: 19  • TERMINAL_MERGER: 1
+  ⛔ JBCHEPHARM — TERMINAL_MERGER, last traded 2026-07-16 → TORNTPHARM (0.51 per share)
+     Excluded from current scanning. Price history retained.
+  ⚠️ KIRLPNU — corporate event pending; entry withheld
+
+Notices are appended, so no existing message assertion changes.
+
+Tests: 18 new. Suite unchanged apart from the same 7 pre-existing failures.
+---
+ old_nse_hull/engine.py        |  18 +++-
+ pine_hull/preview.py          |  20 +++-
+ tests/test_scanner_notices.py | 195 ++++++++++++++++++++++++++++++++++
+ v2/orchestrator.py            |  13 ++-
+ v2/scanner_notices.py         | 191 +++++++++++++++++++++++++++++++++
+ v2/tradeability.py            |  13 +++
+ 6 files changed, 445 insertions(+), 5 deletions(-)
+ create mode 100755 tests/test_scanner_notices.py
+ create mode 100755 v2/scanner_notices.py
+
+diff --git a/old_nse_hull/engine.py b/old_nse_hull/engine.py
+index dd210aa..70b1578 100644
+--- a/old_nse_hull/engine.py
++++ b/old_nse_hull/engine.py
+@@ -24,6 +24,7 @@ from v2.progressive_stages import (
+     build_funnel,
+     classify,
+ )
++from v2.scanner_notices import assemble, render_gateway_notice, render_stage_summary
+ from v2.tradeability import gateway_from_database
+ 
+ 
+@@ -127,13 +128,24 @@ def render_radar(report: dict) -> str:
+              "READY means daily, weekly, monthly, 3M and 6M Hull alignment.",
+              "", "⚠️ <b>Paper-only output</b>",
+              "• This is a research shortlist, not a live-trading instruction.",
+-             "• READY candidates are eligible for the separate paper lifecycle."]
++             "• READY candidates are eligible for the separate paper lifecycle.",
++             "• A symbol must also be currently enterable; a corporate event or",
++             "  an unverified instrument is shown but never entered."]
+     if report["shortlist"]:
+         lines.extend(["", "<b>Discovery shortlist</b>"])
+         for row in report["shortlist"][:10]:
+             aligned = ", ".join(name.upper() for name, ok in row.get("timeframes", {}).items() if ok) or "none"
+-            lines.append(f"• <b>{row['symbol']}</b> — discovery {row['discovery_score']:.1f}/100 | {row.get('hull_state', 'WATCH')} | aligned: {aligned}")
+-    return "\n".join(lines)
++            badge = row.get("stage_badge", "")
++            stage = row.get("availability") or row.get("stage", "")
++            suffix = f" | {badge} {stage}" if stage else ""
++            lines.append(f"• <b>{row['symbol']}</b> — discovery {row['discovery_score']:.1f}/100 | {row.get('hull_state', 'WATCH')} | aligned: {aligned}{suffix}")
++            if not row.get("entry_permitted", True):
++                lines.append(f"   ⚠️ {row.get('next_action', 'Entry withheld')}")
++    return assemble(
++        "\n".join(lines),
++        render_stage_summary(report.get("stage_funnel"), "LADDER STAGES"),
++        render_gateway_notice(report.get("tradeability")),
++    )
+ 
+ 
+ def render_paper_trades(report: dict) -> str:
+diff --git a/pine_hull/preview.py b/pine_hull/preview.py
+index 138315a..d76e9bc 100644
+--- a/pine_hull/preview.py
++++ b/pine_hull/preview.py
+@@ -3,6 +3,14 @@ from __future__ import annotations
+ 
+ from html import escape
+ from urllib.parse import quote
++from v2.scanner_notices import (
++    assemble,
++    render_expired_setups,
++    render_gateway_notice,
++    render_pending_setups,
++    render_reconciliation,
++    render_stage_summary,
++)
+ 
+ 
+ def _number(value: object, default: float = 0.0) -> float:
+@@ -89,4 +97,14 @@ def render_daily_signals(result: dict) -> str:
+                           f"Entry: {_price(low)}–{_price(high)}", reason])
+         lines.extend(["", "🟢 Ready • 🟡 Near • 🔵 Build • ⚪ Wait • 🔴 Avoid", "PAPER — enter only after trigger confirmation."])
+ 
+-    return "\n".join(lines)
++    # READY is a setup, not an entry, so the reader must be able to see what is
++    # armed and awaiting its trigger — otherwise a qualifying symbol appears to
++    # simply vanish.
++    return assemble(
++        "\n".join(lines),
++        render_pending_setups(result.get("pending") or []),
++        render_expired_setups(result.get("expired_setups") or []),
++        render_reconciliation(result.get("reconciled") or []),
++        render_stage_summary(result.get("stage_funnel"), "PINE HULL STAGES"),
++        render_gateway_notice(result.get("tradeability")),
++    )
+diff --git a/tests/test_scanner_notices.py b/tests/test_scanner_notices.py
+new file mode 100755
+index 0000000..19a4939
+--- /dev/null
++++ b/tests/test_scanner_notices.py
+@@ -0,0 +1,195 @@
++"""Step 10: the reader must be told what was removed and what is armed."""
++from __future__ import annotations
++
++from v2.scanner_notices import (
++    assemble,
++    render_data_note,
++    render_expired_setups,
++    render_gateway_notice,
++    render_pending_setups,
++    render_reconciliation,
++    render_stage_summary,
++)
++from v2.tradeability import TradeabilityResult
++
++
++def _terminal_result() -> TradeabilityResult:
++    return TradeabilityResult(
++        symbol="JBCHEPHARM", eligible=False, reason_code="TERMINAL_MERGER",
++        stage="CORPORATE_LIFECYCLE", market_date="2026-08-20",
++        symbol_last_date="2026-07-16", successor_symbol="TORNTPHARM",
++        conversion_ratio=0.51,
++    )
++
++
++DIAGNOSTICS = {
++    "market_date": "2026-08-20", "evaluated": 2157, "eligible": 1657,
++    "entry_permitted": 1656, "observe_only": 343, "non_eq_unverified": 343,
++    "rejection_counts": {"NOT_IN_CURRENT_NSE_UNIVERSE": 265, "NON_EQ_SERIES": 123,
++                         "TERMINAL_MERGER": 1},
++    "terminal_symbols": ["JBCHEPHARM"], "review_symbols": ["KIRLPNU"],
++}
++
++
++# --- data note --------------------------------------------------------------
++
++def test_data_note_states_the_market_date():
++    assert render_data_note("2026-08-20") == "<b>Data:</b> 2026-08-20 EOD"
++
++
++def test_data_note_flags_a_run_date_ahead_of_the_session():
++    note = render_data_note("2026-08-20", "2026-08-23")
++    assert "run 2026-08-23" in note
++    assert "last completed session is 2026-08-20" in note
++
++
++# --- gateway notice ---------------------------------------------------------
++
++def test_terminal_symbol_is_named_with_its_successor_not_silently_dropped():
++    notice = render_gateway_notice(DIAGNOSTICS, {"JBCHEPHARM": _terminal_result()})
++    assert "JBCHEPHARM" in notice
++    assert "TERMINAL_MERGER" in notice
++    assert "last traded 2026-07-16" in notice
++    assert "TORNTPHARM" in notice
++    assert "0.51 per share" in notice
++    assert "Price history retained" in notice
++
++
++def test_gateway_notice_reports_admission_and_observe_only_counts():
++    notice = render_gateway_notice(DIAGNOSTICS)
++    assert "Admitted 1657 of 2157" in notice
++    assert "Observe-only (unverified instrument): 343" in notice
++    assert "NON_EQ_SERIES: 123" in notice
++
++
++def test_symbols_under_corporate_review_are_named_as_entry_withheld():
++    notice = render_gateway_notice(DIAGNOSTICS)
++    assert "KIRLPNU" in notice
++    assert "entry withheld" in notice
++
++
++def test_gateway_notice_is_empty_when_nothing_was_rejected():
++    assert render_gateway_notice({"evaluated": 10, "eligible": 10,
++                                  "rejection_counts": {}, "terminal_symbols": [],
++                                  "review_symbols": []}) == ""
++    assert render_gateway_notice(None) == ""
++
++
++# --- stage summary ----------------------------------------------------------
++
++def test_stage_summary_lists_the_most_advanced_stage_first():
++    summary = render_stage_summary({
++        "stages": {"RADAR": 23, "CONFIRMING": 185, "READY": 713},
++        "availability": {"OBSERVE_ONLY": 66, "CORPORATE_REVIEW": 1},
++        "entry_authorised": 713,
++        "ready_blockers": {"LOW_MEDIAN_VOLUME": 652, "INSUFFICIENT_HISTORY": 251},
++    })
++    assert summary.index("READY: 713") < summary.index("CONFIRMING: 185")
++    assert summary.index("CONFIRMING: 185") < summary.index("RADAR: 23")
++    assert "OBSERVE_ONLY: 66" in summary
++    assert "Entry authorised: 713" in summary
++    assert "Held below READY by:" in summary
++    assert "LOW_MEDIAN_VOLUME: 652" in summary
++
++
++def test_stage_summary_is_empty_without_data():
++    assert render_stage_summary(None) == ""
++    assert render_stage_summary({"stages": {}, "availability": {}}) == ""
++
++
++# --- pending setups ---------------------------------------------------------
++
++PENDING = [{
++    "symbol": "BERGEPAINT", "entry_low": 539.55, "entry_high": 547.60,
++    "initial_stop": 509.56, "sessions_waited": 0, "expires_after_sessions": 5,
++}]
++
++
++def test_pending_setups_are_shown_as_ready_but_not_entered():
++    """Without this section a qualifying symbol appears to simply vanish."""
++    block = render_pending_setups(PENDING)
++    assert "READY — NOT ENTERED" in block
++    assert "BERGEPAINT" in block
++    assert "Entry ₹539.55–₹547.60" in block
++    assert "SL ₹509.56" in block
++    assert "Next: Await next-session trigger" in block
++
++
++def test_waiting_setups_report_how_long_they_have_waited():
++    block = render_pending_setups([{**PENDING[0], "sessions_waited": 2,
++                                    "last_outcome": "TRIGGER_NOT_REACHED"}])
++    assert "Waiting 2 of 5 sessions" in block
++    assert "TRIGGER_NOT_REACHED" in block
++
++
++def test_no_pending_section_when_nothing_is_armed():
++    assert render_pending_setups([]) == ""
++
++
++def test_lapsed_setups_explain_the_non_entry():
++    block = render_expired_setups([
++        {"symbol": "GIPCL", "expiry_reason": "GAP_BEYOND_ENTRY_RANGE"},
++        {"symbol": "5PAISA", "expiry_reason": "SETUP_TIMED_OUT"},
++    ])
++    assert "SETUPS LAPSED" in block
++    assert "GIPCL: GAP_BEYOND_ENTRY_RANGE" in block
++    assert "5PAISA: SETUP_TIMED_OUT" in block
++
++
++# --- reconciliation ---------------------------------------------------------
++
++def test_conversion_is_reported_as_zero_pnl_not_as_a_trade_result():
++    block = render_reconciliation([{
++        "symbol": "JBCHEPHARM", "action": "CORPORATE_CONVERSION",
++        "reason_code": "TERMINAL_MERGER", "successor_symbol": "TORNTPHARM",
++        "successor_quantity": 51.0, "fractional_entitlement": 0.0,
++    }])
++    assert "JBCHEPHARM → TORNTPHARM: converted" in block
++    assert "51 shares" in block
++    assert "Realised P&L ₹0 at conversion" in block
++
++
++def test_fractional_entitlement_is_surfaced_for_manual_settlement():
++    block = render_reconciliation([{
++        "symbol": "JBCHEPHARM", "action": "CORPORATE_CONVERSION",
++        "reason_code": "TERMINAL_MERGER", "successor_symbol": "TORNTPHARM",
++        "successor_quantity": 89.0, "fractional_entitlement": 0.25,
++    }])
++    assert "fractional 0.25" in block
++    assert "settle per the scheme" in block
++
++
++def test_universe_exit_reports_the_exit_price():
++    block = render_reconciliation([{
++        "symbol": "GSEC10IETF", "action": "UNIVERSE_EXIT",
++        "reason_code": "NON_EQ_UNVERIFIED_HOLDING", "exit_price": 266.38,
++    }])
++    assert "GSEC10IETF: UNIVERSE_EXIT" in block
++    assert "NON_EQ_UNVERIFIED_HOLDING" in block
++    assert "₹266.38" in block
++
++
++def test_no_reconciliation_section_when_nothing_moved():
++    assert render_reconciliation([]) == ""
++
++
++# --- assembly ---------------------------------------------------------------
++
++def test_assemble_drops_empty_blocks():
++    assert assemble("a", "", "b", "") == "a\n\nb"
++    assert assemble("", "") == ""
++
++
++def test_terminal_detail_travels_in_the_diagnostics_payload():
++    """A renderer holding only diagnostics must still name the successor."""
++    diagnostics = {
++        **DIAGNOSTICS,
++        "terminal_detail": {"JBCHEPHARM": {
++            "reason_code": "TERMINAL_MERGER", "successor_symbol": "TORNTPHARM",
++            "conversion_ratio": 0.51, "symbol_last_date": "2026-07-16",
++        }},
++    }
++    notice = render_gateway_notice(diagnostics)      # no results map supplied
++    assert "TERMINAL_MERGER" in notice
++    assert "TORNTPHARM" in notice
++    assert "last traded 2026-07-16" in notice
+diff --git a/v2/orchestrator.py b/v2/orchestrator.py
+index b33a10f..279d4dd 100644
+--- a/v2/orchestrator.py
++++ b/v2/orchestrator.py
+@@ -19,6 +19,12 @@ from .progressive_stages import (
+     availability_from_gateway,
+     build_funnel,
+ )
++from .scanner_notices import (
++    assemble,
++    render_gateway_notice,
++    render_reconciliation,
++    render_stage_summary,
++)
+ from .tiered_eligibility import (
+     MIN_TIER_SESSIONS,
+     evaluate_tiered_eligibility,
+@@ -301,7 +307,12 @@ def run_daily(
+         blockers = stage_funnel.get("ready_blockers", {})
+         for reason, count in list(blockers.items())[:6]:
+             funnel_lines.append(f"held by {reason}: {count}")
+-    admin_message = "\n".join(funnel_lines) + "\n\n" + render_admin_diagnostics(diagnostics)
++    admin_message = assemble(
++        "\n".join(funnel_lines),
++        render_gateway_notice(tradeability_funnel, tradeability.results),
++        render_stage_summary(stage_funnel, "V3 PROGRESSIVE FUNNEL"),
++        render_admin_diagnostics(diagnostics),
++    )
+ 
+     persisted_candidates = sorted(
+         [candidate for candidate in candidates if candidate.opportunity_classification != "UNQUALIFIED"],
+diff --git a/v2/scanner_notices.py b/v2/scanner_notices.py
+new file mode 100755
+index 0000000..d44d146
+--- /dev/null
++++ b/v2/scanner_notices.py
+@@ -0,0 +1,191 @@
++"""Shared operator notices for gateway, lifecycle and stage reporting.
++
++Every scanner needs to say the same handful of things to the reader:
++
++* what the market date is, and whether it trails the run date
++* which symbols were removed and why — especially terminal corporate events,
++  which must be named with their successor rather than silently vanishing
++* which symbols are visible but not enterable, and what would change that
++* how many symbols sit at each progressive stage
++
++Rendering that once, here, keeps the three scanners' cards consistent without
++coupling their strategy logic.  These functions take plain dictionaries so they
++work equally with V3's dataclass result, the Ladder's JSON report and Hull
++Pine's state file.
++"""
++from __future__ import annotations
++
++from typing import Mapping, Sequence
++
++from .progressive_stages import PROGRESSION, STAGE_BADGE
++
++DIVIDER = "━━━━━━━━━━━━━━"
++
++
++def render_data_note(market_date: str, run_date: str | None = None) -> str:
++    """One line establishing which session the output actually describes."""
++    line = f"<b>Data:</b> {market_date} EOD"
++    if run_date and run_date != market_date:
++        line += f" (run {run_date}; last completed session is {market_date})"
++    return line
++
++
++def render_gateway_notice(
++    diagnostics: Mapping[str, object] | None,
++    results: Mapping[str, object] | None = None,
++    *,
++    max_named: int = 6,
++) -> str:
++    """Admission summary, naming terminal and withheld symbols.
++
++    ``results`` maps symbol to a ``TradeabilityResult``-shaped object; when
++    supplied, terminal symbols are named with their successor so a merger is
++    never a silent disappearance.
++    """
++    if not diagnostics:
++        return ""
++    counts = dict(diagnostics.get("rejection_counts") or {})
++    terminal = list(diagnostics.get("terminal_symbols") or [])
++    review = list(diagnostics.get("review_symbols") or [])
++    if not (counts or terminal or review):
++        return ""
++
++    lines = ["🛡️ <b>TRADEABILITY</b>",
++             f"Admitted {diagnostics.get('eligible', 0)} of {diagnostics.get('evaluated', 0)}"]
++    observe = diagnostics.get("observe_only") or 0
++    if observe:
++        lines.append(f"Observe-only (unverified instrument): {observe}")
++    for reason, count in list(counts.items())[:max_named]:
++        lines.append(f"• {reason}: {count}")
++
++    detail_map = dict(diagnostics.get("terminal_detail") or {})
++    for symbol in terminal[:max_named]:
++        record = (results or {}).get(symbol)
++        fallback = detail_map.get(symbol) or {}
++
++        def _field(name: str):
++            value = getattr(record, name, None)
++            return value if value is not None else fallback.get(name)
++
++        successor = _field("successor_symbol")
++        reason = _field("reason_code") or "TERMINAL"
++        last_traded = _field("symbol_last_date")
++        detail = f"⛔ <b>{symbol}</b> — {reason}"
++        if last_traded:
++            detail += f", last traded {last_traded}"
++        if successor:
++            ratio = _field("conversion_ratio")
++            detail += f" → {successor}"
++            if ratio:
++                detail += f" ({ratio:.4g} per share)"
++        lines.append(detail)
++        lines.append("   Excluded from current scanning. Price history retained.")
++
++    for symbol in review[:max_named]:
++        lines.append(f"⚠️ <b>{symbol}</b> — corporate event pending; entry withheld")
++
++    return "\n".join(lines)
++
++
++def render_stage_summary(stage_funnel: Mapping[str, object] | None,
++                        title: str = "PROGRESSIVE FUNNEL") -> str:
++    """Stage counts, most advanced first, plus availability states."""
++    if not stage_funnel:
++        return ""
++    stages = dict(stage_funnel.get("stages") or {})
++    availability = dict(stage_funnel.get("availability") or {})
++    if not (stages or availability):
++        return ""
++    lines = [f"📶 <b>{title}</b>"]
++    for stage in reversed(PROGRESSION):
++        count = stages.get(stage)
++        if count:
++            lines.append(f"{STAGE_BADGE.get(stage, '')} {stage}: {count}")
++    for state, count in sorted(availability.items()):
++        lines.append(f"{STAGE_BADGE.get(state, '')} {state}: {count}")
++    authorised = stage_funnel.get("entry_authorised")
++    if authorised is not None:
++        lines.append(f"Entry authorised: {authorised}")
++    blockers = dict(stage_funnel.get("ready_blockers") or {})
++    if blockers:
++        lines.append("Held below READY by:")
++        for reason, count in list(blockers.items())[:5]:
++            lines.append(f"• {reason}: {count}")
++    return "\n".join(lines)
++
++
++def render_pending_setups(
++    pending: Sequence[Mapping[str, object]],
++    *,
++    title: str = "READY — NOT ENTERED",
++    max_shown: int = 8,
++) -> str:
++    """Setups awaiting a next-session trigger.
++
++    This section exists because READY is no longer an entry.  Without it the
++    reader would see a symbol qualify and then apparently nothing happen.
++    """
++    if not pending:
++        return ""
++    lines = [f"🟢 <b>{title}</b>",
++             f"{len(pending)} setup(s) awaiting a next-session trigger"]
++    for setup in list(pending)[:max_shown]:
++        symbol = setup.get("symbol", "?")
++        low, high = setup.get("entry_low"), setup.get("entry_high")
++        lines.extend([
++            "", DIVIDER,
++            f"🟢 <b>{symbol}</b> • READY — NOT ENTERED",
++            f"Entry ₹{float(low):,.2f}–₹{float(high):,.2f}"
++            if low is not None and high is not None else "Entry range pending",
++            f"SL ₹{float(setup.get('initial_stop', 0.0)):,.2f}",
++        ])
++        waited = int(setup.get("sessions_waited", 0) or 0)
++        validity = int(setup.get("expires_after_sessions", 0) or 0)
++        if waited:
++            lines.append(f"Waiting {waited} of {validity} sessions"
++                         f" • last: {setup.get('last_outcome', '-')}")
++        lines.append("Next: Await next-session trigger")
++    return "\n".join(lines)
++
++
++def render_expired_setups(expired: Sequence[Mapping[str, object]],
++                         *, max_shown: int = 6) -> str:
++    """Setups that lapsed, with the reason, so a silent non-entry is explained."""
++    if not expired:
++        return ""
++    lines = ["⌛ <b>SETUPS LAPSED</b>"]
++    for setup in list(expired)[:max_shown]:
++        lines.append(f"• {setup.get('symbol', '?')}: "
++                     f"{setup.get('expiry_reason', 'EXPIRED')}")
++    return "\n".join(lines)
++
++
++def render_reconciliation(actions: Sequence[Mapping[str, object]],
++                         *, max_shown: int = 6) -> str:
++    """Holdings closed or converted because the universe moved under them."""
++    if not actions:
++        return ""
++    lines = ["🔁 <b>UNIVERSE RECONCILIATION</b>"]
++    for action in list(actions)[:max_shown]:
++        symbol = action.get("symbol", "?")
++        kind = action.get("action", "?")
++        reason = action.get("reason_code", "")
++        if kind == "CORPORATE_CONVERSION":
++            successor = action.get("successor_symbol")
++            quantity = action.get("successor_quantity")
++            lines.append(f"• {symbol} → {successor}: converted"
++                         + (f", {quantity:g} shares" if quantity is not None else ""))
++            fractional = action.get("fractional_entitlement") or 0
++            if fractional:
++                lines.append(f"  fractional {fractional:g} — settle per the scheme")
++            lines.append("  Realised P&L ₹0 at conversion")
++        else:
++            price = action.get("exit_price")
++            lines.append(f"• {symbol}: {kind} ({reason})"
++                         + (f" at ₹{float(price):,.2f}" if price is not None else ""))
++    return "\n".join(lines)
++
++
++def assemble(*blocks: str, separator: str = "\n\n") -> str:
++    """Join only the non-empty notice blocks."""
++    return separator.join(block for block in blocks if block)
+diff --git a/v2/tradeability.py b/v2/tradeability.py
+index 422c570..95230e5 100755
+--- a/v2/tradeability.py
++++ b/v2/tradeability.py
+@@ -222,6 +222,19 @@ class UniverseVerdict:
+             "review_symbols": sorted(
+                 s for s, r in self.results.items() if r.review_reason
+             ),
++            # Carried in the payload so a renderer that only has diagnostics can
++            # still name a merger's successor instead of reporting a bare
++            # disappearance.
++            "terminal_detail": {
++                symbol: {
++                    "reason_code": result.reason_code,
++                    "successor_symbol": result.successor_symbol,
++                    "conversion_ratio": result.conversion_ratio,
++                    "symbol_last_date": result.symbol_last_date,
++                }
++                for symbol, result in sorted(self.results.items())
++                if result.terminal
++            },
+         }
+ 
+ 
+-- 
+2.34.1
+

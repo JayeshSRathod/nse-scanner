@@ -1,0 +1,625 @@
+From e488d3af4db8666b90c019361bcaffbc694c31f1 Mon Sep 17 00:00:00 2001
+From: Jayesh Rathod <jayesh4.rathod@ril.com>
+Date: Fri, 21 Aug 2026 13:20:36 +0530
+Subject: [PATCH 06/14] Purge terminal symbols from current scanner state,
+ preserving history
+
+Step 7 of the Cross-Scanner Eligibility and Corporate Lifecycle Sprint.
+
+The gateway stops a terminal symbol entering a new scan, but state files already
+on disk can reintroduce one as a current candidate. This adds a date-aware
+cleaner rather than a per-ticker blacklist, so it works for the next merger too.
+
+The rule
+--------
+* A symbol recorded against a session *before* its terminal date was validly
+  observed then. That record is history and is left alone.
+* A symbol recorded against a session *on or after* its terminal date is
+  defective output and is removed.
+
+For JBCHEPHARM the boundary is 2026-07-17, the session after its last trade on
+2026-07-16. Every occurrence in the shipped state files turned out to be dated
+2026-07-22 or later, so all 21 were defective rather than historical:
+
+  old_nse_hull_shadow_state.json             1 session  [2026-08-19]
+  old_nse_hull_historical_replay_state.json 20 sessions [2026-07-22 .. 2026-08-18]
+
+Price history is untouched: JBCHEPHARM remains in 395 files under
+market_data/daily/, and in the corporate snapshots, exactly as required.
+
+Positions are not silently deleted. An open position in a terminal symbol is a
+portfolio event -- a corporate conversion or a terminal exit -- and belongs to
+v2/universe_reconciliation, which the scanners now run. The script reports such
+positions and refuses to touch them. None were found.
+
+Safety
+------
+Dry run is the default; --apply writes and keeps a .bak of each file. Re-running
+is a no-op. A regression test asserts the repository's own state files stay
+clean, so this cannot silently reappear.
+
+Tests: 12 new, including explicit assertions that 2026-07-16 survives and
+2026-07-17 does not, and that an undated structure is never edited.
+
+Note for applying this patch: if the two state-file hunks conflict with your
+CI's auto-persisted state, drop them and run
+  python scripts/purge_terminal_symbols_from_state.py --apply
+which produces the same result.
+---
+ old_nse_hull_historical_replay_state.json    |  22 +-
+ old_nse_hull_shadow_state.json               |   3 +-
+ scripts/purge_terminal_symbols_from_state.py | 204 +++++++++++++++++++
+ tests/test_purge_terminal_state.py           | 160 +++++++++++++++
+ 4 files changed, 366 insertions(+), 23 deletions(-)
+ create mode 100755 scripts/purge_terminal_symbols_from_state.py
+ create mode 100755 tests/test_purge_terminal_state.py
+
+diff --git a/old_nse_hull_historical_replay_state.json b/old_nse_hull_historical_replay_state.json
+index 281d30b..e19844f 100644
+--- a/old_nse_hull_historical_replay_state.json
++++ b/old_nse_hull_historical_replay_state.json
+@@ -127,7 +127,6 @@
+         "IPCALAB",
+         "J&KBANK",
+         "JAIBALAJI",
+-        "JBCHEPHARM",
+         "JINDALSAW",
+         "JKPAPER",
+         "JSWSTEEL",
+@@ -350,7 +349,6 @@
+         "IPCALAB",
+         "J&KBANK",
+         "JAIBALAJI",
+-        "JBCHEPHARM",
+         "JINDALSAW",
+         "KABRAEXTRU",
+         "KAPSTON",
+@@ -560,7 +558,6 @@
+         "J&KBANK",
+         "JAIBALAJI",
+         "JAMNAAUTO",
+-        "JBCHEPHARM",
+         "JGCHEM",
+         "KABRAEXTRU",
+         "KAPSTON",
+@@ -794,7 +791,6 @@
+         "J&KBANK",
+         "JAIBALAJI",
+         "JAMNAAUTO",
+-        "JBCHEPHARM",
+         "JUNIORBEES",
+         "KABRAEXTRU",
+         "KAPSTON",
+@@ -1046,7 +1042,6 @@
+         "IPCALAB",
+         "J&KBANK",
+         "JAIBALAJI",
+-        "JBCHEPHARM",
+         "JUNIORBEES",
+         "KABRAEXTRU",
+         "KAPSTON",
+@@ -1297,7 +1292,6 @@
+         "IONEXCHANG",
+         "IPCALAB",
+         "JAIBALAJI",
+-        "JBCHEPHARM",
+         "JSFB",
+         "JSWSTEEL",
+         "JUNIORBEES",
+@@ -1553,7 +1547,6 @@
+         "INDUSINDBK",
+         "IPCALAB",
+         "JAIBALAJI",
+-        "JBCHEPHARM",
+         "JBMA",
+         "JSWSTEEL",
+         "JUNIORBEES",
+@@ -1802,7 +1795,6 @@
+         "INDUSINDBK",
+         "IRISDOREME",
+         "JAIBALAJI",
+-        "JBCHEPHARM",
+         "JIOFIN",
+         "JSWSTEEL",
+         "JTLIND",
+@@ -2087,7 +2079,6 @@
+         "IRISDOREME",
+         "JAIBALAJI",
+         "JAMNAAUTO",
+-        "JBCHEPHARM",
+         "JGCHEM",
+         "JINDALSAW",
+         "JSWENERGY",
+@@ -2400,7 +2391,6 @@
+         "IRISDOREME",
+         "JAIBALAJI",
+         "JAMNAAUTO",
+-        "JBCHEPHARM",
+         "JGCHEM",
+         "JINDALSAW",
+         "JSWENERGY",
+@@ -2712,7 +2702,6 @@
+         "JAIBALAJI",
+         "JAMNAAUTO",
+         "JAYNECOIND",
+-        "JBCHEPHARM",
+         "JGCHEM",
+         "JINDALSAW",
+         "JSWENERGY",
+@@ -3046,7 +3035,6 @@
+         "JAIBALAJI",
+         "JAMNAAUTO",
+         "JAYNECOIND",
+-        "JBCHEPHARM",
+         "JGCHEM",
+         "JINDALSAW",
+         "JSWINFRA",
+@@ -3359,7 +3347,6 @@
+         "JAIBALAJI",
+         "JAMNAAUTO",
+         "JAYNECOIND",
+-        "JBCHEPHARM",
+         "JGCHEM",
+         "JINDALSAW",
+         "JSWENERGY",
+@@ -3675,7 +3662,6 @@
+         "IRISDOREME",
+         "JAIBALAJI",
+         "JAYNECOIND",
+-        "JBCHEPHARM",
+         "JGCHEM",
+         "JINDALSAW",
+         "JSWENERGY",
+@@ -3975,7 +3961,6 @@
+         "IOLCP",
+         "IRISDOREME",
+         "JAYNECOIND",
+-        "JBCHEPHARM",
+         "JGCHEM",
+         "JINDALSAW",
+         "JSWENERGY",
+@@ -4281,7 +4266,6 @@
+         "IPCALAB",
+         "IRISDOREME",
+         "JAYNECOIND",
+-        "JBCHEPHARM",
+         "JGCHEM",
+         "JINDALSAW",
+         "JSWINFRA",
+@@ -4576,7 +4560,6 @@
+         "IPCALAB",
+         "IRISDOREME",
+         "JAYNECOIND",
+-        "JBCHEPHARM",
+         "JGCHEM",
+         "JINDALSAW",
+         "JSFB",
+@@ -4875,7 +4858,6 @@
+         "INOXINDIA",
+         "IOLCP",
+         "IRISDOREME",
+-        "JBCHEPHARM",
+         "JGCHEM",
+         "JINDALSAW",
+         "JSFB",
+@@ -5186,7 +5168,6 @@
+         "IPCALAB",
+         "IRISDOREME",
+         "JAGSNPHARM",
+-        "JBCHEPHARM",
+         "JGCHEM",
+         "JINDALSAW",
+         "JNKINDIA",
+@@ -5501,7 +5482,6 @@
+         "IRISDOREME",
+         "JAGSNPHARM",
+         "JAYNECOIND",
+-        "JBCHEPHARM",
+         "JGCHEM",
+         "JINDALSAW",
+         "JINDRILL",
+@@ -5664,4 +5644,4 @@
+     }
+   },
+   "updated_at": "2026-08-19T20:20:51+00:00"
+-}
++}
+\ No newline at end of file
+diff --git a/old_nse_hull_shadow_state.json b/old_nse_hull_shadow_state.json
+index 9c083a7..1fa6e70 100644
+--- a/old_nse_hull_shadow_state.json
++++ b/old_nse_hull_shadow_state.json
+@@ -128,7 +128,6 @@
+         "JAGSNPHARM",
+         "JAYNECOIND",
+         "JAYSREETEA",
+-        "JBCHEPHARM",
+         "JGCHEM",
+         "JINDALSAW",
+         "JINDRILL",
+@@ -270,4 +269,4 @@
+     }
+   },
+   "updated_at": "2026-08-20T03:26:00+00:00"
+-}
++}
+\ No newline at end of file
+diff --git a/scripts/purge_terminal_symbols_from_state.py b/scripts/purge_terminal_symbols_from_state.py
+new file mode 100755
+index 0000000..db77487
+--- /dev/null
++++ b/scripts/purge_terminal_symbols_from_state.py
+@@ -0,0 +1,204 @@
++#!/usr/bin/env python3
++"""Remove terminal symbols from *current* scanner state without touching history.
++
++Step 7 of the Cross-Scanner Eligibility and Corporate Lifecycle Sprint.
++
++The gateway stops a terminal symbol entering a new scan, but scanner state files
++already on disk can reintroduce one as a current candidate.  This script cleans
++them, and it is deliberately date-aware rather than a per-ticker blacklist:
++
++* A symbol recorded against a session **before** its terminal date was validly
++  observed on that date.  That record is history and is left alone.
++* A symbol recorded against a session **on or after** its terminal date is
++  defective output.  That record is removed.
++
++For ``JBCHEPHARM`` (terminal from 2026-07-17, the session after its last trade
++on 2026-07-16) every occurrence in the shipped state files is dated 2026-07-22
++or later, so all of them are defective.
++
++Price history, ``market_data/daily/*.csv`` and the corporate snapshots are never
++touched by this script.
++
++Positions are *not* silently deleted.  An open position in a terminal symbol is
++a portfolio event -- a corporate conversion or a terminal exit -- and belongs to
++``v2.universe_reconciliation``, which the scanners now run.  This script reports
++such positions and refuses to remove them.
++
++Usage
++-----
++    python scripts/purge_terminal_symbols_from_state.py                # dry run
++    python scripts/purge_terminal_symbols_from_state.py --apply        # write
++    python scripts/purge_terminal_symbols_from_state.py --apply --file x.json
++"""
++from __future__ import annotations
++
++import argparse
++import json
++import shutil
++import sys
++from datetime import date
++from pathlib import Path
++
++sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
++
++from v2.security_lifecycle import LifecycleRegistry, read_snapshot  # noqa: E402
++
++#: State files that describe the *current* view and can reseed a candidate.
++DEFAULT_STATE_FILES = (
++    "old_nse_hull_shadow_state.json",
++    "old_nse_hull_historical_replay_state.json",
++    "old_nse_hull_paper_state.json",
++    "scan_lifecycle.json",
++    "scan_history.json",
++    "telegram_last_scan.json",
++)
++
++#: Keys whose lists hold positions rather than candidate symbols.
++POSITION_KEYS = frozenset({"positions", "open_positions", "paper_positions", "holdings"})
++
++_ISO_LENGTH = 10
++
++
++def _as_date(text: object) -> date | None:
++    value = str(text)[:_ISO_LENGTH]
++    try:
++        return date.fromisoformat(value)
++    except (ValueError, TypeError):
++        return None
++
++
++class Purge:
++    """Walks a decoded JSON document, removing only defective current records."""
++
++    def __init__(self, registry: LifecycleRegistry) -> None:
++        self.registry = registry
++        self.removals: list[dict] = []
++        self.position_warnings: list[dict] = []
++
++    def _terminal_on(self, symbol: str, when: date) -> bool:
++        event = self.registry.event_for(symbol, when)
++        return bool(event and event.is_terminal_on(when))
++
++    def _clean_symbol_list(self, values: list, when: date, path: str) -> list:
++        kept = []
++        for value in values:
++            if isinstance(value, str) and self._terminal_on(value, when):
++                self.removals.append({
++                    "path": path, "session": when.isoformat(), "symbol": value,
++                })
++                continue
++            kept.append(value)
++        return kept
++
++    def _clean_position_list(self, values: list, when: date, path: str) -> list:
++        for value in values:
++            if not isinstance(value, dict):
++                continue
++            symbol = str(value.get("symbol", "") or "")
++            if symbol and self._terminal_on(symbol, when):
++                self.position_warnings.append({
++                    "path": path, "session": when.isoformat(), "symbol": symbol,
++                    "state": value.get("state"),
++                })
++        return values
++
++    def walk(self, node, when: date | None, path: str = ""):
++        if isinstance(node, dict):
++            result = {}
++            for key, value in node.items():
++                # A dict keyed by ISO date re-dates everything beneath it.
++                child_when = _as_date(key) or when
++                result[key] = self.walk(value, child_when, f"{path}.{key}")
++            return result
++        if isinstance(node, list):
++            if when is None:
++                return [self.walk(item, when, f"{path}[{index}]")
++                        for index, item in enumerate(node)]
++            leaf = path.rsplit(".", 1)[-1]
++            if leaf in POSITION_KEYS:
++                return self._clean_position_list(node, when, path)
++            if all(isinstance(item, str) for item in node):
++                return self._clean_symbol_list(node, when, path)
++            return [self.walk(item, when, f"{path}[{index}]")
++                    for index, item in enumerate(node)]
++        return node
++
++
++def purge_file(path: Path, registry: LifecycleRegistry, *, apply: bool) -> dict:
++    if not path.exists():
++        return {"file": str(path), "status": "MISSING"}
++    try:
++        document = json.loads(path.read_text(encoding="utf-8"))
++    except (ValueError, json.JSONDecodeError) as error:
++        return {"file": str(path), "status": "UNREADABLE", "detail": str(error)}
++
++    purge = Purge(registry)
++    cleaned = purge.walk(document, None)
++    report = {
++        "file": str(path),
++        "status": "CLEAN" if not purge.removals else ("UPDATED" if apply else "WOULD_UPDATE"),
++        "removals": purge.removals,
++        "position_warnings": purge.position_warnings,
++    }
++    if purge.removals and apply:
++        shutil.copy2(path, path.with_suffix(path.suffix + ".bak"))
++        path.write_text(json.dumps(cleaned, indent=2, sort_keys=True), encoding="utf-8")
++        report["backup"] = str(path.with_suffix(path.suffix + ".bak"))
++    return report
++
++
++def main(argv: list[str] | None = None) -> int:
++    parser = argparse.ArgumentParser(description=__doc__,
++                                     formatter_class=argparse.RawDescriptionHelpFormatter)
++    parser.add_argument("--apply", action="store_true",
++                        help="write the changes; without it this is a dry run")
++    parser.add_argument("--file", action="append", default=None,
++                        help="state file to clean; repeatable")
++    parser.add_argument("--snapshot",
++                        default="corporate_data/normalized/security_lifecycle_events.csv")
++    args = parser.parse_args(argv)
++
++    events = read_snapshot(args.snapshot)
++    if not events:
++        print(f"No lifecycle events in {args.snapshot}; nothing to purge.")
++        return 0
++    registry = LifecycleRegistry(events)
++    print(f"Lifecycle registry: {len(events)} event(s), "
++          f"{len(registry.symbols)} symbol(s)")
++    for symbol in sorted(registry.symbols):
++        for event in registry.events_for(symbol):
++            boundary = event.terminal_from
++            print(f"  {event.describe()}"
++                  + (f" | terminal from {boundary.isoformat()}" if boundary else ""))
++
++    targets = [Path(name) for name in (args.file or DEFAULT_STATE_FILES)]
++    total_removed = 0
++    total_warnings = 0
++    for path in targets:
++        report = purge_file(path, registry, apply=args.apply)
++        removals = report.get("removals", [])
++        warnings = report.get("position_warnings", [])
++        total_removed += len(removals)
++        total_warnings += len(warnings)
++        print(f"\n{report['file']}: {report['status']}")
++        by_symbol: dict[str, list[str]] = {}
++        for entry in removals:
++            by_symbol.setdefault(entry["symbol"], []).append(entry["session"])
++        for symbol, sessions in sorted(by_symbol.items()):
++            span = f"{min(sessions)} .. {max(sessions)}" if len(sessions) > 1 else sessions[0]
++            print(f"  remove {symbol}: {len(sessions)} session(s) [{span}]")
++        for entry in warnings:
++            print(f"  ⚠️  OPEN POSITION in terminal symbol {entry['symbol']} "
++                  f"({entry['state']}) at {entry['path']}")
++            print("      Not removed. Resolve through universe reconciliation, "
++                  "which records a corporate conversion or a terminal exit.")
++
++    print(f"\nTotal defective records: {total_removed}")
++    print(f"Positions needing reconciliation: {total_warnings}")
++    if not args.apply and total_removed:
++        print("\nDry run. Re-run with --apply to write, keeping a .bak of each file.")
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/tests/test_purge_terminal_state.py b/tests/test_purge_terminal_state.py
+new file mode 100755
+index 0000000..f29ff04
+--- /dev/null
++++ b/tests/test_purge_terminal_state.py
+@@ -0,0 +1,160 @@
++"""Step 7: purge terminal symbols from current state, preserving history."""
++from __future__ import annotations
++
++import json
++from pathlib import Path
++
++from scripts.purge_terminal_symbols_from_state import Purge, purge_file
++from v2.security_lifecycle import LifecycleEvent, LifecycleRegistry
++
++# Terminal from 2026-07-17: the session after its last trade on 2026-07-16.
++EVENT = LifecycleEvent(
++    symbol="JBCHEPHARM", event_type="AMALGAMATION", status="EFFECTIVE",
++    effective_date="2026-07-08", record_date="2026-07-17",
++    last_trading_date="2026-07-16", successor_symbol="TORNTPHARM",
++    exchange_ratio_from=100.0, exchange_ratio_to=51.0, terminal=True,
++)
++REGISTRY = LifecycleRegistry([EVENT])
++
++
++def _state() -> dict:
++    return {
++        "schema_version": 1,
++        "sessions": {
++            # Valid history: the symbol really did trade on these dates.
++            "2026-07-15": {"shadow_symbols": ["JBCHEPHARM", "RELIANCE"]},
++            "2026-07-16": {"shadow_symbols": ["JBCHEPHARM", "RELIANCE"]},
++            # Defective: the symbol had already ceased to exist.
++            "2026-07-17": {"shadow_symbols": ["JBCHEPHARM", "RELIANCE"]},
++            "2026-08-19": {"shadow_symbols": ["JBCHEPHARM", "RELIANCE"],
++                           "baseline_symbols": ["JBCHEPHARM"]},
++        },
++        "updated_at": "2026-08-19",
++    }
++
++
++def _write(tmp_path: Path, document: dict, name: str = "state.json") -> Path:
++    path = tmp_path / name
++    path.write_text(json.dumps(document), encoding="utf-8")
++    return path
++
++
++# --- date awareness ---------------------------------------------------------
++
++def test_records_before_the_terminal_date_are_preserved():
++    purge = Purge(REGISTRY)
++    cleaned = purge.walk(_state(), None)
++    for session in ("2026-07-15", "2026-07-16"):
++        assert cleaned["sessions"][session]["shadow_symbols"] == ["JBCHEPHARM", "RELIANCE"], \
++            f"{session} is valid history and must not be edited"
++
++
++def test_records_on_or_after_the_terminal_date_are_removed():
++    purge = Purge(REGISTRY)
++    cleaned = purge.walk(_state(), None)
++    assert cleaned["sessions"]["2026-07-17"]["shadow_symbols"] == ["RELIANCE"]
++    assert cleaned["sessions"]["2026-08-19"]["shadow_symbols"] == ["RELIANCE"]
++    assert cleaned["sessions"]["2026-08-19"]["baseline_symbols"] == []
++
++
++def test_the_boundary_is_the_session_after_the_last_trade():
++    purge = Purge(REGISTRY)
++    purge.walk(_state(), None)
++    removed = {(entry["session"], entry["symbol"]) for entry in purge.removals}
++    assert ("2026-07-16", "JBCHEPHARM") not in removed
++    assert ("2026-07-17", "JBCHEPHARM") in removed
++
++
++def test_unrelated_symbols_are_never_touched():
++    purge = Purge(REGISTRY)
++    cleaned = purge.walk(_state(), None)
++    for session in cleaned["sessions"].values():
++        assert "RELIANCE" in session.get("shadow_symbols", ["RELIANCE"])
++    assert all(entry["symbol"] == "JBCHEPHARM" for entry in purge.removals)
++
++
++def test_every_removal_is_reported_with_its_session():
++    purge = Purge(REGISTRY)
++    purge.walk(_state(), None)
++    assert len(purge.removals) == 3
++    assert {entry["session"] for entry in purge.removals} == {
++        "2026-07-17", "2026-08-19",
++    }
++
++
++def test_undated_structures_are_left_alone():
++    """Without a session date there is no basis to judge a record defective."""
++    purge = Purge(REGISTRY)
++    document = {"watchlist": ["JBCHEPHARM", "RELIANCE"]}
++    cleaned = purge.walk(document, None)
++    assert cleaned == document
++    assert purge.removals == []
++
++
++# --- positions are a portfolio matter, not a text edit ----------------------
++
++def test_open_positions_are_reported_and_never_deleted():
++    purge = Purge(REGISTRY)
++    document = {"sessions": {"2026-08-19": {"positions": [
++        {"symbol": "JBCHEPHARM", "state": "OPEN", "quantity": 100},
++        {"symbol": "RELIANCE", "state": "OPEN", "quantity": 5},
++    ]}}}
++    cleaned = purge.walk(document, None)
++    assert len(cleaned["sessions"]["2026-08-19"]["positions"]) == 2, \
++        "a holding must be resolved by reconciliation, not silently dropped"
++    assert purge.removals == []
++    assert len(purge.position_warnings) == 1
++    assert purge.position_warnings[0]["symbol"] == "JBCHEPHARM"
++
++
++# --- file handling ----------------------------------------------------------
++
++def test_dry_run_does_not_modify_the_file(tmp_path):
++    path = _write(tmp_path, _state())
++    before = path.read_text(encoding="utf-8")
++    report = purge_file(path, REGISTRY, apply=False)
++    assert report["status"] == "WOULD_UPDATE"
++    assert path.read_text(encoding="utf-8") == before
++    assert not path.with_suffix(".json.bak").exists()
++
++
++def test_apply_writes_the_file_and_keeps_a_backup(tmp_path):
++    path = _write(tmp_path, _state())
++    report = purge_file(path, REGISTRY, apply=True)
++    assert report["status"] == "UPDATED"
++    backup = Path(report["backup"])
++    assert backup.exists()
++    assert json.loads(backup.read_text(encoding="utf-8")) == _state()
++    written = json.loads(path.read_text(encoding="utf-8"))
++    assert written["sessions"]["2026-08-19"]["shadow_symbols"] == ["RELIANCE"]
++    assert written["sessions"]["2026-07-16"]["shadow_symbols"] == ["JBCHEPHARM", "RELIANCE"]
++
++
++def test_a_clean_file_is_left_untouched(tmp_path):
++    path = _write(tmp_path, {"sessions": {"2026-08-19": {"shadow_symbols": ["RELIANCE"]}}})
++    before = path.read_text(encoding="utf-8")
++    report = purge_file(path, REGISTRY, apply=True)
++    assert report["status"] == "CLEAN"
++    assert path.read_text(encoding="utf-8") == before
++
++
++def test_missing_and_unreadable_files_are_reported_not_raised(tmp_path):
++    assert purge_file(tmp_path / "nope.json", REGISTRY, apply=True)["status"] == "MISSING"
++    broken = tmp_path / "broken.json"
++    broken.write_text("{not json", encoding="utf-8")
++    assert purge_file(broken, REGISTRY, apply=True)["status"] == "UNREADABLE"
++
++
++def test_shipped_state_files_contain_no_post_terminal_records():
++    """Regression guard: the repository's own state must stay clean."""
++    root = Path(__file__).resolve().parents[1]
++    for name in ("old_nse_hull_shadow_state.json",
++                 "old_nse_hull_historical_replay_state.json"):
++        path = root / name
++        if not path.exists():
++            continue
++        report = purge_file(path, REGISTRY, apply=False)
++        assert report["status"] == "CLEAN", (
++            f"{name} still lists a terminal symbol as current: "
++            f"{report.get('removals')}"
++        )
+-- 
+2.34.1
+

@@ -1,0 +1,93 @@
+From 20feda27bdc03113b105b9d962b2c86dee1ba8aa Mon Sep 17 00:00:00 2001
+From: Jayesh Rathod <jayesh4.rathod@ril.com>
+Date: Fri, 21 Aug 2026 17:10:04 +0530
+Subject: [PATCH 12/14] Measure V3 plan yield across history: the shortfall is
+ chronic
+
+Replayed six sessions spanning Nov 2025 to Aug 2026 to test whether V3's
+one-tradeable-plan-per-day was a bad session or its normal behaviour.
+
+It is normal.
+
+  date        regime    evaluated  plans
+  2025-11-03  NEUTRAL           0      0   (no symbol had 260 sessions yet)
+  2026-02-02  BEAR            568      0
+  2026-03-16  BEAR            589      0
+  2026-05-04  NEUTRAL         682      0
+  2026-06-15  NEUTRAL         698      0
+  2026-07-16  NEUTRAL         734      2
+  2026-08-20  NEUTRAL         759      1
+
+Across the five usable sessions: 3,271 candidates evaluated, 2 carried an entry,
+stop and target. A rate of 0.06 per cent. Four of five sessions produced none at
+all.
+
+Classifications across all sessions: REJECT 2,592 / WATCH 677 / ACTION 2.
+
+So V3 is not under-recording -- it is barely producing anything to record. Its
+weekly relative-strength discovery works and ranks hundreds of names, but by the
+time it confirms, the great majority are either WEAK or already EXTENDED, and
+the daily trigger finds no valid entry structure. On 2026-08-20 that was 170 of
+192 WATCH candidates with NO_TRIGGER and 150 already extended.
+
+This also explains the empty portfolio: with roughly half a plan per session
+since go-live on 2026-08-04, near-zero committed capital is the expected outcome,
+not a persistence defect.
+
+Adds resume support to the replay script so a multi-month run can proceed a few
+sessions at a time, and corrects the trigger-key lookup, which read metrics
+rather than the candidate payload and reported '?' for every row.
+---
+ scripts/replay_v3_plan_yield.py | 20 ++++++++++++++++++--
+ 1 file changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/scripts/replay_v3_plan_yield.py b/scripts/replay_v3_plan_yield.py
+index a5763e4..00c090c 100755
+--- a/scripts/replay_v3_plan_yield.py
++++ b/scripts/replay_v3_plan_yield.py
+@@ -117,7 +117,9 @@ def replay_date(
+             continue
+         classes[str(candidate.classification)] += 1
+         plan_states[str(candidate.metrics.get("trade_plan_state", "?"))] += 1
+-        triggers[str(candidate.metrics.get("setup", "?"))] += 1
++        triggers[str(getattr(candidate, "setup", None)
++                      or candidate.metrics.get("entry_trigger")
++                      or candidate.metrics.get("setup", "?"))] += 1
+         timings[str(candidate.metrics.get("timing_state", "?"))] += 1
+         # A tradeable plan is the only thing that can become a position.
+         if candidate.classification == "ACTION" and float(candidate.entry or 0) > 0:
+@@ -176,9 +178,21 @@ def main(argv: list[str] | None = None) -> int:
+         targets = targets[:args.limit]
+     print(f"replaying {len(targets)} session(s): {targets[0]} .. {targets[-1]}", flush=True)
+ 
+-    results = []
+     out = Path(args.out)
+     out.parent.mkdir(parents=True, exist_ok=True)
++    # Resume-friendly: a long replay may be run a few sessions at a time.
++    results = []
++    if out.exists():
++        try:
++            results = json.loads(out.read_text(encoding="utf-8"))
++            done = {r.get("date") for r in results}
++            targets = [d for d in targets if d not in done]
++            print(f"resuming: {len(results)} session(s) already recorded, "
++                  f"{len(targets)} remaining", flush=True)
++        except (ValueError, json.JSONDecodeError):
++            results = []
++    if not targets:
++        print("nothing left to replay")
+     for index, date in enumerate(targets, start=1):
+         t0 = time.time()
+         try:
+@@ -197,6 +211,8 @@ def main(argv: list[str] | None = None) -> int:
+               f"  regime={row.get('regime', '-')}  ({time.time() - t0:.0f}s)", flush=True)
+         out.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
+ 
++    results.sort(key=lambda r: str(r.get("date")))
++    out.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
+     plans = [r.get("tradeable_plans", 0) for r in results if "tradeable_plans" in r]
+     if plans:
+         print("\n" + "=" * 58)
+-- 
+2.34.1
+

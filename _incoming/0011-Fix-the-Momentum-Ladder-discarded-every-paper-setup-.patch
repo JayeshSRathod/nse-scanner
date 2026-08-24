@@ -1,0 +1,509 @@
+From c527d187e7c2299621acdb1928ede8061f79ccd8 Mon Sep 17 00:00:00 2001
+From: Jayesh Rathod <jayesh4.rathod@ril.com>
+Date: Fri, 21 Aug 2026 16:56:37 +0530
+Subject: [PATCH 11/14] Fix: the Momentum Ladder discarded every paper setup it
+ generated
+
+The Ladder's paper watchlist has been empty since the lifecycle was introduced.
+old_nse_hull_paper_state.json is written on schedule -- updated_at moves every
+day -- but watchlist, positions and events have never contained a single entry.
+
+Cause
+-----
+paper_lifecycle.update built one lookup:
+
+    candidate_map = {str(row["symbol"]): row for row in (market_rows or candidates)}
+
+and used it for two incompatible purposes: advancing held positions, which needs
+completed OHLC for every observed symbol, and admitting new watchlist entries,
+which needs trade_levels. The shadow engine always passes market_rows -- every
+enriched row, so a held symbol that drops out of today's candidates still gets
+its stop checked, which is correct -- but those rows carry no trade_levels,
+because run_shadow attaches them only to the qualified candidates frame. So the
+"market_rows or candidates" expression silently resolved to the rows without
+levels, eligible_for_paper was never seen, and nothing was ever admitted.
+
+Measured on 2026-08-20: 282 qualified candidates, 117 with a valid entry, stop
+and risk under 8%. Admitted: zero.
+
+Fix
+---
+ old_nse_hull/multi_horizon/paper_lifecycle.py |  31 ++-
+ scripts/replay_v3_plan_yield.py               | 217 ++++++++++++++++++
+ tests/test_ladder_paper_admission.py          | 186 +++++++++++++++
+ 3 files changed, 432 insertions(+), 2 deletions(-)
+ create mode 100755 scripts/replay_v3_plan_yield.py
+ create mode 100755 tests/test_ladder_paper_admission.py
+
+diff --git a/old_nse_hull/multi_horizon/paper_lifecycle.py b/old_nse_hull/multi_horizon/paper_lifecycle.py
+index 1680f9f..443e1ef 100644
+--- a/old_nse_hull/multi_horizon/paper_lifecycle.py
++++ b/old_nse_hull/multi_horizon/paper_lifecycle.py
+@@ -15,12 +15,32 @@ def _load(path: Path) -> dict:
+ 
+ 
+ def update(path: str | Path, as_of_date: str, candidates: list[dict], market_rows: list[dict] | None = None) -> dict:
+-    """Advance simulated positions using completed EOD bars and write state idempotently."""
++    """Advance simulated positions using completed EOD bars and write state idempotently.
++
++    Two distinct lookups are needed and must not be conflated:
++
++    ``bar_map``
++        Completed OHLC for *every* observed symbol, used to advance an existing
++        watchlist entry or open position.  ``market_rows`` is the right source
++        because a held symbol may drop out of today's qualified candidates and
++        still needs its stop and targets checked.
++
++    ``admission_map``
++        Today's qualified candidates, used to admit *new* watchlist entries.
++        Only these rows carry ``trade_levels``.
++
++    Previously both came from ``market_rows or candidates``.  Whenever
++    ``market_rows`` was supplied — which the shadow engine always does — the
++    admission loop read rows with no ``trade_levels``, so ``eligible_for_paper``
++    was never seen and nothing was ever admitted.  The Ladder generated valid
++    setups from the start and discarded every one of them.
++    """
+     target = Path(path)
+     state = _load(target)
+     watchlist, positions = state.setdefault("watchlist", {}), state.setdefault("positions", {})
+     events: list[dict] = []
+     candidate_map = {str(row["symbol"]): row for row in (market_rows or candidates)}
++    admission_map = {str(row["symbol"]): row for row in candidates}
+     for symbol, pending in list(watchlist.items()):
+         row = candidate_map.get(symbol)
+         if row is None or as_of_date <= pending["created_date"]:
+@@ -49,7 +69,14 @@ def update(path: str | Path, as_of_date: str, candidates: list[dict], market_row
+             position["exit_price"] = position["target_2"]
+             events.append({"date": as_of_date, "symbol": symbol, "event": "PAPER_TARGET_2_HIT", "price": position["target_2"]})
+     open_risk = sum(float(item.get("risk_pct", 0)) for item in positions.values() if item.get("status") == "OPEN")
+-    for symbol, row in candidate_map.items():
++    # Admissions read today's qualified candidates, which are the only rows that
++    # carry trade_levels. Sorted so a capacity or risk cap admits the strongest
++    # setups rather than whichever symbol happened to come first alphabetically.
++    ranked = sorted(
++        admission_map.items(),
++        key=lambda item: (-float(item[1].get("primary_score") or 0.0), item[0]),
++    )
++    for symbol, row in ranked:
+         levels = row.get("trade_levels", {})
+         capacity = sum(item.get("status") == "OPEN" for item in positions.values()) + len(watchlist) < MAX_OPEN_POSITIONS
+         risk_ok = open_risk + float(levels.get("risk_pct", 0)) <= MAX_TOTAL_OPEN_RISK_PCT
+diff --git a/scripts/replay_v3_plan_yield.py b/scripts/replay_v3_plan_yield.py
+new file mode 100755
+index 0000000..a5763e4
+--- /dev/null
++++ b/scripts/replay_v3_plan_yield.py
+@@ -0,0 +1,217 @@
++#!/usr/bin/env python3
++"""Measure how many *tradeable plans* V3 produces per session, over history.
++
++V3's scan is not the bottleneck. On 2026-08-20 it ranked 316 candidates, 250 of
++them scoring 70+, yet only one carried an entry, stop and target — the rest had
++``entry = 0`` and ``trade_plan_state = WAIT``. A candidate without a plan can
++never become a position, which is why committed capital has been zero since
++go-live.
++
++This script answers the obvious next question: is that one-a-day yield chronic,
++or was that session unusual?
++
++It deliberately skips the portfolio, Telegram and diagnostics layers and runs
++only eligibility plus candidate evaluation, because plan yield is decided there.
++Prices are loaded once and sliced per date, which is what makes a multi-month
++replay affordable.
++
++    python scripts/replay_v3_plan_yield.py --every 5 --out output/v3_plan_yield.json
++    python scripts/replay_v3_plan_yield.py --dates 2026-08-20,2026-07-16
++"""
++from __future__ import annotations
++
++import argparse
++import json
++import sys
++import time
++from collections import Counter
++from pathlib import Path
++
++import pandas as pd
++
++sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
++
++from v2.candidates import evaluate_candidate  # noqa: E402
++from v2.database import V2Database  # noqa: E402
++from v2.snapshots import build_market_snapshot  # noqa: E402
++from v2.tiered_eligibility import evaluate_tiered_eligibility  # noqa: E402
++from v2.tradeability import evaluate_universe  # noqa: E402
++
++
++def _equal_weight_benchmark(prices: pd.DataFrame) -> pd.DataFrame:
++    frame = prices[["symbol", "trade_date", "close"]].copy()
++    frame["return"] = frame.groupby("symbol")["close"].pct_change()
++    daily = frame.groupby("trade_date", as_index=False)["return"].mean().fillna(0.0)
++    daily["close"] = (1.0 + daily["return"]).cumprod() * 1000.0
++    return daily[["trade_date", "close"]]
++
++
++def _benchmark(indices: pd.DataFrame, prices: pd.DataFrame) -> tuple[pd.DataFrame, str]:
++    if not indices.empty:
++        normalized = indices["index_name"].astype(str).str.upper()
++        preferred = indices[normalized.isin(["NIFTY 500", "NIFTY 50"])]
++        if not preferred.empty and preferred.groupby("index_name")["trade_date"].nunique().max() >= 200:
++            names = preferred["index_name"].astype(str).str.upper()
++            chosen = "NIFTY 500" if (names == "NIFTY 500").any() else "NIFTY 50"
++            return preferred[names == chosen].copy(), "OFFICIAL_INDEX_HISTORY"
++    return _equal_weight_benchmark(prices), "EQUAL_WEIGHT_UNIVERSE_FALLBACK"
++
++
++def replay_date(
++    date: str,
++    prices_all: pd.DataFrame,
++    indices_all: pd.DataFrame,
++    master: pd.DataFrame,
++    *,
++    min_sessions: int = 120,
++    minimum_score: float = 70.0,
++) -> dict:
++    """One session's plan yield, without touching portfolio or delivery state."""
++    prices = prices_all[prices_all["_d"] <= date]
++    if prices.empty:
++        return {"date": date, "error": "no_prices"}
++    counts = prices.groupby("symbol")["trade_date"].nunique()
++    keep = counts[counts >= min_sessions].index
++    prices = prices[prices["symbol"].isin(keep)]
++    if prices.empty:
++        return {"date": date, "error": "no_symbol_met_min_sessions"}
++
++    indices = indices_all[indices_all["_d"] <= date] if "_d" in indices_all.columns else indices_all
++    benchmark, source = _benchmark(indices, prices)
++    benchmark = benchmark.sort_values("trade_date").reset_index(drop=True)
++    benchmark_close = benchmark["close"].reset_index(drop=True)
++    regime = build_market_snapshot(prices, benchmark)["regime"]
++
++    verdict = evaluate_universe(
++        prices, market_date=date, master=master, lifecycle=None, restricted=None,
++    )
++    metadata = {str(r["symbol"]): r.to_dict() for _, r in master.iterrows()} if not master.empty else {}
++
++    stages: Counter = Counter()
++    classes: Counter = Counter()
++    plan_states: Counter = Counter()
++    triggers: Counter = Counter()
++    timings: Counter = Counter()
++    planned: list[dict] = []
++    evaluated = 0
++
++    for symbol, frame in prices.groupby("symbol"):
++        symbol = str(symbol)
++        if not verdict.is_eligible(symbol):
++            continue
++        tiered = evaluate_tiered_eligibility(
++            symbol, frame, metadata=metadata.get(symbol), as_of_date=date, strict=False,
++        )
++        stages[tiered.stage] += 1
++        if not tiered.entry_authorised:
++            continue
++        evaluated += 1
++        try:
++            candidate = evaluate_candidate(
++                symbol, frame, regime, stale_data=False, minimum_score=minimum_score,
++                benchmark_close=benchmark_close, previous_stage=None,
++                previously_exited=False,
++                action_permitted=source == "OFFICIAL_INDEX_HISTORY",
++            )
++        except Exception:
++            continue
++        classes[str(candidate.classification)] += 1
++        plan_states[str(candidate.metrics.get("trade_plan_state", "?"))] += 1
++        triggers[str(candidate.metrics.get("setup", "?"))] += 1
++        timings[str(candidate.metrics.get("timing_state", "?"))] += 1
++        # A tradeable plan is the only thing that can become a position.
++        if candidate.classification == "ACTION" and float(candidate.entry or 0) > 0:
++            planned.append({
++                "symbol": symbol, "score": round(float(candidate.score), 2),
++                "entry": float(candidate.entry), "stop": float(candidate.stop),
++                "risk_pct": round(float(candidate.metrics.get("risk_percent") or 0), 2),
++            })
++
++    return {
++        "date": date, "regime": regime, "benchmark_source": source,
++        "stages": dict(stages), "evaluated_for_plan": evaluated,
++        "classifications": dict(classes), "plan_states": dict(plan_states),
++        "triggers": dict(triggers.most_common(8)), "timing": dict(timings),
++        "tradeable_plans": len(planned), "plans": planned[:10],
++    }
++
++
++def main(argv: list[str] | None = None) -> int:
++    parser = argparse.ArgumentParser(description=__doc__,
++                                     formatter_class=argparse.RawDescriptionHelpFormatter)
++    parser.add_argument("--db", default="nse_scanner.db")
++    parser.add_argument("--every", type=int, default=10,
++                        help="sample every Nth session (10 keeps a 20-month replay affordable)")
++    parser.add_argument("--dates", help="explicit comma-separated dates instead of sampling")
++    parser.add_argument("--start", default="2025-07-01",
++                        help="ignore sessions before this; earlier ones lack 120 sessions of history")
++    parser.add_argument("--limit", type=int, default=0, help="stop after N dates (0 = all)")
++    parser.add_argument("--out", default="output/v3_plan_yield.json")
++    args = parser.parse_args(argv)
++
++    database = V2Database(args.db)
++    print("loading prices once...", flush=True)
++    started = time.time()
++    prices_all = database.load_prices()
++    # Downstream V2 modules expect a real timestamp in trade_date, so slicing
++    # uses a separate string key rather than rewriting the column.
++    prices_all["trade_date"] = pd.to_datetime(prices_all["trade_date"], errors="coerce")
++    prices_all["_d"] = prices_all["trade_date"].dt.strftime("%Y-%m-%d")
++    indices_all = database.load_indices()
++    if not indices_all.empty:
++        indices_all["trade_date"] = pd.to_datetime(indices_all["trade_date"], errors="coerce")
++        indices_all["_d"] = indices_all["trade_date"].dt.strftime("%Y-%m-%d")
++    master = database.load_symbol_master()
++    print(f"  {prices_all['symbol'].nunique()} symbols, "
++          f"{prices_all['_d'].nunique()} sessions "
++          f"({time.time() - started:.0f}s)", flush=True)
++
++    sessions = sorted(prices_all["_d"].unique())
++    if args.dates:
++        targets = [d.strip() for d in args.dates.split(",") if d.strip()]
++    else:
++        eligible = [d for d in sessions if d >= args.start]
++        targets = eligible[::args.every]
++    if args.limit:
++        targets = targets[:args.limit]
++    print(f"replaying {len(targets)} session(s): {targets[0]} .. {targets[-1]}", flush=True)
++
++    results = []
++    out = Path(args.out)
++    out.parent.mkdir(parents=True, exist_ok=True)
++    for index, date in enumerate(targets, start=1):
++        t0 = time.time()
++        try:
++            row = replay_date(date, prices_all, indices_all, master)
++        except Exception as exc:
++            # One unusable session must not abort a multi-month replay; the most
++            # common cause is a benchmark with fewer than 200 sessions early on.
++            row = {"date": date, "error": f"{type(exc).__name__}: {exc}"}
++        results.append(row)
++        if row.get("error"):
++            print(f"[{index}/{len(targets)}] {date}  SKIPPED  {row['error'][:60]}", flush=True)
++            out.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
++            continue
++        print(f"[{index}/{len(targets)}] {date}  plans={row.get('tradeable_plans', '-')}"
++              f"  evaluated={row.get('evaluated_for_plan', '-')}"
++              f"  regime={row.get('regime', '-')}  ({time.time() - t0:.0f}s)", flush=True)
++        out.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
++
++    plans = [r.get("tradeable_plans", 0) for r in results if "tradeable_plans" in r]
++    if plans:
++        print("\n" + "=" * 58)
++        print(f"sessions replayed      : {len(plans)}")
++        print(f"tradeable plans total  : {sum(plans)}")
++        print(f"per session  mean/median/max : {sum(plans)/len(plans):.2f} / "
++              f"{sorted(plans)[len(plans)//2]} / {max(plans)}")
++        print(f"sessions with ZERO plans: {sum(1 for p in plans if p == 0)} of {len(plans)}")
++        merged: Counter = Counter()
++        for r in results:
++            merged.update(r.get("timing", {}))
++        print(f"timing mix across all   : {dict(merged.most_common(6))}")
++    print(f"\nwritten to {out}")
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/tests/test_ladder_paper_admission.py b/tests/test_ladder_paper_admission.py
+new file mode 100755
+index 0000000..7b65ab0
+--- /dev/null
++++ b/tests/test_ladder_paper_admission.py
+@@ -0,0 +1,186 @@
++"""The Momentum Ladder must actually admit the setups it generates.
++
++Regression for a defect that silenced the Ladder's entire paper lifecycle since
++it was introduced.  ``paper_lifecycle.update`` built one lookup from
++``market_rows or candidates`` and used it for both advancing held positions *and*
++admitting new ones.  The shadow engine always passes ``market_rows`` (every
++observed symbol, for stop and target checks), and those rows carry no
++``trade_levels`` — so ``eligible_for_paper`` was never seen and the watchlist
++stayed permanently empty.
++
++On 2026-08-20 the Ladder had 282 qualified candidates, 117 of them with a valid
++entry, stop and risk under 8%. It admitted none.
++"""
++from __future__ import annotations
++
++import json
++from pathlib import Path
++
++from old_nse_hull.multi_horizon.paper_lifecycle import (
++    MAX_OPEN_POSITIONS,
++    MAX_TOTAL_OPEN_RISK_PCT,
++    update,
++)
++
++DAY1 = "2026-08-19"
++DAY2 = "2026-08-20"
++
++
++def _levels(entry: float, stop: float, risk_pct: float) -> dict:
++    risk = entry - stop
++    return {
++        "eligible_for_paper": True, "entry_trigger": entry, "stop": stop,
++        "risk_per_share": risk, "risk_pct": risk_pct,
++        "target_1": entry + 1.5 * risk, "target_2": entry + 2.5 * risk,
++        "trail_rule": "After T1, trail below prior 10-session low",
++        "rejection_code": None,
++    }
++
++
++def _candidate(symbol: str, *, entry: float = 100.0, stop: float = 95.0,
++               risk_pct: float = 5.0, score: float = 80.0,
++               high: float = 99.0, low: float = 96.0) -> dict:
++    return {
++        "symbol": symbol, "primary_score": score, "primary_horizon": "3M",
++        "high": high, "low": low, "close": (high + low) / 2,
++        "trade_levels": _levels(entry, stop, risk_pct),
++    }
++
++
++def _bar(symbol: str, *, high: float, low: float) -> dict:
++    """A market row as the shadow engine supplies it — no trade_levels."""
++    return {"symbol": symbol, "high": high, "low": low, "close": (high + low) / 2}
++
++
++def _state(path: Path) -> dict:
++    return json.loads(path.read_text(encoding="utf-8"))
++
++
++# --- the defect -------------------------------------------------------------
++
++def test_candidates_are_admitted_even_when_market_rows_are_supplied(tmp_path):
++    """The exact call shape the shadow engine uses."""
++    path = tmp_path / "paper.json"
++    candidates = [_candidate("AAA"), _candidate("BBB")]
++    market_rows = [_bar("AAA", high=99.0, low=96.0), _bar("BBB", high=99.0, low=96.0),
++                   _bar("ZZZ", high=50.0, low=48.0)]
++    update(path, DAY1, candidates, market_rows)
++    state = _state(path)
++    assert set(state["watchlist"]) == {"AAA", "BBB"}, (
++        "market_rows must supply bars, not replace the admission source"
++    )
++    assert len(state["events"]) == 2
++    assert all(e["event"] == "PAPER_WATCHING" for e in state["events"])
++
++
++def test_symbols_present_only_in_market_rows_are_never_admitted():
++    """A bar without trade levels is not a setup and must not become one."""
++    import tempfile
++    path = Path(tempfile.mkdtemp()) / "p.json"
++    update(path, DAY1, [], [_bar("NOLEVELS", high=99.0, low=96.0)])
++    assert _state(path)["watchlist"] == {}
++
++
++def test_admission_still_works_when_market_rows_are_omitted(tmp_path):
++    path = tmp_path / "paper.json"
++    update(path, DAY1, [_candidate("AAA")], None)
++    assert set(_state(path)["watchlist"]) == {"AAA"}
++
++
++def test_ineligible_levels_are_refused(tmp_path):
++    path = tmp_path / "paper.json"
++    bad = _candidate("BAD")
++    bad["trade_levels"] = {"eligible_for_paper": False, "rejection_code": "risk_exceeds_maximum"}
++    update(path, DAY1, [bad, _candidate("GOOD")], None)
++    assert set(_state(path)["watchlist"]) == {"GOOD"}
++
++
++# --- held positions still advance from market rows --------------------------
++
++def test_a_held_symbol_absent_from_todays_candidates_still_advances(tmp_path):
++    """This is why market_rows exists, and the fix must not break it."""
++    path = tmp_path / "paper.json"
++    update(path, DAY1, [_candidate("AAA", entry=100.0, stop=95.0)], None)
++    assert set(_state(path)["watchlist"]) == {"AAA"}
++
++    # AAA drops out of the candidate list, but its trigger is hit.
++    update(path, DAY2, [], [_bar("AAA", high=101.0, low=99.0)])
++    state = _state(path)
++    assert state["watchlist"] == {}
++    assert state["positions"]["AAA"]["status"] == "OPEN"
++    assert state["positions"]["AAA"]["entered_date"] == DAY2
++    assert any(e["event"] == "PAPER_ENTERED" for e in state["events"])
++
++
++def test_a_stop_is_honoured_from_market_rows_alone(tmp_path):
++    path = tmp_path / "paper.json"
++    update(path, DAY1, [_candidate("AAA", entry=100.0, stop=95.0)], None)
++    update(path, DAY2, [], [_bar("AAA", high=101.0, low=99.0)])
++    update(path, "2026-08-21", [], [_bar("AAA", high=100.0, low=94.0)])
++    position = _state(path)["positions"]["AAA"]
++    assert position["status"] == "STOPPED"
++    assert position["exit_price"] == 95.0
++
++
++def test_a_trigger_is_not_filled_on_its_own_creation_session(tmp_path):
++    """Next-session discipline: same-day fills are not permitted."""
++    path = tmp_path / "paper.json"
++    update(path, DAY1, [_candidate("AAA", entry=100.0, stop=95.0, high=105.0, low=99.0)],
++           [_bar("AAA", high=105.0, low=99.0)])
++    state = _state(path)
++    assert set(state["watchlist"]) == {"AAA"}
++    assert state["positions"] == {}
++
++
++# --- caps bind on the strongest setups -------------------------------------
++
++def test_risk_cap_admits_the_highest_scoring_setups_first(tmp_path):
++    path = tmp_path / "paper.json"
++    candidates = [
++        _candidate("WEAK", risk_pct=8.0, score=70.0),
++        _candidate("STRONG", risk_pct=8.0, score=95.0),
++        _candidate("MIDDLE", risk_pct=8.0, score=85.0),
++    ]
++    update(path, DAY1, candidates, [_bar(c["symbol"], high=99.0, low=96.0) for c in candidates])
++    admitted = set(_state(path)["watchlist"])
++    # 8 + 8 = 16 fits under 20; a third would breach it.
++    assert admitted == {"STRONG", "MIDDLE"}, admitted
++
++
++def test_open_position_count_is_capped(tmp_path):
++    path = tmp_path / "paper.json"
++    candidates = [_candidate(f"S{i:02d}", risk_pct=0.5, score=100 - i) for i in range(20)]
++    update(path, DAY1, candidates, [_bar(c["symbol"], high=99.0, low=96.0) for c in candidates])
++    assert len(_state(path)["watchlist"]) == MAX_OPEN_POSITIONS
++
++
++def test_total_open_risk_cap_is_respected(tmp_path):
++    path = tmp_path / "paper.json"
++    candidates = [_candidate(f"R{i}", risk_pct=7.0, score=100 - i) for i in range(6)]
++    update(path, DAY1, candidates, None)
++    watchlist = _state(path)["watchlist"]
++    total = sum(float(w["risk_pct"]) for w in watchlist.values())
++    assert total <= MAX_TOTAL_OPEN_RISK_PCT
++    assert len(watchlist) == 2
++
++
++# --- idempotency ------------------------------------------------------------
++
++def test_rerunning_the_same_session_does_not_duplicate(tmp_path):
++    path = tmp_path / "paper.json"
++    candidates = [_candidate("AAA")]
++    rows = [_bar("AAA", high=99.0, low=96.0)]
++    update(path, DAY1, candidates, rows)
++    first = _state(path)
++    update(path, DAY1, candidates, rows)
++    second = _state(path)
++    assert first["watchlist"] == second["watchlist"]
++    assert len(second["events"]) == len(first["events"])
++
++
++def test_summary_reports_what_is_being_watched(tmp_path):
++    path = tmp_path / "paper.json"
++    summary = update(path, DAY1, [_candidate("AAA", risk_pct=4.0)], None)
++    assert summary["watching"] == 1
++    assert summary["open"] == 0
++    assert summary["limits"]["max_total_open_risk_pct"] == MAX_TOTAL_OPEN_RISK_PCT
+-- 
+2.34.1
+
