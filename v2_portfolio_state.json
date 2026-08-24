@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "exported_at": "2026-08-21T02:08:31.067963+00:00",
+  "exported_at": "2026-08-24T02:07:29.424917+00:00",
   "tables": {
     "v2_positions": [],
     "v2_position_events": [],
@@ -229,6 +229,22 @@
         "pending_setups": 0,
         "snapshot_json": "{\"portfolio_date\": \"2026-08-20\", \"capital_base\": 300000.0, \"committed_capital\": 0, \"market_value\": 0, \"realised_pnl\": 0, \"unrealised_pnl\": 0, \"total_pnl\": 0, \"portfolio_return_pct\": 0.0, \"initial_risk\": 0, \"open_risk_to_stops\": 0, \"open_positions\": 0, \"pending_setups\": 0}",
         "created_at": "2026-08-21 02:08:11"
+      },
+      {
+        "portfolio_date": "2026-08-21",
+        "capital_base": 300000.0,
+        "committed_capital": 0.0,
+        "market_value": 0.0,
+        "realised_pnl": 0.0,
+        "unrealised_pnl": 0.0,
+        "total_pnl": 0.0,
+        "portfolio_return_pct": 0.0,
+        "initial_risk": 0.0,
+        "open_risk_to_stops": 0.0,
+        "open_positions": 0,
+        "pending_setups": 0,
+        "snapshot_json": "{\"portfolio_date\": \"2026-08-21\", \"capital_base\": 300000.0, \"committed_capital\": 0, \"market_value\": 0, \"realised_pnl\": 0, \"unrealised_pnl\": 0, \"total_pnl\": 0, \"portfolio_return_pct\": 0.0, \"initial_risk\": 0, \"open_risk_to_stops\": 0, \"open_positions\": 0, \"pending_setups\": 0}",
+        "created_at": "2026-08-24 02:07:09"
       }
     ]
   }
