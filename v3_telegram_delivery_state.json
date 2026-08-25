@@ -22,5 +22,17 @@
   },
   "2026-08-21:portfolio_pnl:6:1:1c5eab146d6b35aa": {
     "status": "sent"
+  },
+  "2026-08-24:fresh_candidates:3:1:233e9a74f677e0e8": {
+    "status": "sent"
+  },
+  "2026-08-24:fresh_candidates:3:2:5aff052aa8e43618": {
+    "status": "sent"
+  },
+  "2026-08-24:lifecycle:6:1:e10a16fd08481379": {
+    "status": "sent"
+  },
+  "2026-08-24:portfolio_pnl:6:1:f6a8c6fea3487839": {
+    "status": "sent"
   }
 }
