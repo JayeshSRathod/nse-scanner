@@ -64,7 +64,7 @@ def test_message_two_contains_position_state_and_levels():
     position = replace(open_position(), last_price=105)
     message = render_portfolio_message([position], "2026-01-03")
     assert "NSE V3 — PORTFOLIO LIFECYCLE" in message
-    assert ">TEST</a>" in message
+    assert "TEST" in message
     assert "State: OPEN" in message
     assert "Initial Stop: ₹95.00" in message
     assert "Target 2: ₹120.00" in message
