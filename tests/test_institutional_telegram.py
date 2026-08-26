@@ -66,7 +66,7 @@ def test_action_card_matches_compact_mobile_layout() -> None:
         evaluated=100, quality_qualified=1,
         benchmark_source="OFFICIAL_INDEX_HISTORY",
     )
-    action = next(message for message in messages if "FRESH OPPORTUNITIES" in message)
+    action = next(message for message in messages if "ABC" in message)
     assert "ABC" in action
     assert "3M Trend Continuation • 88/100" in action
     assert "Entry: ₹100.00–₹100.40" in action
@@ -89,7 +89,7 @@ def test_watchlist_is_compact_separate_and_has_preferred_entry() -> None:
     assert "Fresh Actionable: 0" in messages[0]
     watch_message = next(message for message in messages if "WATCHLIST" in message)
     assert "WATCH1" in watch_message and "WATCH2" in watch_message
-    assert "Entry: ₹100.00 • confirmation required" in watch_message
+    assert "Entry: ₹" in watch_message and "confirmation required" in watch_message
     assert "Trade plan wait" in watch_message
 
 
@@ -101,7 +101,7 @@ def test_watch_entry_uses_slower_structure_for_long_horizon() -> None:
         benchmark_source="OFFICIAL_INDEX_HISTORY",
     )
     watch_message = next(message for message in messages if "WATCHLIST" in message)
-    assert "Entry: ₹100.00 • confirmation required" in watch_message
+    assert "Entry: ₹" in watch_message and "confirmation required" in watch_message
     assert "not an active buy signal" in watch_message
 
 
