@@ -55,6 +55,7 @@ jobs:
           git config user.name "nse-scanner-bot"
           git config user.email "nse-scanner-bot@users.noreply.github.com"
           git add old_nse_hull_shadow_state.json old_nse_hull_paper_state.json
+          git add -f output/old_nse_hull_daily.json
           if git diff --cached --quiet; then
             echo "No shadow comparison state changes to commit."
           else
