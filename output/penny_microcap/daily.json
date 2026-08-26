@@ -3,7 +3,7 @@
   "strategy_version": "penny-shadow-v1",
   "mode": "PAPER",
   "as_of_date": "2026-08-25",
-  "generated_at": "2026-08-26T08:07:14.163357+00:00",
+  "generated_at": "2026-08-26T08:18:54.571944+00:00",
   "universe_symbols": 2972,
   "selected": 124,
   "counts": {
@@ -30297,13 +30297,29 @@
     }
   ],
   "delivery": {
-    "daily": {
-      "sent": true,
-      "reason": "sent"
+    "early_radar": {
+      "sent": false,
+      "reason": "disabled"
     },
-    "risk": {
-      "sent": true,
-      "reason": "sent"
+    "confirming": {
+      "sent": false,
+      "reason": "disabled"
+    },
+    "ready": {
+      "sent": false,
+      "reason": "disabled"
+    },
+    "circuit_risk": {
+      "sent": false,
+      "reason": "disabled"
+    },
+    "portfolio": {
+      "sent": false,
+      "reason": "disabled"
+    },
+    "system": {
+      "sent": false,
+      "reason": "disabled"
     }
   }
 }
