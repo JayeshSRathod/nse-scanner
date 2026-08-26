@@ -1,0 +1,57 @@
+from __future__ import annotations
+
+import pandas as pd
+
+from v2.tradeability import evaluate_tradeability
+
+
+def frame(symbol: str, dates: list[str]) -> pd.DataFrame:
+    return pd.DataFrame({"symbol": symbol, "trade_date": pd.to_datetime(dates),
+                         "open": 100.0, "high": 101.0, "low": 99.0,
+                         "close": 100.0, "volume": 1000})
+
+
+MASTER = {"series": "EQ", "active": 1}
+JB_EVENT = {"event_type": "AMALGAMATION", "status": "EFFECTIVE", "effective_date": "2026-07-08",
+            "last_trading_date": "2026-07-16", "successor_symbol": "TORNTPHARM", "terminal": "1"}
+
+
+def test_terminal_merger_wins_over_staleness_and_missing_master():
+    result = evaluate_tradeability("JBCHEPHARM", frame("JBCHEPHARM", ["2026-07-16"]),
+                                  market_date="2026-08-25", master_row=None, lifecycle_event=JB_EVENT,
+                                  session_calendar=("2026-07-16", "2026-08-25"))
+    assert not result.eligible
+    assert result.reason_code == "TERMINAL_MERGER"
+    assert result.successor_symbol == "TORNTPHARM"
+
+
+def test_historical_replay_keeps_pre_terminal_symbol_valid():
+    result = evaluate_tradeability("JBCHEPHARM", frame("JBCHEPHARM", ["2026-07-16"]),
+                                  market_date="2026-07-16", master_row=MASTER, lifecycle_event=JB_EVENT,
+                                  session_calendar=("2026-07-16",))
+    assert result.eligible
+
+
+def test_successor_remains_tradeable():
+    result = evaluate_tradeability("TORNTPHARM", frame("TORNTPHARM", ["2026-08-25"]),
+                                  market_date="2026-08-25", master_row=MASTER,
+                                  session_calendar=("2026-08-25",))
+    assert result.eligible
+
+
+def test_stale_symbol_is_rejected_in_market_sessions():
+    result = evaluate_tradeability("STALE", frame("STALE", ["2026-08-21"]),
+                                  market_date="2026-08-25", master_row=MASTER,
+                                  session_calendar=("2026-08-21", "2026-08-24", "2026-08-25"))
+    assert result.reason_code == "STALE_SYMBOL_PRICE"
+    assert result.staleness_sessions == 2
+
+
+def test_missing_master_fails_closed_only_when_master_is_available():
+    prices = frame("X", ["2026-08-25"])
+    strict = evaluate_tradeability("X", prices, market_date="2026-08-25", master_row=None,
+                                  session_calendar=("2026-08-25",), require_metadata=True)
+    bootstrap = evaluate_tradeability("X", prices, market_date="2026-08-25", master_row=None,
+                                     session_calendar=("2026-08-25",), require_metadata=False)
+    assert strict.reason_code == "NOT_IN_CURRENT_NSE_UNIVERSE"
+    assert bootstrap.eligible
