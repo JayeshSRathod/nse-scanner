@@ -68,7 +68,7 @@ jobs:
           git add -f output/news_latest.json output/news_*.json 2>/dev/null || true
           git add portfolio.json 2>/dev/null || true
           git add v2_portfolio_state.json 2>/dev/null || true
-          git add output/v2_daily_run.json 2>/dev/null || true
+          git add -f output/v2_daily_run.json 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "No scanner state changes to commit."
           else
