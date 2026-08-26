@@ -55,8 +55,8 @@ jobs:
           PENNY_DAILY_TOPIC_ID: ${{ secrets.PENNY_DAILY_TOPIC_ID }}
           PENNY_RISK_TOPIC_ID: ${{ secrets.PENNY_RISK_TOPIC_ID }}
         run: |
-          SEND_FLAG=""
-          if [[ "${{ github.event_name }}" == "schedule" || ( "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.send_telegram }}" == "true" ) ]]; then SEND_FLAG="--send-telegram"; fi
+          SEND_FLAG="--send-telegram"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.send_telegram }}" != "true" ]]; then SEND_FLAG=""; fi
           python scripts/run_penny_microcap_daily.py --restore-snapshots $SEND_FLAG
 
       - name: Persist isolated report
