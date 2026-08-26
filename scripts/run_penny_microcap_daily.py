@@ -34,7 +34,9 @@ def main() -> int:
     as_of = str(pd.to_datetime(prices["trade_date"]).max().date()) if args.date is None else args.date
     master = database.load_symbol_master(as_of)
     restricted = database.load_restricted_symbols(as_of)
-    report = scan_market(prices, symbol_master=master, restricted=restricted)
+    lifecycle_registry = database.load_lifecycle_registry()
+    report = scan_market(prices, symbol_master=master, restricted=restricted,
+                         lifecycle_registry=lifecycle_registry)
     topic_order = ("early_radar", "confirming", "ready", "circuit_risk", "portfolio", "system")
     messages = {topic: render_topic_messages(report, topic) for topic in topic_order}
     deliveries = {
