@@ -25,6 +25,10 @@ class MiniAppFeedTest(unittest.TestCase):
                 {"symbol": "VISIBLE", "state": "READY", "score": 80, "close": 10},
                 {"symbol": "JBCHEPHARM", "state": "CONFIRMING", "score": 90, "close": 2400}]})
             write_json(root, "output/pine_hull_daily_run.json", {"trade_date": "2026-08-25", "created": [], "watch": []})
+            write_json(root, "output/v2_daily_run.json", {"trade_date": "2026-08-25", "dashboard_candidates": [
+                {"symbol": "V3TEST", "timing_state": "READY", "score": 88, "entry": 100, "stop": 95}]})
+            write_json(root, "output/old_nse_hull_daily.json", {"as_of_date": "2026-08-25", "shortlist": [
+                {"symbol": "LADDERTEST", "hull_state": "WATCH", "discovery_score": 75, "close": 50}]})
             registry = root / "corporate_data/normalized/security_lifecycle_events.csv"
             registry.parent.mkdir(parents=True)
             with registry.open("w", encoding="utf-8", newline="") as handle:
@@ -33,8 +37,12 @@ class MiniAppFeedTest(unittest.TestCase):
             with patch.object(module, "ROOT", root):
                 self.assertEqual(module.main(), 0)
             feed = json.loads((root / "docs/data/feed.json").read_text(encoding="utf-8"))
-            self.assertEqual([row["symbol"] for row in feed["items"]], ["VISIBLE"])
-            self.assertEqual(feed["items"][0]["stage"], "Ready to watch")
+            self.assertEqual({row["symbol"] for row in feed["items"]}, {"VISIBLE", "V3TEST", "LADDERTEST"})
+            by_symbol = {row["symbol"]: row for row in feed["items"]}
+            self.assertEqual(by_symbol["VISIBLE"]["stage"], "Watch for entry")
+            self.assertEqual(by_symbol["V3TEST"]["stage"], "Watch for entry")
+            self.assertEqual(by_symbol["LADDERTEST"]["stage"], "Watchlist—wait for confirmation")
+            self.assertTrue(all(scanner["available"] for scanner in feed["scanners"]))
             self.assertNotIn("JBCHEPHARM", json.dumps(feed))
 
 if __name__ == "__main__":
