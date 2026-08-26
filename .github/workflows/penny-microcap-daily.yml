@@ -1,6 +1,10 @@
 name: Penny Microcap Shadow Daily
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/penny-microcap-daily.yml'
   schedule:
     # 03:15 UTC = 08:45 IST, after the shared NSE data pipeline.
     - cron: '15 3 * * 1-5'
@@ -56,8 +60,8 @@ jobs:
           PENNY_TOPIC_PORTFOLIO: ${{ secrets.PENNY_TOPIC_PORTFOLIO }}
           PENNY_TOPIC_SYSTEM: ${{ secrets.PENNY_TOPIC_SYSTEM }}
         run: |
-          SEND_FLAG="--send-telegram"
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.send_telegram }}" != "true" ]]; then SEND_FLAG=""; fi
+          SEND_FLAG=""
+          if [[ "${{ github.event_name }}" == "schedule" || ( "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.send_telegram }}" == "true" ) ]]; then SEND_FLAG="--send-telegram"; fi
           python scripts/run_penny_microcap_daily.py --restore-snapshots $SEND_FLAG
 
       - name: Persist isolated report
