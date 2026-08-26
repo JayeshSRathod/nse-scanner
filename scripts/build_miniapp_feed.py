@@ -54,11 +54,11 @@ def item(row: dict, scanner: str, stage: str) -> dict:
 
 def penny_items(data: dict) -> list[dict]:
     labels = {
-        "READY": "Ready to watch",
-        "CONFIRMING": "Strength building",
-        "EARLY_RADAR": "Movement starting",
-        "CIRCUIT_LOCKED": "Buying may be difficult",
-        "EXTENDED": "Price moved too far",
+        "READY": "Watch for entry",
+        "CONFIRMING": "Watchlist—wait for confirmation",
+        "EARLY_RADAR": "Early watchlist",
+        "CIRCUIT_LOCKED": "No entry—circuit risk",
+        "EXTENDED": "Wait for pullback",
     }
     return [item(row, "penny", labels.get(row.get("state"), "Watch"))
             for row in data.get("candidates", [])]
@@ -67,11 +67,38 @@ def penny_items(data: dict) -> list[dict]:
 def hull_items(data: dict) -> list[dict]:
     rows: list[dict] = []
     for row in data.get("created", []):
-        rows.append(item(row, "hull", "Paper position opened"))
-    labels = {"READY": "Ready to watch", "EARLY": "Movement starting",
-              "EXTENDED": "Price moved too far", "WEAK": "Wait"}
+        rows.append(item(row, "hull", "New paper entry"))
+    labels = {"READY": "Watch for entry", "EARLY": "Early watchlist",
+              "EXTENDED": "Wait for pullback", "WEAK": "No action yet"}
     for row in data.get("watch", []):
         rows.append(item(row, "hull", labels.get(row.get("timing_state"), "Watch")))
+    return rows
+
+
+def v3_items(data: dict) -> list[dict]:
+    labels = {
+        "READY": "Watch for entry",
+        "ACTION": "Watch for entry",
+        "CONFIRMING": "Watchlist—wait for confirmation",
+        "RADAR": "Early watchlist",
+        "EARLY": "Early watchlist",
+        "EXTENDED": "Wait for pullback",
+        "WEAK": "No action yet",
+    }
+    rows = []
+    for row in data.get("dashboard_candidates", []):
+        stage = labels.get(row.get("timing_state"), labels.get(row.get("classification"), "Watchlist—wait for confirmation"))
+        rows.append(item(row, "v3", stage))
+    return rows
+
+
+def ladder_items(data: dict) -> list[dict]:
+    rows = []
+    for row in data.get("shortlist", []):
+        stage = "Watch for entry" if row.get("hull_state") == "READY" else "Watchlist—wait for confirmation"
+        normalized = dict(row)
+        normalized["score"] = row.get("discovery_score")
+        rows.append(item(normalized, "ladder", stage))
     return rows
 
 
@@ -79,15 +106,18 @@ def main() -> int:
     terminal = terminal_symbols()
     penny = read_json("output/penny_microcap/daily.json", {})
     hull = read_json("output/pine_hull_daily_run.json", {})
-    items = penny_items(penny) + hull_items(hull)
+    v3 = read_json("output/v2_daily_run.json", {})
+    ladder = read_json("output/old_nse_hull_daily.json", {})
+    items = penny_items(penny) + hull_items(hull) + v3_items(v3) + ladder_items(ladder)
     items = [row for row in items if row["symbol"] and row["symbol"] not in terminal]
     items.sort(key=lambda row: (row["scanner"], -(row["score"] or 0), row["symbol"]))
     feed = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "market_dates": {"penny": penny.get("as_of_date"), "hull": hull.get("trade_date")},
+        "market_dates": {"v3": v3.get("trade_date"), "ladder": ladder.get("as_of_date"),
+                         "penny": penny.get("as_of_date"), "hull": hull.get("trade_date")},
         "scanners": [
-            {"id": "v3", "name": "NSE Scanner V3", "available": False},
-            {"id": "ladder", "name": "Momentum Ladder", "available": False},
+            {"id": "v3", "name": "NSE Scanner V3", "available": bool(v3.get("dashboard_candidates"))},
+            {"id": "ladder", "name": "Momentum Ladder", "available": bool(ladder.get("shortlist"))},
             {"id": "hull", "name": "Hull Scanner", "available": bool(hull)},
             {"id": "penny", "name": "Penny Scanner", "available": bool(penny)},
         ],
