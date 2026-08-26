@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from penny_microcap.telegram import send_messages
+from penny_microcap.telegram import render_topic_messages, send_messages
 
 
 class Response:
@@ -11,9 +11,9 @@ class Response:
 def test_dedicated_penny_route(monkeypatch):
     monkeypatch.setenv("PENNY_TELEGRAM_BOT_TOKEN", "penny-token")
     monkeypatch.setenv("PENNY_TELEGRAM_CHAT_ID", "-100444")
-    monkeypatch.setenv("PENNY_DAILY_TOPIC_ID", "601")
+    monkeypatch.setenv("PENNY_TOPIC_EARLY_RADAR", "601")
     with patch("penny_microcap.telegram.requests.post", return_value=Response()) as post:
-        result = send_messages(["hello"], "daily", enabled=True)
+        result = send_messages(["hello"], "early_radar", enabled=True)
     assert result.sent
     assert post.call_args.args[0] == "https://api.telegram.org/botpenny-token/sendMessage"
     assert post.call_args.kwargs["json"]["chat_id"] == "-100444"
@@ -21,6 +21,50 @@ def test_dedicated_penny_route(monkeypatch):
 
 
 def test_missing_penny_secrets_fail_closed(monkeypatch):
-    for name in ("PENNY_TELEGRAM_BOT_TOKEN", "PENNY_TELEGRAM_CHAT_ID", "PENNY_RISK_TOPIC_ID"):
+    for name in ("PENNY_TELEGRAM_BOT_TOKEN", "PENNY_TELEGRAM_CHAT_ID", "PENNY_TOPIC_CIRCUIT_RISK"):
         monkeypatch.delenv(name, raising=False)
-    assert send_messages(["hello"], "risk", enabled=True).reason == "telegram_not_configured"
+    assert send_messages(["hello"], "circuit_risk", enabled=True).reason == "telegram_not_configured"
+
+
+def test_all_six_topics_use_their_own_thread(monkeypatch):
+    monkeypatch.setenv("PENNY_TELEGRAM_BOT_TOKEN", "penny-token")
+    monkeypatch.setenv("PENNY_TELEGRAM_CHAT_ID", "-100444")
+    routes = {
+        "early_radar": ("PENNY_TOPIC_EARLY_RADAR", 601),
+        "confirming": ("PENNY_TOPIC_CONFIRMING", 602),
+        "ready": ("PENNY_TOPIC_READY", 603),
+        "circuit_risk": ("PENNY_TOPIC_CIRCUIT_RISK", 604),
+        "portfolio": ("PENNY_TOPIC_PORTFOLIO", 605),
+        "system": ("PENNY_TOPIC_SYSTEM", 606),
+    }
+    for _, (variable, thread_id) in routes.items():
+        monkeypatch.setenv(variable, str(thread_id))
+    with patch("penny_microcap.telegram.requests.post", return_value=Response()) as post:
+        for route, (_, thread_id) in routes.items():
+            assert send_messages([route], route, enabled=True).sent
+            assert post.call_args.kwargs["json"]["message_thread_id"] == thread_id
+
+
+def test_each_candidate_state_renders_only_in_its_topic():
+    report = {
+        "as_of_date": "2026-08-25", "universe_symbols": 3, "selected": 3,
+        "counts": {"EARLY_RADAR": 1, "CONFIRMING": 1, "READY": 1},
+        "candidates": [
+            {"symbol": "EARLY", "state": "EARLY_RADAR", "score": 40, "close": 10, "metrics": {}},
+            {"symbol": "CONFIRM", "state": "CONFIRMING", "score": 60, "close": 20, "metrics": {}},
+            {"symbol": "READYONE", "state": "READY", "score": 80, "close": 30, "stop": 27, "target1": 36, "target2": 39, "metrics": {}},
+        ],
+    }
+    early = "\n".join(render_topic_messages(report, "early_radar"))
+    confirming = "\n".join(render_topic_messages(report, "confirming"))
+    ready = "\n".join(render_topic_messages(report, "ready"))
+    assert "EARLY" in early and "CONFIRM" not in early and "READYONE" not in early
+    assert "CONFIRM" in confirming and "EARLY" not in confirming and "READYONE" not in confirming
+    assert "READYONE" in ready and "EARLY" not in ready and "CONFIRM" not in ready
+
+
+def test_portfolio_and_system_have_dedicated_summaries():
+    report = {"as_of_date": "2026-08-25", "strategy_version": "v1", "universe_symbols": 10,
+              "selected": 0, "counts": {}, "candidates": []}
+    assert "No open PAPER positions" in render_topic_messages(report, "portfolio")[0]
+    assert "HEALTHY" in render_topic_messages(report, "system")[0]
