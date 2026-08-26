@@ -48,8 +48,13 @@ jobs:
         env:
           PENNY_TELEGRAM_BOT_TOKEN: ${{ secrets.PENNY_TELEGRAM_BOT_TOKEN }}
           PENNY_TELEGRAM_CHAT_ID: ${{ secrets.PENNY_TELEGRAM_CHAT_ID }}
-          PENNY_DAILY_TOPIC_ID: ${{ secrets.PEENY_TOPIC_EARLY_RADAR }}
-          PENNY_RISK_TOPIC_ID: ${{ secrets.PENNY_TOPIC_CIRCUIT_RISK }}
+          # Keep the historical PEENY spelling because GitHub secret names cannot be renamed.
+          PENNY_TOPIC_EARLY_RADAR: ${{ secrets.PEENY_TOPIC_EARLY_RADAR }}
+          PENNY_TOPIC_CONFIRMING: ${{ secrets.PENNY_TOPIC_CONFIRMING }}
+          PENNY_TOPIC_READY: ${{ secrets.PENNY_TOPIC_READY }}
+          PENNY_TOPIC_CIRCUIT_RISK: ${{ secrets.PENNY_TOPIC_CIRCUIT_RISK }}
+          PENNY_TOPIC_PORTFOLIO: ${{ secrets.PENNY_TOPIC_PORTFOLIO }}
+          PENNY_TOPIC_SYSTEM: ${{ secrets.PENNY_TOPIC_SYSTEM }}
         run: |
           SEND_FLAG="--send-telegram"
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.send_telegram }}" != "true" ]]; then SEND_FLAG=""; fi
