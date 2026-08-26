@@ -41,18 +41,57 @@ def _card(row: dict) -> str:
     return "\n".join(lines)
 
 
-def render_messages(report: dict, *, risk_only: bool = False, limit: int = 3400, cards_per_page: int = 7) -> list[str]:
-    risk_states = {"CIRCUIT_LOCKED", "EXTENDED"}
-    rows = [r for r in report.get("candidates", []) if (r["state"] in risk_states) == risk_only]
-    title = "🚧 <b>PENNY CIRCUIT & RISK</b>" if risk_only else "🪙 <b>PENNY & MICROCAP RADAR</b>"
+TOPIC_STATES = {
+    "early_radar": {"EARLY_RADAR"},
+    "confirming": {"CONFIRMING"},
+    "ready": {"READY"},
+    "circuit_risk": {"CIRCUIT_LOCKED", "EXTENDED"},
+}
+
+TOPIC_TITLES = {
+    "early_radar": "🔵 <b>PENNY EARLY RADAR</b>",
+    "confirming": "🟡 <b>PENNY CONFIRMING</b>",
+    "ready": "🟢 <b>PENNY READY</b>",
+    "circuit_risk": "🚧 <b>PENNY CIRCUIT & RISK</b>",
+}
+
+
+def _header(report: dict, title: str) -> str:
     counts = report.get("counts", {})
-    header = "\n".join([title, f'<b>{report.get("as_of_date", "N/A")} EOD • PAPER ONLY</b>',
+    return "\n".join([title, f'<b>{report.get("as_of_date", "N/A")} EOD • PAPER ONLY</b>',
         f'Universe {report.get("universe_symbols", 0)} • Selected {report.get("selected", 0)}',
         f'Ready {counts.get("READY",0)} • Confirming {counts.get("CONFIRMING",0)} • Early {counts.get("EARLY_RADAR",0)}', ""])
+
+
+def render_topic_messages(report: dict, topic: str, *, limit: int = 3400, cards_per_page: int = 7) -> list[str]:
+    if topic == "portfolio":
+        positions = report.get("portfolio", [])
+        header = _header(report, "📂 <b>PENNY PAPER PORTFOLIO</b>")
+        if not positions:
+            return [header + "No open PAPER positions. READY candidates remain watchlist items until fill rules execute.\n\n⚠️ HIGH-RISK MICROCAP RESEARCH — NOT ADVICE"]
+        rows = positions
+    elif topic == "system":
+        counts = report.get("counts", {})
+        return ["\n".join([
+            "⚙️ <b>PENNY SCANNER SYSTEM</b>",
+            f'<b>{report.get("as_of_date", "N/A")} EOD • HEALTHY</b>',
+            f'Data universe: {report.get("universe_symbols", 0)} symbols',
+            f'Qualified: {report.get("selected", 0)}',
+            f'Early {counts.get("EARLY_RADAR", 0)} • Confirming {counts.get("CONFIRMING", 0)} • Ready {counts.get("READY", 0)}',
+            f'Circuit {counts.get("CIRCUIT_LOCKED", 0)} • Extended {counts.get("EXTENDED", 0)}',
+            f'Strategy: {html.escape(str(report.get("strategy_version", "N/A")))} • PAPER',
+        ])]
+    elif topic in TOPIC_STATES:
+        rows = [r for r in report.get("candidates", []) if r["state"] in TOPIC_STATES[topic]]
+        header = _header(report, TOPIC_TITLES[topic])
+    else:
+        raise ValueError(f"Unknown Penny topic: {topic}")
+
     footer = "\n\n⚠️ HIGH-RISK MICROCAP RESEARCH — NOT ADVICE"
     pages, current, cards = [], header, 0
     if not rows:
-        return [header + ("No new circuit or extension risks." if risk_only else "No qualifying candidates today.") + footer]
+        empty = "No new circuit or extension risks." if topic == "circuit_risk" else "No qualifying candidates in this stage today."
+        return [header + empty + footer]
     for row in rows:
         card = _card(row)
         if cards and (cards >= cards_per_page or len(current) + len(card) + len(footer) + 2 > limit):
@@ -62,11 +101,27 @@ def render_messages(report: dict, *, risk_only: bool = False, limit: int = 3400,
     return pages
 
 
+def render_messages(report: dict, *, risk_only: bool = False, limit: int = 3400, cards_per_page: int = 7) -> list[str]:
+    """Compatibility wrapper for callers using the original two-route API."""
+    if risk_only:
+        return render_topic_messages(report, "circuit_risk", limit=limit, cards_per_page=cards_per_page)
+    pages = []
+    for topic in ("ready", "confirming", "early_radar"):
+        pages.extend(render_topic_messages(report, topic, limit=limit, cards_per_page=cards_per_page))
+    return pages
+
+
 def send_messages(messages: list[str], kind: str, *, enabled: bool, timeout: int = 20) -> DeliveryResult:
     if not enabled: return DeliveryResult(False, "disabled")
     token, chat_id = os.getenv("PENNY_TELEGRAM_BOT_TOKEN", "").strip(), os.getenv("PENNY_TELEGRAM_CHAT_ID", "").strip()
-    topic_names = {"daily": "PENNY_DAILY_TOPIC_ID", "risk": "PENNY_RISK_TOPIC_ID", "portfolio": "PENNY_PORTFOLIO_TOPIC_ID",
-                   "validation": "PENNY_VALIDATION_TOPIC_ID", "review": "PENNY_REVIEW_TOPIC_ID", "system": "PENNY_SYSTEM_TOPIC_ID"}
+    topic_names = {
+        "early_radar": "PENNY_TOPIC_EARLY_RADAR",
+        "confirming": "PENNY_TOPIC_CONFIRMING",
+        "ready": "PENNY_TOPIC_READY",
+        "circuit_risk": "PENNY_TOPIC_CIRCUIT_RISK",
+        "portfolio": "PENNY_TOPIC_PORTFOLIO",
+        "system": "PENNY_TOPIC_SYSTEM",
+    }
     topic = os.getenv(topic_names[kind], "").strip()
     if not token or not chat_id or not topic: return DeliveryResult(False, "telegram_not_configured")
     for message in messages:
