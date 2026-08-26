@@ -98,8 +98,32 @@ def ladder_items(data: dict) -> list[dict]:
         stage = "Watch for entry" if row.get("hull_state") == "READY" else "Watchlist—wait for confirmation"
         normalized = dict(row)
         normalized["score"] = row.get("discovery_score")
-        rows.append(item(normalized, "ladder", stage))
+        if number(normalized.get("score")) is not None and normalized["score"] >= 75:
+            rows.append(item(normalized, "ladder", stage))
     return rows
+
+
+def _ranking_key(row: dict) -> tuple:
+    """Rank by evidence first; upside and reward/risk only break close calls."""
+    entry = row.get("entry_low") or row.get("price")
+    stop, target = row.get("stop"), row.get("target2") or row.get("target1")
+    upside = ((target / entry) - 1.0) if entry and target and target > entry else 0.0
+    risk = (entry - stop) if entry and stop and stop < entry else 0.0
+    reward_risk = ((target - entry) / risk) if risk and target else 0.0
+    stage_priority = {
+        "New paper entry": 6, "Open paper position": 6, "Watch for entry": 5,
+        "Watchlist—wait for confirmation": 4, "Early watchlist": 3,
+        "Wait for pullback": 2, "No action yet": 1, "No entry—circuit risk": 0,
+    }.get(row.get("stage"), 0)
+    return (-stage_priority, -(row.get("score") or 0), -min(upside, 1.0), -min(reward_risk, 10.0), row["symbol"])
+
+
+def limit_per_scanner(rows: list[dict], maximum: int = 25) -> list[dict]:
+    result = []
+    for scanner in ("v3", "ladder", "hull", "penny"):
+        ranked = sorted((row for row in rows if row["scanner"] == scanner), key=_ranking_key)
+        result.extend(ranked[:maximum])
+    return result
 
 
 def main() -> int:
@@ -110,7 +134,7 @@ def main() -> int:
     ladder = read_json("output/old_nse_hull_daily.json", {})
     items = penny_items(penny) + hull_items(hull) + v3_items(v3) + ladder_items(ladder)
     items = [row for row in items if row["symbol"] and row["symbol"] not in terminal]
-    items.sort(key=lambda row: (row["scanner"], -(row["score"] or 0), row["symbol"]))
+    items = limit_per_scanner(items)
     feed = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "market_dates": {"v3": v3.get("trade_date"), "ladder": ladder.get("as_of_date"),
@@ -123,6 +147,7 @@ def main() -> int:
         ],
         "items": items,
         "notice": "Paper tracking for research and education only. Not investment advice.",
+        "display_rule": "Up to 25 higher-ranked opportunities per scanner. Ladder requires a score of at least 75.",
     }
     target = ROOT / "docs/data/feed.json"
     target.parent.mkdir(parents=True, exist_ok=True)

@@ -45,5 +45,17 @@ class MiniAppFeedTest(unittest.TestCase):
             self.assertTrue(all(scanner["available"] for scanner in feed["scanners"]))
             self.assertNotIn("JBCHEPHARM", json.dumps(feed))
 
+    def test_each_scanner_is_limited_to_25_and_ladder_requires_75(self):
+        rows = [{"scanner": "penny", "symbol": f"P{i}", "stage": "Early watchlist", "score": i,
+                 "price": 10, "entry_low": 10, "entry_high": 10, "stop": 9, "target1": 11, "target2": 12}
+                for i in range(30)]
+        limited = module.limit_per_scanner(rows)
+        self.assertEqual(len(limited), 25)
+        self.assertEqual(limited[0]["symbol"], "P29")
+        ladder = module.ladder_items({"shortlist": [
+            {"symbol": "LOW", "hull_state": "WATCH", "discovery_score": 74.99},
+            {"symbol": "SHOW", "hull_state": "WATCH", "discovery_score": 75.0}]})
+        self.assertEqual([row["symbol"] for row in ladder], ["SHOW"])
+
 if __name__ == "__main__":
     unittest.main()
