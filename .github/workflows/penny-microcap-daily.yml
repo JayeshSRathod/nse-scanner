@@ -1,0 +1,68 @@
+name: Penny Microcap Shadow Daily
+
+on:
+  schedule:
+    # 03:15 UTC = 08:45 IST, after the shared NSE data pipeline.
+    - cron: '15 3 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      send_telegram:
+        description: Send PAPER reports to the dedicated penny bot
+        required: false
+        default: true
+        type: boolean
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  PYTHONPATH: ${{ github.workspace }}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: penny-microcap-shadow-daily
+  cancel-in-progress: false
+
+jobs:
+  penny-shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout persisted market history
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run focused tests
+        run: pytest -q tests/test_penny_microcap_progressive.py tests/test_penny_microcap_telegram.py
+
+      - name: Run progressive PAPER scanner
+        env:
+          PENNY_TELEGRAM_BOT_TOKEN: ${{ secrets.PENNY_TELEGRAM_BOT_TOKEN }}
+          PENNY_TELEGRAM_CHAT_ID: ${{ secrets.PENNY_TELEGRAM_CHAT_ID }}
+          PENNY_DAILY_TOPIC_ID: ${{ secrets.PENNY_DAILY_TOPIC_ID }}
+          PENNY_RISK_TOPIC_ID: ${{ secrets.PENNY_RISK_TOPIC_ID }}
+        run: |
+          SEND_FLAG="--send-telegram"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.send_telegram }}" != "true" ]]; then SEND_FLAG=""; fi
+          python scripts/run_penny_microcap_daily.py --restore-snapshots $SEND_FLAG
+
+      - name: Persist isolated report
+        run: |
+          git config user.name "nse-scanner-bot"
+          git config user.email "nse-scanner-bot@users.noreply.github.com"
+          git add -f output/penny_microcap/daily.json
+          if git diff --cached --quiet; then
+            echo "No penny shadow report changes."
+          else
+            git commit -m "Auto: persist penny microcap shadow report"
+            git push origin HEAD:main
+          fi
