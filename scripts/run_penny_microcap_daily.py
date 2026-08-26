@@ -14,7 +14,7 @@ if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
 from nse_loader import init_database
 from nse_market_store import restore_prices
 from penny_microcap.engine import scan_market
-from penny_microcap.telegram import render_messages, send_messages
+from penny_microcap.telegram import render_topic_messages, send_messages
 from v2.database import V2Database
 
 
@@ -35,13 +35,16 @@ def main() -> int:
     master = database.load_symbol_master(as_of)
     restricted = database.load_restricted_symbols(as_of)
     report = scan_market(prices, symbol_master=master, restricted=restricted)
-    daily, risk = render_messages(report), render_messages(report, risk_only=True)
-    deliveries = {"daily": send_messages(daily, "daily", enabled=args.send_telegram).__dict__,
-                  "risk": send_messages(risk, "risk", enabled=args.send_telegram).__dict__}
+    topic_order = ("early_radar", "confirming", "ready", "circuit_risk", "portfolio", "system")
+    messages = {topic: render_topic_messages(report, topic) for topic in topic_order}
+    deliveries = {
+        topic: send_messages(messages[topic], topic, enabled=args.send_telegram).__dict__
+        for topic in topic_order
+    }
     payload = {**report, "delivery": deliveries}
     target = Path(args.output); target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    print("\n\n".join(daily + risk))
+    print("\n\n".join(message for topic in topic_order for message in messages[topic]))
     return 0 if all(x["sent"] or x["reason"] == "disabled" for x in deliveries.values()) else 2
 
 
