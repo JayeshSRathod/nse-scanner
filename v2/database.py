@@ -173,7 +173,7 @@ class V2Database:
             if "symbol_master_v2" not in names:
                 return pd.DataFrame(columns=["symbol", "series", "active", "market_cap_cr", "market_cap_as_of", "market_cap_source"])
             available = {row[1] for row in conn.execute("PRAGMA table_info(symbol_master_v2)")}
-            columns = [column for column in ("symbol", "series", "active", "market_cap_cr", "market_cap_as_of", "market_cap_source") if column in available]
+            columns = [column for column in ("symbol", "series", "active", "delisting_date", "market_cap_cr", "market_cap_as_of", "market_cap_source") if column in available]
             if "shareholding_patterns_v3" not in names:
                 return pd.read_sql_query(f"SELECT {', '.join(columns)} FROM symbol_master_v2", conn)
             cutoff = as_of_date or "9999-12-31"
@@ -213,6 +213,14 @@ class V2Database:
                     LIMIT 1
                 )
             """, conn, params=[cutoff, cutoff, cutoff, cutoff])
+
+    def load_lifecycle_registry(self) -> dict[str, dict]:
+        """Load the git-backed terminal-event registry for disposable runners."""
+        path = Path("corporate_data/normalized/security_lifecycle_events.csv")
+        if not path.exists():
+            return {}
+        frame = pd.read_csv(path, dtype=str).fillna("")
+        return {str(row["symbol"]).upper(): row.to_dict() for _, row in frame.iterrows()}
 
     def load_restricted_symbols(self, trade_date: str) -> dict[str, str]:
         """Load dated regulatory exclusions when a compatible table is available."""

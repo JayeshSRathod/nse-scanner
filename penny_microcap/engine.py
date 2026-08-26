@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from v2.indicators import atr
+from v2.tradeability import evaluate_tradeability, summarize as summarize_tradeability
 from .config import PennyConfig
 
 
@@ -240,16 +241,30 @@ def evaluate_symbol(symbol: str, frame: pd.DataFrame, *, metadata: Mapping[str, 
 
 
 def scan_market(prices: pd.DataFrame, *, symbol_master: pd.DataFrame | None = None,
-                restricted: Mapping[str, str] | None = None, config: PennyConfig = PennyConfig()) -> dict:
+                restricted: Mapping[str, str] | None = None,
+                lifecycle_registry: Mapping[str, Mapping[str, object]] | None = None,
+                config: PennyConfig = PennyConfig()) -> dict:
     if prices.empty:
         return {"system": "PENNY_MICROCAP_SHADOW", "state": "NO_DATA", "candidates": [], "audit": []}
     prices = prices.copy(); prices["trade_date"] = pd.to_datetime(prices["trade_date"])
     as_of = prices["trade_date"].max(); prices = prices[prices["trade_date"] <= as_of]
-    metadata = _metadata(symbol_master); restricted = restricted or {}
+    metadata = _metadata(symbol_master); restricted = restricted or {}; lifecycle_registry = lifecycle_registry or {}
+    session_calendar = tuple(sorted(prices["trade_date"].dt.date.astype(str).unique()))
+    tradeability_results = {}
     candidates, audits = [], []
     for symbol, frame in prices.groupby("symbol", sort=True):
-        candidate, audit = evaluate_symbol(str(symbol), frame, metadata=metadata.get(str(symbol), {}),
-                                           restricted_reason=restricted.get(str(symbol)), expected_as_of=as_of, config=config)
+        symbol = str(symbol)
+        gate = evaluate_tradeability(
+            symbol, frame, market_date=as_of.date().isoformat(), master_row=metadata.get(symbol),
+            restricted_reason=restricted.get(symbol), lifecycle_event=lifecycle_registry.get(symbol),
+            session_calendar=session_calendar, require_metadata=bool(metadata),
+        )
+        tradeability_results[symbol] = gate
+        if not gate.eligible or gate.entry_blocked:
+            audits.append({**gate.to_dict(), "eligible": False})
+            continue
+        candidate, audit = evaluate_symbol(symbol, frame, metadata=metadata.get(symbol, {}),
+                                           restricted_reason=restricted.get(symbol), expected_as_of=as_of, config=config)
         audits.append(audit)
         if candidate: candidates.append(candidate.to_dict())
     priority = {"READY": 0, "CONFIRMING": 1, "EARLY_RADAR": 2, "CIRCUIT_LOCKED": 3, "EXTENDED": 4}
@@ -258,4 +273,5 @@ def scan_market(prices: pd.DataFrame, *, symbol_master: pd.DataFrame | None = No
     return {"system": "PENNY_MICROCAP_SHADOW", "strategy_version": config.strategy_version,
             "mode": "PAPER", "as_of_date": as_of.date().isoformat(),
             "generated_at": datetime.now().astimezone().isoformat(), "universe_symbols": prices["symbol"].nunique(),
-            "selected": len(candidates), "counts": counts, "candidates": candidates, "audit": audits}
+            "selected": len(candidates), "counts": counts, "candidates": candidates, "audit": audits,
+            "tradeability": summarize_tradeability(tradeability_results)}

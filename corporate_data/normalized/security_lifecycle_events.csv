@@ -1,0 +1,2 @@
+symbol,event_type,status,announcement_date,effective_date,record_date,last_trading_date,successor_symbol,exchange_ratio_from,exchange_ratio_to,source,terminal,notes
+JBCHEPHARM,AMALGAMATION,EFFECTIVE,,2026-07-08,2026-07-17,2026-07-16,TORNTPHARM,100.0,51.0,TORRENT_PHARMA_EXCHANGE_FILING,1,Amalgamated into Torrent Pharmaceuticals and dissolved without winding up; 51 TORNTPHARM shares for every 100 JBCHEPHARM shares.

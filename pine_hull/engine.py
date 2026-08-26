@@ -18,6 +18,7 @@ import pandas as pd
 
 from v2.database import V2Database
 from v2.indicators import atr, hma, kama, wma
+from v2.tradeability import evaluate_tradeability, summarize as summarize_tradeability
 from .opportunity_lifecycle import timing_state as lifecycle_timing_state, weekly_transition
 
 
@@ -228,12 +229,33 @@ def run_daily(
     db_path: str | Path = "nse_scanner.db", *, state_path: str | Path = "pine_hull_state.json",
     as_of: str | None = None, config: PineConfig = PineConfig(),
 ) -> dict:
-    prices = V2Database(db_path).load_prices(end_date=as_of, min_sessions=300)
+    database = V2Database(db_path)
+    prices = database.load_prices(end_date=as_of, min_sessions=300)
     if prices.empty:
         raise RuntimeError("No Pine-compatible daily price history")
     trade_date = pd.Timestamp(prices["trade_date"].max()).date().isoformat()
     state = load_state(state_path, config)
-    frames = {str(symbol): frame.sort_values("trade_date").copy() for symbol, frame in prices.groupby("symbol")}
+    master = database.load_symbol_master(trade_date)
+    metadata = {str(row["symbol"]): row.to_dict() for _, row in master.iterrows()} if not master.empty else {}
+    restricted = database.load_restricted_symbols(trade_date)
+    lifecycle_registry = database.load_lifecycle_registry()
+    session_calendar = tuple(sorted(pd.to_datetime(prices["trade_date"]).dt.date.astype(str).unique()))
+    all_frames = {str(symbol): frame.sort_values("trade_date").copy() for symbol, frame in prices.groupby("symbol")}
+    gateway = {
+        symbol: evaluate_tradeability(symbol, frame, market_date=trade_date, master_row=metadata.get(symbol),
+                                     restricted_reason=restricted.get(symbol), lifecycle_event=lifecycle_registry.get(symbol),
+                                     session_calendar=session_calendar, require_metadata=bool(metadata))
+        for symbol, frame in all_frames.items()
+    }
+    frames = {symbol: frame for symbol, frame in all_frames.items()
+              if gateway[symbol].eligible and not gateway[symbol].entry_blocked}
+    for position in state["positions"]:
+        gate = gateway.get(str(position.get("symbol")))
+        if _active(position) and gate and (not gate.eligible or gate.entry_blocked):
+            position["state"] = "CORPORATE_ACTION_REVIEW"
+            position["review_reason"] = gate.reason_code
+            position["successor_symbol"] = gate.successor_symbol
+            _position_event(state, trade_date, position, "CORPORATE_ACTION_REVIEW")
     metrics = {symbol: pine_metrics(frame, atr_multiplier=config.atr_multiplier) for symbol, frame in frames.items()}
     for position in state["positions"]:
         if _active(position) and position["symbol"] in frames:
@@ -278,6 +300,8 @@ def run_daily(
         "positions": state["positions"], "open_positions": open_positions, "realised_pnl": round(realised, 2),
         "unrealised_pnl": round(unrealised, 2), "total_pnl": round(realised + unrealised, 2),
         "evaluated": len(metrics), "state_path": str(state_path),
+        "tradeability": summarize_tradeability(gateway),
+        "corporate_action_reviews": [p for p in state["positions"] if p.get("state") == "CORPORATE_ACTION_REVIEW"],
     }
 
 
