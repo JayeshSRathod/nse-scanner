@@ -67,7 +67,7 @@ def test_preview_contains_trade_levels_and_reasons():
         assert "EMA" not in text
         assert "ADX" not in text
     else:
-        assert "No new candidates met" in text
+        assert "No candidate crossed the qualification threshold" in text
 
 
 def test_preview_can_show_configured_allocation():
