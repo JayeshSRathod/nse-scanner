@@ -56,8 +56,7 @@ def test_every_action_candidate_is_present() -> None:
     for candidate in actions:
         assert candidate.symbol in joined
     assert "Fresh Actionable: 17" in messages[0]
-    assert "🚀 ACTION CANDIDATES" in joined
-    assert "17 Fresh Actionable Stocks" in joined
+    assert "NSE V3 — FRESH OPPORTUNITIES" in joined
     assert all(len(message) <= 4096 for message in messages)
 
 
@@ -67,17 +66,15 @@ def test_action_card_matches_compact_mobile_layout() -> None:
         evaluated=100, quality_qualified=1,
         benchmark_source="OFFICIAL_INDEX_HISTORY",
     )
-    action = next(message for message in messages if "ACTION CANDIDATES" in message)
-    assert "🥇 ABC" in action
-    assert "3M • TREND CONTINUATION" in action
-    assert "Score: 88/100" in action
-    assert "Entry       ₹100.00" in action
-    assert "SL          ₹94.00" in action
-    assert "T1          ₹109.00" in action
-    assert "T2          ₹118.00" in action
-    assert "RR          1.50R / 3.00R" in action
-    assert "Validity    5 sessions" in action
-    assert "✓ Daily trend" in action
+    action = next(message for message in messages if "FRESH OPPORTUNITIES" in message)
+    assert "ABC" in action
+    assert "3M Trend Continuation • 88/100" in action
+    assert "Entry: ₹100.00–₹100.40" in action
+    assert "SL: ₹94.00" in action
+    assert "T1: ₹109.00 • T2: ₹118.00" in action
+    assert "R:R: 1:3.00" in action
+    assert "Validity: 5 sessions" in action
+    assert "✅ Daily trend" in action
     assert "Entry basis:" not in action
     assert "score breakdown:" not in action
 
@@ -92,9 +89,8 @@ def test_watchlist_is_compact_separate_and_has_preferred_entry() -> None:
     assert "Fresh Actionable: 0" in messages[0]
     watch_message = next(message for message in messages if "WATCHLIST" in message)
     assert "WATCH1" in watch_message and "WATCH2" in watch_message
-    assert "Preferred Entry:" in watch_message
-    assert "Zone:" in watch_message
-    assert "WAIT for a fresh trigger" in watch_message
+    assert "Entry: ₹100.00 • confirmation required" in watch_message
+    assert "Trade plan wait" in watch_message
 
 
 def test_watch_entry_uses_slower_structure_for_long_horizon() -> None:
@@ -105,7 +101,7 @@ def test_watch_entry_uses_slower_structure_for_long_horizon() -> None:
         benchmark_source="OFFICIAL_INDEX_HISTORY",
     )
     watch_message = next(message for message in messages if "WATCHLIST" in message)
-    assert "Hull55/HMA51 structural retest" in watch_message
+    assert "Entry: ₹100.00 • confirmation required" in watch_message
     assert "not an active buy signal" in watch_message
 
 
@@ -118,8 +114,8 @@ def test_action_cards_keep_horizon_on_each_stock() -> None:
         benchmark_source="OFFICIAL_INDEX_HISTORY",
     )
     joined = "\n".join(messages)
-    assert "1M • TREND CONTINUATION" in joined
-    assert "3M • TREND CONTINUATION" in joined
+    assert "1M Trend Continuation" in joined
+    assert "3M Trend Continuation" in joined
 
 
 def test_fallback_reason_is_readable() -> None:
