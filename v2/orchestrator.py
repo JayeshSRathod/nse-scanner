@@ -52,6 +52,7 @@ class DailyRunResult:
     diagnostics_text_path: str = ""
     admin_delivery: DeliveryResult = DeliveryResult(False, 0, "not_attempted")
     eligibility_funnel: dict | None = None
+    dashboard_candidates: tuple[dict, ...] = ()
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -302,6 +303,7 @@ def run_daily(
     )
     admin_enabled = send_telegram if send_admin_telegram is None else send_admin_telegram
     admin_delivery = send_admin_messages([admin_message], enabled=admin_enabled)
+    dashboard_candidates = {candidate.symbol: candidate.to_dict() for candidate in [*selected, *watches]}
 
     return DailyRunResult(
         trade_date=run_date.isoformat(), regime=regime, benchmark_source=benchmark_source,
@@ -313,4 +315,5 @@ def run_daily(
         admin_message=admin_message, diagnostics_json_path=str(diagnostics_json),
         diagnostics_text_path=str(diagnostics_text), admin_delivery=admin_delivery,
         eligibility_funnel=eligibility_funnel,
+        dashboard_candidates=tuple(dashboard_candidates.values()),
     )
