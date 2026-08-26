@@ -3,7 +3,7 @@
   "strategy_version": "penny-shadow-v1",
   "mode": "PAPER",
   "as_of_date": "2026-08-25",
-  "generated_at": "2026-08-26T08:00:03.114598+00:00",
+  "generated_at": "2026-08-26T08:07:14.163357+00:00",
   "universe_symbols": 2972,
   "selected": 124,
   "counts": {
@@ -30298,12 +30298,12 @@
   ],
   "delivery": {
     "daily": {
-      "sent": false,
-      "reason": "disabled"
+      "sent": true,
+      "reason": "sent"
     },
     "risk": {
-      "sent": false,
-      "reason": "disabled"
+      "sent": true,
+      "reason": "sent"
     }
   }
 }
