@@ -12,7 +12,7 @@ from .candidate_diagnostics import build_scanner_diagnostics, render_admin_diagn
 from .candidates import evaluate_candidate, rank_candidates, watch_candidates
 from .daily_portfolio import process_portfolio_day
 from .database import V2Database
-from .eligibility import evaluate_eligibility
+from .eligibility import EligibilityResult, evaluate_eligibility
 from .freshness import FreshnessStatus, assess_freshness
 from .lifecycle import new_position
 from .portfolio_message import render_portfolio_message
@@ -26,6 +26,7 @@ from .telegram_delivery import DeliveryResult, send_admin_messages, send_message
 from .indicators import atr
 from .progression import next_holding_stage
 from .lifecycle import TradeState, transition
+from .tradeability import evaluate_tradeability, summarize as summarize_tradeability
 
 
 @dataclass(frozen=True)
@@ -117,11 +118,29 @@ def run_daily(
     master = database.load_symbol_master(run_date.isoformat())
     metadata = {str(row["symbol"]): row.to_dict() for _, row in master.iterrows()} if not master.empty else {}
     restricted = database.load_restricted_symbols(run_date.isoformat())
+    lifecycle_registry = database.load_lifecycle_registry()
+    session_calendar = tuple(sorted(pd.to_datetime(prices["trade_date"]).dt.date.astype(str).unique()))
     fundamental_gates = database.load_fundamental_gates(run_date.isoformat())
     eligibility_results = {}
+    tradeability_results = {}
     candidates = []
     for symbol, frame in prices.groupby("symbol"):
         symbol = str(symbol)
+        tradeability = evaluate_tradeability(
+            symbol, frame, market_date=run_date.isoformat(), master_row=metadata.get(symbol),
+            restricted_reason=restricted.get(symbol), lifecycle_event=lifecycle_registry.get(symbol),
+            session_calendar=session_calendar, require_metadata=bool(metadata),
+        )
+        tradeability_results[symbol] = tradeability
+        if not tradeability.eligible or tradeability.entry_blocked:
+            eligibility_results[symbol] = EligibilityResult(
+                symbol, False, tradeability.reason_code if not tradeability.eligible else "MATERIAL_CORPORATE_ACTION_REVIEW",
+                tradeability.stage, tradeability.detail, "TRADEABLE_CURRENT_SECURITY",
+                metrics={"successor_symbol": tradeability.successor_symbol or "",
+                         "symbol_last_date": tradeability.symbol_last_date or "",
+                         "staleness_sessions": tradeability.staleness_sessions or 0},
+            )
+            continue
         eligibility = evaluate_eligibility(
             symbol, frame, metadata=metadata.get(symbol), restricted_reason=restricted.get(symbol),
             as_of_date=run_date.isoformat(),
@@ -150,6 +169,7 @@ def run_daily(
         "eligible": sum(result.eligible for result in eligibility_results.values()),
         "rejected": sum(not result.eligible for result in eligibility_results.values()),
         "rejection_reasons": dict(sorted(rejection_counts.items())),
+        "tradeability": summarize_tradeability(tradeability_results),
     }
 
     ranked = rank_candidates(candidates, top_n=None)
