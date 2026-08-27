@@ -40,7 +40,14 @@ def main() -> int:
     destination.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     print(signals)
     print("\n" + portfolio)
-    return 0
+    deliveries = {"daily": signals_delivery, "portfolio": portfolio_delivery}
+    for topic, delivery in deliveries.items():
+        status = "SENT" if delivery.sent else ("SKIPPED" if not args.send_telegram else "FAILED")
+        print(f"[TELEGRAM] {topic}: {status} ({delivery.reason}; messages={delivery.message_count})")
+    failed = [topic for topic, result in deliveries.items() if args.send_telegram and not result.sent]
+    if failed:
+        print(f"::warning::Hull Telegram delivery incomplete for: {', '.join(failed)}")
+    return 2 if args.send_telegram and len(failed) == len(deliveries) else 0
 
 
 if __name__ == "__main__":

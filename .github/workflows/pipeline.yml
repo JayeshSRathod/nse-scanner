@@ -72,6 +72,5 @@ jobs:
           if git diff --cached --quiet; then
             echo "No scanner state changes to commit."
           else
-            git commit -m "Auto: persist NSE market data and scan output"
-            git push
+            bash scripts/persist_generated_state.sh "Auto: persist NSE market data and scan output"
           fi

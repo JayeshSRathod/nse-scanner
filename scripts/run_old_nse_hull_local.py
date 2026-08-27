@@ -51,15 +51,24 @@ def main() -> int:
     if args.send_telegram:
         delivery = send_radar(message)
         trades_delivery = send_trades(render_paper_trades(report))
-        print(f"[OLD_NSE_HULL] Radar Telegram: {delivery.reason}; Trades Telegram: {trades_delivery.reason}")
+        print(f"[TELEGRAM] daily: {'SENT' if delivery.sent else 'FAILED'} ({delivery.reason})")
+        print(f"[TELEGRAM] portfolio: {'SENT' if trades_delivery.sent else 'FAILED'} ({trades_delivery.reason})")
         if not delivery.sent or not trades_delivery.sent:
             return 2
     if args.send_shadow_preview:
-        for preview in shadow_messages:
+        preview_sent = 0
+        preview_errors: list[str] = []
+        for index, preview in enumerate(shadow_messages, start=1):
             delivery = send_message(preview, "validation")
-            if not delivery.sent:
-                print(f"[OLD_NSE_HULL] Shadow preview Telegram: {delivery.reason}")
-                return 2
+            if delivery.sent:
+                preview_sent += 1
+            else:
+                preview_errors.append(f"page_{index}:{delivery.reason}")
+        if preview_errors:
+            print(f"::warning::Momentum Ladder validation preview partially failed: {', '.join(preview_errors)}")
+            print(f"[TELEGRAM] validation: PARTIAL ({preview_sent}/{len(shadow_messages)} pages sent)")
+        else:
+            print(f"[TELEGRAM] validation: SENT ({preview_sent}/{len(shadow_messages)} pages)")
     return 0
 
 

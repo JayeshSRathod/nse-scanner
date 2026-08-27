@@ -47,7 +47,19 @@ def main() -> int:
     target = Path(args.output); target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     print("\n\n".join(message for topic in topic_order for message in messages[topic]))
-    return 0 if all(x["sent"] or x["reason"] == "disabled" for x in deliveries.values()) else 2
+    failed = []
+    for topic in topic_order:
+        result = deliveries[topic]
+        status = "SENT" if result["sent"] else ("SKIPPED" if result["reason"] == "disabled" else "FAILED")
+        print(f"[TELEGRAM] {topic}: {status} ({result['reason']}; pages={len(messages[topic])})")
+        if args.send_telegram and not result["sent"]:
+            failed.append(topic)
+    if failed:
+        print(f"::warning::Penny Telegram delivery incomplete for: {', '.join(failed)}")
+    # Preserve the generated report and successful routes when one topic is
+    # misconfigured. Fail only when the Telegram bot delivered nothing at all.
+    sent_count = sum(1 for result in deliveries.values() if result["sent"])
+    return 2 if args.send_telegram and sent_count == 0 else 0
 
 
 if __name__ == "__main__":

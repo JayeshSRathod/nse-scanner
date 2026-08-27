@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import os
+import re
+import html
 from dataclasses import dataclass
 
 import requests
@@ -36,19 +38,28 @@ def send_message(message: str, kind: str, timeout: int = 20) -> DeliveryResult:
     chat_id = os.getenv("LADDER_TELEGRAM_CHAT_ID", "").strip()
     if not token or not chat_id:
         return DeliveryResult(False, "telegram_not_configured")
+    topic_id = _topic_id(kind)
+    if topic_id is None:
+        return DeliveryResult(False, f"topic_not_configured:{kind}")
     payload: dict[str, object] = {
         "chat_id": chat_id,
         "text": message,
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
     }
-    if topic_id := _topic_id(kind):
-        payload["message_thread_id"] = topic_id
+    payload["message_thread_id"] = topic_id
     try:
         response = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json=payload, timeout=timeout)
+        if getattr(response, "status_code", 200) == 400:
+            # A malformed entity should not suppress an otherwise readable
+            # validation card. Retry once as plain text in the same topic.
+            payload.pop("parse_mode", None)
+            payload["text"] = html.unescape(re.sub(r"<[^>]+>", "", message))
+            response = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json=payload, timeout=timeout)
         response.raise_for_status()
     except requests.RequestException as exc:
-        return DeliveryResult(False, f"telegram_failed:{type(exc).__name__}")
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        return DeliveryResult(False, f"telegram_http_{status or 'network'}:{type(exc).__name__}")
     return DeliveryResult(True, "sent")
 
 
