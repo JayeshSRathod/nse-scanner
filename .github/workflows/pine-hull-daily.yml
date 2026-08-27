@@ -54,6 +54,5 @@ jobs:
           if git diff --cached --quiet; then
             echo "No Pine Hull state changes to commit."
           else
-            git commit -m "Auto: persist Pine Hull paper state"
-            git push origin HEAD:main
+            bash scripts/persist_generated_state.sh "Auto: persist Pine Hull paper state"
           fi

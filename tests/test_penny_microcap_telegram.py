@@ -23,7 +23,16 @@ def test_dedicated_penny_route(monkeypatch):
 def test_missing_penny_secrets_fail_closed(monkeypatch):
     for name in ("PENNY_TELEGRAM_BOT_TOKEN", "PENNY_TELEGRAM_CHAT_ID", "PENNY_TOPIC_CIRCUIT_RISK"):
         monkeypatch.delenv(name, raising=False)
-    assert send_messages(["hello"], "circuit_risk", enabled=True).reason == "telegram_not_configured"
+    assert send_messages(["hello"], "circuit_risk", enabled=True).reason == "credentials_not_configured"
+
+
+def test_missing_topic_is_reported_by_name(monkeypatch):
+    monkeypatch.setenv("PENNY_TELEGRAM_BOT_TOKEN", "penny-token")
+    monkeypatch.setenv("PENNY_TELEGRAM_CHAT_ID", "-100444")
+    monkeypatch.delenv("PENNY_TOPIC_READY", raising=False)
+    result = send_messages(["hello"], "ready", enabled=True)
+    assert not result.sent
+    assert result.reason == "topic_not_configured:ready"
 
 
 def test_all_six_topics_use_their_own_thread(monkeypatch):

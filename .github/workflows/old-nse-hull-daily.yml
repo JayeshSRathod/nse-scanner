@@ -14,6 +14,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: old-nse-hull-daily
+  cancel-in-progress: false
+
 jobs:
   radar:
     runs-on: ubuntu-latest
@@ -59,6 +63,5 @@ jobs:
           if git diff --cached --quiet; then
             echo "No shadow comparison state changes to commit."
           else
-            git commit -m "chore: record Old NSE Hull shadow comparison"
-            git push origin HEAD:main
+            bash scripts/persist_generated_state.sh "chore: record Old NSE Hull shadow comparison"
           fi

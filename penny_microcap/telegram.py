@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import html
 import os
+import re
+import time
 from dataclasses import dataclass
 
 import requests
@@ -123,12 +125,22 @@ def send_messages(messages: list[str], kind: str, *, enabled: bool, timeout: int
         "system": "PENNY_TOPIC_SYSTEM",
     }
     topic = os.getenv(topic_names[kind], "").strip()
-    if not token or not chat_id or not topic: return DeliveryResult(False, "telegram_not_configured")
-    for message in messages:
+    if not token or not chat_id:
+        return DeliveryResult(False, "credentials_not_configured")
+    if not topic:
+        return DeliveryResult(False, f"topic_not_configured:{kind}")
+    for index, message in enumerate(messages, start=1):
         payload = {"chat_id": chat_id, "message_thread_id": int(topic), "text": message, "parse_mode": "HTML", "disable_web_page_preview": True}
         try:
             response = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json=payload, timeout=timeout)
+            if getattr(response, "status_code", 200) == 400:
+                payload.pop("parse_mode", None)
+                payload["text"] = html.unescape(re.sub(r"<[^>]+>", "", message))
+                response = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json=payload, timeout=timeout)
             response.raise_for_status()
         except (requests.RequestException, ValueError) as exc:
-            return DeliveryResult(False, f"telegram_failed:{type(exc).__name__}")
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            return DeliveryResult(False, f"page_{index}:telegram_http_{status or 'network'}:{type(exc).__name__}")
+        if index < len(messages):
+            time.sleep(0.15)
     return DeliveryResult(True, "sent")

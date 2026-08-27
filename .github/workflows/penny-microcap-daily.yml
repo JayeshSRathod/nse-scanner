@@ -48,8 +48,8 @@ jobs:
         env:
           PENNY_TELEGRAM_BOT_TOKEN: ${{ secrets.PENNY_TELEGRAM_BOT_TOKEN }}
           PENNY_TELEGRAM_CHAT_ID: ${{ secrets.PENNY_TELEGRAM_CHAT_ID }}
-          # Keep the historical PEENY spelling because GitHub secret names cannot be renamed.
-          PENNY_TOPIC_EARLY_RADAR: ${{ secrets.PEENY_TOPIC_EARLY_RADAR }}
+          # Prefer the corrected name while retaining the historical PEENY fallback.
+          PENNY_TOPIC_EARLY_RADAR: ${{ secrets.PENNY_TOPIC_EARLY_RADAR || secrets.PEENY_TOPIC_EARLY_RADAR }}
           PENNY_TOPIC_CONFIRMING: ${{ secrets.PENNY_TOPIC_CONFIRMING }}
           PENNY_TOPIC_READY: ${{ secrets.PENNY_TOPIC_READY }}
           PENNY_TOPIC_CIRCUIT_RISK: ${{ secrets.PENNY_TOPIC_CIRCUIT_RISK }}
@@ -68,6 +68,5 @@ jobs:
           if git diff --cached --quiet; then
             echo "No penny shadow report changes."
           else
-            git commit -m "Auto: persist penny microcap shadow report"
-            git push origin HEAD:main
+            bash scripts/persist_generated_state.sh "Auto: persist penny microcap shadow report"
           fi
