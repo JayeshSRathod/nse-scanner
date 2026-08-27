@@ -42,7 +42,7 @@ def test_user_delivery_remains_on_user_chat_id(monkeypatch) -> None:
     assert post.call_args.kwargs["json"]["chat_id"] == "user-123"
 
 
-def test_topic_delivery_preserves_explicit_topic_without_callbacks(monkeypatch) -> None:
+def test_topic_delivery_preserves_topic_with_url_only_dashboard_button(monkeypatch) -> None:
     monkeypatch.setenv("V3_TELEGRAM_BOT_TOKEN", "token")
     monkeypatch.setenv("V3_TELEGRAM_CHAT_ID", "group-123")
     message = (
@@ -55,7 +55,9 @@ def test_topic_delivery_preserves_explicit_topic_without_callbacks(monkeypatch) 
     assert result.sent is True
     payload = post.call_args.kwargs["json"]
     assert payload["message_thread_id"] == 321
-    assert "reply_markup" not in payload
+    button = payload["reply_markup"]["inline_keyboard"][0][0]
+    assert button["url"].endswith("?startapp=v3")
+    assert "callback_data" not in button
 
 
 def test_v3_transport_does_not_generate_pine_controls(monkeypatch) -> None:
@@ -69,7 +71,9 @@ def test_v3_transport_does_not_generate_pine_controls(monkeypatch) -> None:
     with patch("v2.telegram_delivery.requests.post", return_value=_ok_response()) as post:
         result = send_messages([message], enabled=True)
     assert result.sent is True
-    assert "reply_markup" not in post.call_args.kwargs["json"]
+    button = post.call_args.kwargs["json"]["reply_markup"]["inline_keyboard"][0][0]
+    assert button["url"].endswith("?startapp=v3")
+    assert "callback_data" not in button
 
 
 def test_html_failure_falls_back_to_plain_text(monkeypatch) -> None:
