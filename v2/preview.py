@@ -8,6 +8,7 @@ from .candidates import Candidate
 from .freshness import FreshnessStatus
 from .portfolio_risk import Allocation
 from .v3_telegram import currency, paginate_cards, text, ticker
+from telegram_dashboard import status_label
 
 
 HORIZON_LABELS = {"1M": "1 month", "3M": "3 months", "6M": "6 months", "12M": "12 months"}
@@ -86,7 +87,7 @@ def _action_card(candidate: Candidate, rank: int, allocations: dict[tuple[str, s
     except (TypeError, ValueError):
         cmp_value = candidate.entry
     lines = [
-        "━━━━━━━━━━━━━━", f"🆕 {ticker(candidate.symbol)} • <b>{timing.replace('_', ' ')}</b>",
+        "━━━━━━━━━━━━━━", f"🆕 {ticker(candidate.symbol)} • <b>{status_label('READY')}</b>",
         f"{text(candidate.primary_horizon)} {text(trigger.title())} • {candidate.score:.0f}/100", "",
         f"CMP: {_price(cmp_value)}",
         f"Entry: {_price(candidate.entry)}–{_price(entry_high)}",
@@ -160,9 +161,10 @@ def _watch_entry_guidance(candidate: Candidate) -> tuple[float, float, float, st
 def _watch_card(candidate: Candidate, rank: int) -> str:
     timing = _timing(candidate)
     readiness = {
-        "READY": "🟢 READY", "PULLBACK_REENTRY": "🟡 NEAR", "EARLY": "🔵 BUILD",
-        "HOLD_TREND": "🟡 NEAR", "EXTENDED": "⚪ WAIT", "WEAK": "🔴 AVOID",
-    }.get(timing, "⚪ WAIT")
+        "READY": f"🟢 {status_label('READY')}", "PULLBACK_REENTRY": f"🟡 {status_label('CONFIRMING')}",
+        "EARLY": f"🔵 {status_label('EARLY')}", "HOLD_TREND": f"🟡 {status_label('CONFIRMING')}",
+        "EXTENDED": f"🟠 {status_label('EXTENDED')}", "WEAK": f"⚪ {status_label('WEAK')}",
+    }.get(timing, f"⚪ {status_label('WAIT')}")
     lines = ["━━━━━━━━━━━━━━", f"{readiness} • {ticker(candidate.symbol)}",
              f"{text(candidate.primary_horizon)} • Score {candidate.score:.0f}/100"]
     guidance = _watch_entry_guidance(candidate)
@@ -196,10 +198,10 @@ def render_candidate_messages(
         f"Tradable/Evaluated: {tradable if tradable is not None else (evaluated if evaluated is not None else '-')}",
         f"Quality Qualified: {quality_qualified if quality_qualified is not None else len(all_rows)}",
         f"Fresh Actionable: {len(action_rows)}", f"Focus Watchlist: {len(watch_rows)}", "",
-        "Opportunity Lifecycle",
-        f"🟠 EARLY: {timing_counts.get('EARLY', 0)} | 🟢 READY: {timing_counts.get('READY', 0)}",
-        f"🟣 PULLBACK/RE-ENTRY: {timing_counts.get('PULLBACK_REENTRY', 0)} | 🔴 EXTENDED: {timing_counts.get('EXTENDED', 0)}",
-        f"⚫ WEAK: {timing_counts.get('WEAK', 0)}",
+        "Opportunity stages",
+        f"🔵 Early watchlist: {timing_counts.get('EARLY', 0)} | 🟢 Watch for entry: {timing_counts.get('READY', 0)}",
+        f"🟡 Wait for confirmation: {timing_counts.get('PULLBACK_REENTRY', 0)} | 🟠 Wait for pullback: {timing_counts.get('EXTENDED', 0)}",
+        f"⚪ No action yet: {timing_counts.get('WEAK', 0)}",
     ]
     if not action_rows:
         summary.extend(["", "No new candidates qualified today.", "", "<b>Reason</b>", "• No candidate crossed the qualification threshold", "• Existing leaders remain under lifecycle monitoring"])
@@ -207,7 +209,7 @@ def render_candidate_messages(
     messages.extend(_action_messages(action_rows, allocations))
     if watch_rows:
         cards = [_watch_card(candidate, rank) for rank, candidate in enumerate(watch_rows, 1)]
-        legend = "🟢 Ready • 🟡 Near • 🔵 Build • ⚪ Wait • 🔴 Avoid\nScreening watchlist—not an active buy signal."
+        legend = "🟢 Watch for entry • 🟡 Wait for confirmation • 🔵 Early watchlist • 🟠 Wait for pullback • ⚪ No action yet\nScreening watchlist—not an active buy signal."
         messages.extend(paginate_cards(
             f"👀 <b>V3 RADAR WATCHLIST</b>\n{text(trade_date)} EOD • {len(watch_rows)} stocks",
             cards, legend,

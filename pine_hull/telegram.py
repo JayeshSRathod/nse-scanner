@@ -7,6 +7,8 @@ from dataclasses import dataclass
 
 import requests
 
+from telegram_dashboard import dashboard_keyboard
+
 
 @dataclass(frozen=True)
 class DeliveryResult:
@@ -44,6 +46,8 @@ def _send(messages: list[str], *, enabled: bool, topic: str) -> DeliveryResult:
         }
         if thread_id is not None:
             payload["message_thread_id"] = thread_id
+        if index == len(clean) and topic != "SYSTEM":
+            payload["reply_markup"] = dashboard_keyboard("hull")
         try:
             response = requests.post(endpoint, json=payload, timeout=20)
             response.raise_for_status()

@@ -4,6 +4,8 @@ from __future__ import annotations
 from html import escape
 from urllib.parse import quote
 
+from telegram_dashboard import status_label
+
 
 def _number(value: object, default: float = 0.0) -> float:
     try:
@@ -59,7 +61,7 @@ def render_daily_signals(result: dict) -> str:
         lines.extend([
             "",
             "━━━━━━━━━━━━━━",
-            f"{_rank_badge(rank)} {_ticker(position['symbol'])} • READY LONG",
+            f"{_rank_badge(rank)} {_ticker(position['symbol'])} • {status_label('NEW_TRIGGER')}",
             "Hull Pullback Continuation",
             "",
             f"Entry: {_price(entry)}–{_price(entry_high)}",
@@ -78,15 +80,15 @@ def render_daily_signals(result: dict) -> str:
         lines.extend(["", "👀 <b>HULL PINE WATCHLIST</b>", f"{result.get('trade_date', '-')} EOD • {len(watch)} stocks"])
         for item in watch:
             timing = str(item.get("timing_state", "EARLY"))
-            readiness = "⚪ WAIT" if item.get("overextended") else "🔵 BUILD" if timing == "EARLY" else "🟡 NEAR"
+            readiness = f"⚪ {status_label('EXTENDED')}" if item.get("overextended") else f"🔵 {status_label('EARLY')}" if timing == "EARLY" else f"🟡 {status_label('CONFIRMING')}"
             reason = "Hull rising • commitment pending"
             if item.get("overextended"):
                 reason = "Extended price • wait for reset"
             elif item.get("chop") or item.get("rotational"):
-                readiness, reason = "🔴 AVOID", "Chop/rotation • expansion pending"
+                readiness, reason = f"⚪ {status_label('WAIT')}", "Sideways movement • confirmation missing"
             low, high = _watch_range(item)
             lines.extend(["", "━━━━━━━━━━━━━━", f"{readiness} • {_ticker(item['symbol'])}",
                           f"Entry: {_price(low)}–{_price(high)}", reason])
-        lines.extend(["", "🟢 Ready • 🟡 Near • 🔵 Build • ⚪ Wait • 🔴 Avoid", "PAPER — enter only after trigger confirmation."])
+        lines.extend(["", "🟢 Watch for entry • 🟡 Wait for confirmation • 🔵 Early watchlist • ⚪ No action yet", "PAPER — enter only after trigger confirmation."])
 
     return "\n".join(lines)

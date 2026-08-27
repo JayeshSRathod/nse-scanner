@@ -23,7 +23,7 @@ def test_paper_radar_identifies_the_active_python_hull_rules():
     assert "PAPER SYSTEM" in text
     assert "PYTHON EOD ACTIVE" in text
     assert "live-trading instruction" in text
-    assert "Hull READY: 0" in text
+    assert "Watch for entry: 0" in text
 
 
 def test_old_hull_delivery_uses_its_own_optional_topic(monkeypatch):
@@ -54,5 +54,5 @@ def test_paper_trade_topic_never_treats_ready_as_entered():
     report = {"as_of_date": "2026-08-18", "shortlist": [{"symbol": "AAA", "discovery_score": 90.0,
               "discovery_rank": 1, "hull_state": "READY"}]}
     text = render_paper_trades(report)
-    assert "READY — NOT ENTERED" in text
+    assert "WATCH FOR ENTRY — NOT ENTERED" in text
     assert "same closing price" in text

@@ -13,6 +13,7 @@ from urllib.parse import quote
 import requests
 
 from .v3_telegram import fingerprint
+from telegram_dashboard import dashboard_keyboard
 
 STATE_PATH = Path("v3_telegram_delivery_state.json")
 
@@ -152,11 +153,10 @@ def _rich_payload(chat_id: str, message: str, thread_id: int | None, keyboard: d
 
 
 def _send_one(plain_endpoint: str, rich_endpoint: str, *, chat_id: str, message: str, timeout: int,
-              message_thread_id: int | None, prefer_rich: bool) -> tuple[bool, str]:
+              message_thread_id: int | None, prefer_rich: bool, keyboard: dict | None = None) -> tuple[bool, str]:
     # Scheduled GitHub Actions has no callback receiver. V3 reports use
     # hyperlinks in HTML and optional URL-only report buttons supplied by a
     # caller; never generate callback/copy controls here.
-    keyboard = None
     if prefer_rich:
         rich_payload = _rich_payload(chat_id, message, message_thread_id, keyboard)
         ok, reason = _post_message(rich_endpoint, rich_payload, timeout=timeout)
@@ -226,8 +226,9 @@ def _send_to_chat(messages: list[str], *, chat_id: str | None, enabled: bool, ti
         ok = False; reason = "not_attempted"
         for attempt, delay in enumerate((0, 2, 5), start=1):
             if delay: time.sleep(delay)
+            keyboard = dashboard_keyboard("v3") if index == len(clean) and message_type != "system" else None
             ok, reason = _send_one(plain_endpoint, rich_endpoint, chat_id=chat_id, message=message, timeout=timeout,
-                                   message_thread_id=message_thread_id, prefer_rich=False)
+                                   message_thread_id=message_thread_id, prefer_rich=False, keyboard=keyboard)
             if ok or not any(code in reason for code in ("network_error", "HTTP 429", "HTTP 5")): break
         if ok:
             sent += 1
