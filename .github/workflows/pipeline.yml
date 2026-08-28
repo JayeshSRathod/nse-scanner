@@ -2,7 +2,9 @@ name: NSE Pipeline Daily Run
 
 on:
   schedule:
-    - cron: '30 0 * * 1-5'
+    # 22:30 UTC Sunday-Thursday = 04:00 IST Monday-Friday.
+    # Started early to absorb GitHub Actions schedule delays before the 08:00 IST deadline.
+    - cron: '30 22 * * 0-4'
   workflow_dispatch:
     inputs:
       strict_v3:
