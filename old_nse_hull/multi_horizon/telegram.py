@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from html import escape
 
+from telegram_dashboard import status_label
+
 
 MAX_MESSAGE_CHARS = 3950
 
@@ -21,10 +23,10 @@ def _card(row: dict) -> str:
     atr = float(row.get("atr", 0) or 0)
     if levels.get("eligible_for_paper") and trigger:
         entry = f"₹{float(trigger):,.2f}–₹{float(trigger) + 0.15 * atr:,.2f}"
-        readiness = "🟢 READY" if str(row.get("lifecycle_status")) in {"NEW_TRIGGER", "NEWLY_QUALIFIED", "UPGRADED"} else "🟡 NEAR"
+        readiness = f"🟢 {status_label('READY')}" if str(row.get("lifecycle_status")) in {"NEW_TRIGGER", "NEWLY_QUALIFIED", "UPGRADED"} else f"🟡 {status_label('CONFIRMING')}"
     else:
         entry = "Awaiting valid structure"
-        readiness = "⚪ WAIT"
+        readiness = f"⚪ {status_label('WAIT')}"
     reason = "Multi-horizon strength • confirmation present" if confirmations != "none" else "Primary horizon qualified • confirmation pending"
     return "\n".join([
         "━━━━━━━━━━━━━━",
@@ -63,4 +65,4 @@ def render_messages(report: dict) -> list[str]:
             current += "\n" + card
     messages.append(current)
     total = len(messages)
-    return [f"{message}\n\n🟢 Ready • 🟡 Near • ⚪ Wait\n<i>Shadow preview {index}/{total}. No live-trading instruction.</i>" for index, message in enumerate(messages, 1)]
+    return [f"{message}\n\n🟢 Watch for entry • 🟡 Wait for confirmation • ⚪ No action yet\n<i>Shadow preview {index}/{total}. No live-trading instruction.</i>" for index, message in enumerate(messages, 1)]

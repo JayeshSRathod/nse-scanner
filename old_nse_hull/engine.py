@@ -72,17 +72,18 @@ def render_radar(report: dict) -> str:
              f"<b>Data:</b> {report.get('as_of_date') or 'N/A'} EOD",
              f"<b>Generated:</b> {report['generated_at']}", "",
              f"Eligible EQ stocks: {report['eligible']}", f"Discovery qualified: {report['discovery_qualified']}",
-             f"Hull READY: {report['ready']}", f"Hull WATCH: {report['watch']}", "",
+             f"Watch for entry: {report['ready']}", f"Wait for confirmation: {report['watch']}", "",
              "Hull rules: <b>PYTHON EOD ACTIVE</b>",
-             "READY means daily, weekly, monthly, 3M and 6M Hull alignment.",
+             "Watch for entry means the trend is aligned; wait for the stated trigger.",
              "", "⚠️ <b>Paper-only output</b>",
              "• This is a research shortlist, not a live-trading instruction.",
-             "• READY candidates are eligible for the separate paper lifecycle."]
+             "• Watch-for-entry candidates are eligible for the separate paper lifecycle."]
     if report["shortlist"]:
         lines.extend(["", "<b>Discovery shortlist</b>"])
         for row in report["shortlist"][:10]:
             aligned = ", ".join(name.upper() for name, ok in row.get("timeframes", {}).items() if ok) or "none"
-            lines.append(f"• <b>{row['symbol']}</b> — discovery {row['discovery_score']:.1f}/100 | {row.get('hull_state', 'WATCH')} | aligned: {aligned}")
+            label = "Watch for entry" if row.get("hull_state") == "READY" else "Watchlist—wait for confirmation"
+            lines.append(f"• <b>{row['symbol']}</b> — discovery {row['discovery_score']:.1f}/100 | {label} | aligned: {aligned}")
     return "\n".join(lines)
 
 
@@ -93,15 +94,15 @@ def render_paper_trades(report: dict) -> str:
              f"<b>Data:</b> {report.get('as_of_date') or 'N/A'} EOD", "",
              f"Ready setups: {len(ready)}", "Triggered today: 0", "Active paper trades: 0", "Exited today: 0", ""]
     if not ready:
-        lines.append("No READY setups today. No paper entry was created.")
+        lines.append("No watch-for-entry setups today. No paper entry was created.")
     for row in ready[:5]:
         symbol = row["symbol"]
         url = f"https://www.tradingview.com/chart/?symbol=NSE%3A{symbol}"
-        lines.extend(["━━━━━━━━━━━━━━━━━━", f"🟢 <a href=\"{url}\">{symbol}</a> — READY — NOT ENTERED",
+        lines.extend(["━━━━━━━━━━━━━━━━━━", f"🟢 <a href=\"{url}\">{symbol}</a> — WATCH FOR ENTRY — NOT ENTERED",
                       f"Discovery: {row['discovery_score']:.1f}/100 | Rank: {row['discovery_rank']}",
                       "Hull: Daily, Weekly, Monthly, 3M and 6M aligned", "",
                       "Next step: Wait for the next-session mechanical trigger.",
-                      "⚠️ READY is not a paper entry and never uses the same closing price."])
+                      "⚠️ Watch for entry is not a paper entry. It never uses the same closing price; wait for the next-session trigger."])
     lines.extend(["", "💼 <b>OLD+HULL — PAPER PORTFOLIO</b>",
                   "⚠️ SIMULATED RESULTS — NO LIVE ORDERS", "Open paper trades: 0 | Deployed: ₹0.00 | Total P&L: ₹0.00",
                   "Health: ✅ Radar data current · No lifecycle state created yet"])
@@ -113,7 +114,7 @@ def render_period_report(report: dict, period: str, shadow_summary: dict | None 
     lines = [f"📅 <b>OLD NSE + HULL — {title}</b>", "🧪 <b>PAPER SYSTEM</b>",
              f"Latest data: {report.get('as_of_date') or 'N/A'} EOD", "",
              f"Old NSE discovery qualified: {report['discovery_qualified']}",
-             f"Hull READY: {report['ready']} | Hull WATCH: {report['watch']}",
+             f"Watch for entry: {report['ready']} | Wait for confirmation: {report['watch']}",
              "Triggered entries: 0 | Closed paper trades: 0", "",
              "System comparison: N/A — equivalent closed-lifecycle baseline unavailable.",
              "Status: Continue PAPER observation; no live orders."]

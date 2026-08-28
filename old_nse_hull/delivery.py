@@ -8,6 +8,8 @@ from dataclasses import dataclass
 
 import requests
 
+from telegram_dashboard import dashboard_keyboard
+
 
 @dataclass(frozen=True)
 class DeliveryResult:
@@ -48,6 +50,8 @@ def send_message(message: str, kind: str, timeout: int = 20) -> DeliveryResult:
         "disable_web_page_preview": True,
     }
     payload["message_thread_id"] = topic_id
+    if kind != "system":
+        payload["reply_markup"] = dashboard_keyboard("ladder")
     try:
         response = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json=payload, timeout=timeout)
         if getattr(response, "status_code", 200) == 400:

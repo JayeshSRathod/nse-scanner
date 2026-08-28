@@ -49,7 +49,7 @@ def test_delivery_failure_does_not_raise(monkeypatch):
     assert "chat not found" in result.reason
 
 
-def test_scheduled_delivery_does_not_generate_callback_keyboard(monkeypatch):
+def test_scheduled_delivery_adds_url_only_dashboard_keyboard(monkeypatch):
     monkeypatch.setenv("V3_TELEGRAM_BOT_TOKEN", "123:abc")
     monkeypatch.setenv("V3_TELEGRAM_CHAT_ID", "-100123")
     post = Mock(return_value=_response(200))
@@ -61,4 +61,8 @@ def test_scheduled_delivery_does_not_generate_callback_keyboard(monkeypatch):
     result = send_messages([message], enabled=True)
 
     assert result.sent
-    assert "reply_markup" not in post.call_args.kwargs["json"]
+    keyboard = post.call_args.kwargs["json"]["reply_markup"]
+    button = keyboard["inline_keyboard"][0][0]
+    assert button["text"] == "📊 Open Scanner Dashboard"
+    assert button["url"].endswith("?startapp=v3")
+    assert "callback_data" not in button

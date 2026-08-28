@@ -9,6 +9,8 @@ from dataclasses import dataclass
 
 import requests
 
+from telegram_dashboard import dashboard_keyboard, status_label
+
 
 ICONS = {"READY": "🟢", "CONFIRMING": "🟡", "EARLY_RADAR": "🔵", "CIRCUIT_LOCKED": "🔴", "EXTENDED": "🟠"}
 
@@ -26,7 +28,7 @@ def _link(symbol: str) -> str:
 
 def _card(row: dict) -> str:
     state, metrics = row["state"], row.get("metrics", {})
-    lines = ["━━━━━━━━━━━━━━", f'{ICONS.get(state, "⚪")} <b>{_link(row["symbol"])} • {state} • {row["score"]:.0f}/100</b>',
+    lines = ["━━━━━━━━━━━━━━", f'{ICONS.get(state, "⚪")} <b>{_link(row["symbol"])} • {status_label(state)} • {row["score"]:.0f}/100</b>',
              f'CMP ₹{row["close"]:.2f}', f'5D {metrics.get("return_5d_pct", 0):+.1f}% • Turnover {metrics.get("turnover_ratio", 0):.1f}× normal']
     if row.get("entry_low") is not None:
         lines.append(f'Probable entry ₹{row["entry_low"]:.2f}–₹{row["entry_high"]:.2f}')
@@ -51,9 +53,9 @@ TOPIC_STATES = {
 }
 
 TOPIC_TITLES = {
-    "early_radar": "🔵 <b>PENNY EARLY RADAR</b>",
-    "confirming": "🟡 <b>PENNY CONFIRMING</b>",
-    "ready": "🟢 <b>PENNY READY</b>",
+    "early_radar": "🔵 <b>PENNY — EARLY WATCHLIST</b>",
+    "confirming": "🟡 <b>PENNY — WAIT FOR CONFIRMATION</b>",
+    "ready": "🟢 <b>PENNY — WATCH FOR ENTRY</b>",
     "circuit_risk": "🚧 <b>PENNY CIRCUIT & RISK</b>",
 }
 
@@ -62,7 +64,7 @@ def _header(report: dict, title: str) -> str:
     counts = report.get("counts", {})
     return "\n".join([title, f'<b>{report.get("as_of_date", "N/A")} EOD • PAPER ONLY</b>',
         f'Universe {report.get("universe_symbols", 0)} • Selected {report.get("selected", 0)}',
-        f'Ready {counts.get("READY",0)} • Confirming {counts.get("CONFIRMING",0)} • Early {counts.get("EARLY_RADAR",0)}', ""])
+        f'Watch for entry {counts.get("READY",0)} • Waiting for confirmation {counts.get("CONFIRMING",0)} • Early watchlist {counts.get("EARLY_RADAR",0)}', ""])
 
 
 def render_topic_messages(report: dict, topic: str, *, limit: int = 3400, cards_per_page: int = 7) -> list[str]:
@@ -79,8 +81,8 @@ def render_topic_messages(report: dict, topic: str, *, limit: int = 3400, cards_
             f'<b>{report.get("as_of_date", "N/A")} EOD • HEALTHY</b>',
             f'Data universe: {report.get("universe_symbols", 0)} symbols',
             f'Qualified: {report.get("selected", 0)}',
-            f'Early {counts.get("EARLY_RADAR", 0)} • Confirming {counts.get("CONFIRMING", 0)} • Ready {counts.get("READY", 0)}',
-            f'Circuit {counts.get("CIRCUIT_LOCKED", 0)} • Extended {counts.get("EXTENDED", 0)}',
+            f'Early watchlist {counts.get("EARLY_RADAR", 0)} • Waiting for confirmation {counts.get("CONFIRMING", 0)} • Watch for entry {counts.get("READY", 0)}',
+            f'Circuit risk {counts.get("CIRCUIT_LOCKED", 0)} • Wait for pullback {counts.get("EXTENDED", 0)}',
             f'Strategy: {html.escape(str(report.get("strategy_version", "N/A")))} • PAPER',
         ])]
     elif topic in TOPIC_STATES:
@@ -131,6 +133,8 @@ def send_messages(messages: list[str], kind: str, *, enabled: bool, timeout: int
         return DeliveryResult(False, f"topic_not_configured:{kind}")
     for index, message in enumerate(messages, start=1):
         payload = {"chat_id": chat_id, "message_thread_id": int(topic), "text": message, "parse_mode": "HTML", "disable_web_page_preview": True}
+        if index == len(messages) and kind != "system":
+            payload["reply_markup"] = dashboard_keyboard("penny")
         try:
             response = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json=payload, timeout=timeout)
             if getattr(response, "status_code", 200) == 400:

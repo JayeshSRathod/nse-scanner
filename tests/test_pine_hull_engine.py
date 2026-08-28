@@ -71,7 +71,8 @@ def test_pine_signal_message_matches_compact_daily_candidate_style() -> None:
     message = render_daily_signals(result)
     assert "📐 PINE HULL SIGNALS" in message
     assert "NSE%3ARELIANCE" in message
-    assert "READY LONG" in message
+    assert "New paper entry" in message
+    assert "Early watchlist" in message
     assert "Entry: ₹1,500.00–" in message
     assert "SL: ₹1,450.00" in message
     assert "T1: ₹1,575.00 • T2: ₹1,650.00" in message
