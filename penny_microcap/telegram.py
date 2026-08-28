@@ -32,6 +32,8 @@ def _card(row: dict) -> str:
              f'CMP ₹{row["close"]:.2f}', f'5D {metrics.get("return_5d_pct", 0):+.1f}% • Turnover {metrics.get("turnover_ratio", 0):.1f}× normal']
     if row.get("entry_low") is not None:
         lines.append(f'Probable entry ₹{row["entry_low"]:.2f}–₹{row["entry_high"]:.2f}')
+    if metrics.get("liquidity_tier") == "HIGH":
+        lines.append("Liquidity: <b>High</b>")
     if state == "CIRCUIT_LOCKED":
         lines.extend(["Current entry: <b>NOT EXECUTABLE</b>", "Next: Wait for normal two-way trading"])
     elif state == "EXTENDED":

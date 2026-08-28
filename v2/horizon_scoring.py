@@ -122,9 +122,11 @@ def score_horizons(
     drawdown126 = _drawdown_score(close, 126)
     drawdown252 = _drawdown_score(close, 252)
 
-    daily_trend = 100.0 if hybrid["daily_bullish"] else (45.0 if not hybrid["chop"] else 15.0)
+    daily_trend = 100.0 if hybrid["daily_bullish"] else (
+        75.0 if hybrid["daily_persistent"] else 45.0 if hybrid["hull_slope_improving"] and not hybrid["chop"] else 15.0
+    )
     weekly_trend = 100.0 if weekly["weekly_bullish"] and weekly["weekly_rising"] else (55.0 if weekly["weekly_bullish"] else 0.0)
-    kama_score = 100.0 if hybrid["kama_rising"] else 20.0
+    structure_score = 100.0 if hybrid["daily_persistent"] else (55.0 if hybrid["hull_slope_improving"] else 20.0)
     participation_score = float(participation.score)
     alignment_score = (daily_trend + weekly_trend) / 2.0
 
@@ -132,13 +134,13 @@ def score_horizons(
         "1M": {
             "weights": {
                 "daily_trend": 25, "entry_readiness": 20, "rs20": 15,
-                "participation": 15, "kama": 10, "risk_quality": 10, "market": 5,
+                "participation": 15, "structure_persistence": 10, "risk_quality": 10, "market": 5,
             },
             "values": {
                 "daily_trend": daily_trend,
-                "entry_readiness": 100.0 if hybrid["daily_bullish"] and hybrid["kama_rising"] and not hybrid["stretched"] and not hybrid["chop"] else 35.0,
+                "entry_readiness": 100.0 if hybrid["daily_persistent"] and not hybrid["stretched"] and not hybrid["chop"] else 35.0,
                 "rs20": _rs_score(rs20), "participation": participation_score,
-                "kama": kama_score,
+                "structure_persistence": structure_score,
                 "risk_quality": 100.0 if not hybrid["stretched"] and not hybrid["chop"] else 20.0,
                 "market": regime_value,
             },
@@ -188,16 +190,14 @@ def score_horizons(
         if regime.upper() in {"BEAR", "BEARISH"} and horizon in {"1M", "3M"}:
             blocks.append("bear_market_new_entry_block")
         if horizon == "1M":
-            if not hybrid["daily_bullish"]:
-                blocks.append("daily_hybrid_hull_not_bullish")
-            if not hybrid["kama_rising"]:
-                blocks.append("kama_not_rising")
+            if not hybrid["daily_persistent"]:
+                blocks.append("daily_hull_structure_not_persistent")
             if hybrid["chop"]:
                 blocks.append("hybrid_hull_chop")
             if hybrid["stretched"]:
                 blocks.append("extended_above_hybrid_hull")
         elif horizon == "3M":
-            if not hybrid["daily_bullish"]:
+            if not hybrid["daily_persistent"]:
                 blocks.append("daily_trend_not_bullish")
             if rs63 <= 0:
                 blocks.append("rs63_not_positive")

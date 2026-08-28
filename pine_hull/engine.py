@@ -93,19 +93,23 @@ def pine_metrics(frame: pd.DataFrame, *, atr_multiplier: float = 3.5) -> dict[st
     last_close, last_atr = float(close.iloc[-1]), float(atr14.iloc[-1])
     distance_atr = (last_close - float(hybrid_hull.iloc[-1])) / last_atr if last_atr > 0 else 0.0
     hull_speed = abs(float(hull_slope.iloc[-1])) / max(last_atr, 1.0)
-    kama_slope = (float(kama30.iloc[-1]) - float(kama30.iloc[-4])) / max(last_atr, 1.0)
-    kama_band = (kama30.rolling(8).max().iloc[-1] - kama30.rolling(8).min().iloc[-1]) / max(float(kama30.iloc[-1]), 1.0)
-    no_impulse = abs(kama_slope) < 0.072
-    band_compressed = kama_band < 0.025
+    # KAMA remains diagnostic only. Chop is derived from price/Hull behaviour.
+    price_band = (close.tail(20).max() - close.tail(20).min()) / max(last_close, 1.0)
+    no_impulse = abs(float(hull_slope.iloc[-1])) < last_atr * 0.08
+    band_compressed = price_band < 0.025
     rotational = abs(distance_atr) < 0.4 and abs(float(hull_slope.iloc[-1])) < abs(float(hull_slope.iloc[-2])) * 1.1
     chop = (int(no_impulse) + int(band_compressed)) >= 2
     daily_bullish = last_close > float(hybrid_hull.iloc[-1]) and float(hull_slope.iloc[-1]) > 0.0
+    above_hull_5 = close.tail(5).reset_index(drop=True) > hybrid_hull.tail(5).reset_index(drop=True)
+    hull_up_5 = hybrid_hull.diff().tail(5)
+    hull_slope_improving = bool((hull_up_5 >= 0).sum() >= 2 and hybrid_hull.iloc[-1] >= hybrid_hull.iloc[-3])
+    daily_persistent = bool(above_hull_5.sum() >= 3 and hull_slope_improving)
     htf_state, htf_metrics = weekly_transition(weekly21, weekly51)
     weekly_bullish = htf_state == "BULLISH"
     kama_rising = float(kama30.iloc[-1]) > float(kama30.iloc[-2])
     hma_aligned = float(hma21.iloc[-1]) > float(hma51.iloc[-1])
     trend_commitment = abs(float(hull_slope.iloc[-1])) > abs(float(hull_slope.iloc[-2]))
-    overextended = distance_atr > 1.5
+    overextended = distance_atr > 1.25
     volume_ratio = float(volume.iloc[-1] / vol_ma.iloc[-1]) if pd.notna(vol_ma.iloc[-1]) and vol_ma.iloc[-1] > 0 else 0.0
     adx_value = _number(adx14.iloc[-1])
     rsi_value = _number(rsi14.iloc[-1])
@@ -121,12 +125,14 @@ def pine_metrics(frame: pd.DataFrame, *, atr_multiplier: float = 3.5) -> dict[st
     score += 10 if float(ema50.iloc[-1]) > float(ema200.iloc[-1]) else 0
     score += 5 if last_close > float(ema200.iloc[-1]) else 0
     score += 5 if daily_bullish else 0
-    ready = bool(daily_bullish and hma_aligned and kama_rising and trend_commitment and not chop and not rotational and not overextended and score >= 70)
+    adx_confirmed = bool(adx_value >= 22 or (len(adx14.dropna()) >= 2 and adx_value >= 18 and adx_value > _number(adx14.iloc[-2])))
+    ready = bool(daily_persistent and hma_aligned and trend_commitment and adx_confirmed and not chop and not rotational and not overextended and score >= 75)
     state = "READY" if ready else "BLOCKED" if chop or rotational or overextended else "WATCH"
     opportunity_state = lifecycle_timing_state(
-        daily_bullish=daily_bullish, hma_aligned=hma_aligned, kama_rising=kama_rising,
+        daily_bullish=daily_bullish, daily_persistent=daily_persistent,
+        hma_aligned=hma_aligned, kama_rising=kama_rising,
         trend_commitment=trend_commitment, chop=chop, rotational=rotational,
-        overextended=overextended, score=score, htf_state=htf_state,
+        overextended=overextended, score=score, htf_state=htf_state, adx_confirmed=adx_confirmed,
     )
     initial_stop = float(data["high"].rolling(22, min_periods=22).max().iloc[-1]) - last_atr * atr_multiplier
     t2_base = 3.0 if last_atr > float(atr14.rolling(50).mean().iloc[-1]) * 1.15 else 2.0 if last_atr < float(atr14.rolling(50).mean().iloc[-1]) * 0.85 else 2.5
@@ -134,6 +140,8 @@ def pine_metrics(frame: pd.DataFrame, *, atr_multiplier: float = 3.5) -> dict[st
     return {
         "available": True, "state": state, "timing_state": opportunity_state, "htf_state": htf_state,
         "score": round(score, 2), "daily_bullish": daily_bullish, "weekly_bullish": weekly_bullish,
+        "daily_persistent": daily_persistent, "hull_above_sessions_5": int(above_hull_5.sum()),
+        "hull_slope_improving": hull_slope_improving, "adx_confirmed": adx_confirmed,
         "hma_aligned": hma_aligned, "kama_rising": kama_rising, "trend_commitment": trend_commitment,
         "chop": chop, "rotational": rotational, "overextended": overextended,
         "close": round(last_close, 2), "atr14": round(last_atr, 2), "hybrid_hull": round(float(hybrid_hull.iloc[-1]), 2),

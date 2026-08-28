@@ -30,7 +30,11 @@ def load_market_data(db_path: str | Path, as_of: str | None = None) -> pd.DataFr
 
 
 def discover(prices: pd.DataFrame, top_n: int = 25) -> DiscoveryResult:
-    """Rank 22/44/66-session momentum; Hull receives this shortlist only."""
+    """Find momentum beginning through acceleration, structure and participation.
+
+    Positive 1M/3M returns are deliberately not hard gates: a stock emerging
+    from a sound base can surface before its backward-looking return is strong.
+    """
     rows, rejected = [], {"insufficient_history": 0, "low_price": 0, "low_volume": 0}
     for symbol, frame in prices.groupby("symbol"):
         data = frame.sort_values("trade_date")
@@ -43,13 +47,53 @@ def discover(prices: pd.DataFrame, top_n: int = 25) -> DiscoveryResult:
         if volume.tail(20).mean() < 50_000:
             rejected["low_volume"] += 1; continue
         returns = [close.iloc[-1] / close.iloc[-1 - window] - 1 for window in (22, 44, 66)]
+        ret5 = float(close.iloc[-1] / close.iloc[-6] - 1.0)
+        prior5 = float(close.iloc[-6] / close.iloc[-11] - 1.0)
+        ret10 = float(close.iloc[-1] / close.iloc[-11] - 1.0)
+        prior10 = float(close.iloc[-11] / close.iloc[-21] - 1.0)
+        ema20 = close.ewm(span=20, adjust=False).mean()
+        prior_high = float(close.shift(1).tail(20).max())
+        volume_base = float(volume.shift(1).tail(20).median())
+        volume_ratio = float(volume.tail(5).mean() / volume_base) if volume_base > 0 else 0.0
+        range20 = float((close.tail(20).max() - close.tail(20).min()) / max(close.tail(20).min(), 0.01))
+        higher_low = bool(close.tail(10).min() >= close.iloc[-20:-10].min())
+        near_breakout = bool(close.iloc[-1] >= prior_high * 0.97)
+        ema_reclaim = bool(close.iloc[-1] >= ema20.iloc[-1] and ema20.iloc[-1] >= ema20.iloc[-4])
+        hull_proxy_up = bool(close.rolling(10).mean().iloc[-1] >= close.rolling(10).mean().iloc[-3])
+        signals = {
+            "price_accelerating": ret5 > prior5 or ret10 > prior10,
+            "relative_strength_accelerating": ret5 > returns[0] * 5.0 / 22.0,
+            "ema20_reclaimed": ema_reclaim,
+            "trend_turning_up": hull_proxy_up,
+            "participation_improving": volume_ratio >= 1.2,
+            "higher_low_or_tight_base": higher_low or range20 <= 0.12,
+            "near_breakout": near_breakout,
+        }
+        if sum(signals.values()) < 4:
+            continue
         rows.append({"symbol": str(symbol), "as_of_date": data["trade_date"].iloc[-1].date().isoformat(),
                      "momentum_1m": returns[0], "momentum_2m": returns[1], "momentum_3m": returns[2],
+                     "return_5d": ret5, "prior_return_5d": prior5,
+                     "price_acceleration": ret5 - prior5,
+                     "rs_acceleration": ret5 - returns[0] * 5.0 / 22.0,
+                     "base_quality": float(higher_low) + float(range20 <= 0.12),
+                     "volume_ratio": volume_ratio,
+                     "trend_transition": float(ema_reclaim) + float(hull_proxy_up),
+                     "breakout_proximity": float(near_breakout),
+                     "early_signal_count": sum(signals.values()),
+                     "early_signals": tuple(name for name, passed in signals.items() if passed),
                      "volume_20d": float(volume.tail(20).mean())})
     result = pd.DataFrame(rows)
     if result.empty:
         return DiscoveryResult("", 0, result, rejected)
-    result["discovery_score"] = (result["momentum_1m"].rank(pct=True) * 20 + result["momentum_2m"].rank(pct=True) * 30 + result["momentum_3m"].rank(pct=True) * 50)
+    result["discovery_score"] = (
+        result["rs_acceleration"].rank(pct=True) * 25
+        + result["price_acceleration"].rank(pct=True) * 20
+        + result["base_quality"].clip(upper=2) / 2 * 15
+        + (result["volume_ratio"].clip(upper=1.5) / 1.5) * 15
+        + result["trend_transition"].clip(upper=2) / 2 * 15
+        + result["breakout_proximity"] * 10
+    ).round(2)
     result = result.sort_values(["discovery_score", "symbol"], ascending=[False, True]).reset_index(drop=True)
     result["discovery_rank"] = result.index + 1
     return DiscoveryResult(str(result["as_of_date"].iloc[0]), len(result), result.head(top_n), rejected)

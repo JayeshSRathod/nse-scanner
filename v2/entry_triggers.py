@@ -10,7 +10,7 @@ from dataclasses import asdict, dataclass
 import pandas as pd
 
 from .horizon_scoring import HorizonScore
-from .indicators import atr, fixed_hybrid_hull_signals, hma, kama
+from .indicators import atr, fixed_hybrid_hull_signals, hma
 from .pullback import PullbackResult
 from .setups import breakout_signal, compression_signal
 
@@ -32,7 +32,6 @@ _PRIORITY = {
     "BREAKOUT": 85,
     "COMPRESSION_RELEASE": 80,
     "HULL_CROSSOVER": 75,
-    "KAMA_ALIGNMENT": 70,
     "RS_ACCELERATION": 65,
     "TREND_CONTINUATION": 60,
     "REACCUMULATION": 55,
@@ -83,18 +82,10 @@ def evaluate_entry_triggers(
 
     hma21 = hma(close, 21)
     hma51 = hma(close, 51)
-    kama30 = kama(close, 30)
     hull_cross = bool(
         pd.notna(hma21.iloc[-2]) and pd.notna(hma51.iloc[-2])
         and hma21.iloc[-2] <= hma51.iloc[-2]
         and hma21.iloc[-1] > hma51.iloc[-1]
-        and hybrid["daily_bullish"]
-    )
-    kama_alignment = bool(
-        pd.notna(kama30.iloc[-2]) and pd.notna(kama30.iloc[-1])
-        and close.iloc[-2] <= kama30.iloc[-2]
-        and close.iloc[-1] > kama30.iloc[-1]
-        and kama30.iloc[-1] > kama30.iloc[-2]
         and hybrid["daily_bullish"]
     )
 
@@ -140,7 +131,7 @@ def evaluate_entry_triggers(
         "range20_width_atr": round(range_width_atr, 3),
         "daily_bullish": bool(hybrid["daily_bullish"]),
         "weekly_bullish": bool(hybrid["weekly_bullish"]),
-        "kama_rising": bool(hybrid["kama_rising"]),
+        "daily_persistent": bool(hybrid["daily_persistent"]),
         "stretched": bool(hybrid["stretched"]),
         "chop": bool(hybrid["chop"]),
     }
@@ -176,13 +167,6 @@ def evaluate_entry_triggers(
             quality_available and hull_cross and not hybrid["stretched"] and not hybrid["chop"],
             80.0 if hull_cross else 0.0,
             ("hma21_crossed_above_hma51", "hybrid_hull_confirmed") if hull_cross else ("no_fresh_hull_crossover",),
-            common_metrics,
-        ),
-        EntryTrigger(
-            "KAMA_ALIGNMENT",
-            quality_available and kama_alignment and not hybrid["stretched"] and not hybrid["chop"],
-            75.0 if kama_alignment else 0.0,
-            ("price_reclaimed_kama30", "kama30_rising", "hybrid_hull_confirmed") if kama_alignment else ("no_fresh_kama_alignment",),
             common_metrics,
         ),
         EntryTrigger(

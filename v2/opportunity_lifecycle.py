@@ -67,7 +67,7 @@ def htf_transition(metrics: Mapping[str, object]) -> str:
 
 
 def entry_horizon(primary_horizon: str, trigger_name: str) -> str:
-    if trigger_name in {"HULL_CROSSOVER", "KAMA_ALIGNMENT", "RS_ACCELERATION"}:
+    if trigger_name in {"HULL_CROSSOVER", "RS_ACCELERATION"}:
         preferred = "1M"
     elif trigger_name in {"QUALIFIED_PULLBACK", "BREAKOUT", "COMPRESSION_RELEASE", "TREND_CONTINUATION", "REACCUMULATION"}:
         preferred = "3M"
@@ -90,14 +90,14 @@ def timing_state(*, classification: str, metrics: Mapping[str, object], htf_stat
                  trade_plan_state: str, reward_risk_t1: float, pullback_state: str) -> str:
     stretched = bool(metrics.get("stretched"))
     daily_bullish = bool(metrics.get("daily_bullish"))
-    kama_rising = bool(metrics.get("kama_rising"))
+    structure_holding = bool(metrics.get("daily_persistent", metrics.get("daily_bullish")))
     if stretched or trade_plan_state == "RISKY" or (reward_risk_t1 > 0 and reward_risk_t1 < 1.0):
         return "EXTENDED"
     if (pullback_state or "") in _PULLBACK_STATES and classification in {"ACTION", "WATCH"}:
         return "PULLBACK_REENTRY" if classification == "WATCH" else "READY"
     if classification == "ACTION" and trade_plan_state == "READY":
         return "READY"
-    if classification == "WATCH" and daily_bullish and kama_rising and htf_state in {"BULLISH", "IMPROVING", "NEUTRAL"}:
+    if classification == "WATCH" and structure_holding and htf_state in {"BULLISH", "IMPROVING", "NEUTRAL"}:
         return "EARLY"
     if classification == "WATCH" and htf_state == "BULLISH":
         return "EARLY"

@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 import pandas as pd
 
 from .entry_triggers import EntryTrigger
-from .indicators import atr, fixed_hybrid_hull_signals, kama
+from .indicators import atr, fixed_hybrid_hull_signals
 
 
 @dataclass(frozen=True)
@@ -60,7 +60,6 @@ def _trigger_levels(data: pd.DataFrame, trigger: EntryTrigger, current_atr: floa
     last = data.iloc[-1]
     hybrid = fixed_hybrid_hull_signals(data)
     close = pd.to_numeric(data["close"], errors="coerce")
-    kama30 = kama(close, 30)
     name = trigger.name
 
     if name == "BREAKOUT":
@@ -95,14 +94,6 @@ def _trigger_levels(data: pd.DataFrame, trigger: EntryTrigger, current_atr: floa
             float(swing_low - 0.20 * current_atr),
             "recent_pivot_high_plus_0.10_atr",
             "recent_swing_low_minus_0.20_atr",
-        )
-    if name == "KAMA_ALIGNMENT":
-        kama_value = float(kama30.iloc[-1])
-        return (
-            float(last["high"] + 0.10 * current_atr),
-            float(min(last["low"], kama_value) - 0.20 * current_atr),
-            "confirmation_high_plus_0.10_atr",
-            "kama_support_minus_0.20_atr",
         )
     if name == "HULL_CROSSOVER":
         return (

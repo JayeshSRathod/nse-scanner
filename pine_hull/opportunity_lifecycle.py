@@ -34,17 +34,20 @@ def weekly_transition(weekly21: pd.Series, weekly51: pd.Series) -> tuple[str, di
 
 def timing_state(*, daily_bullish: bool, hma_aligned: bool, kama_rising: bool,
                  trend_commitment: bool, chop: bool, rotational: bool,
-                 overextended: bool, score: float, htf_state: str) -> str:
+                 overextended: bool, score: float, htf_state: str,
+                 daily_persistent: bool | None = None, adx_confirmed: bool = True) -> str:
+    # kama_rising is accepted for report compatibility only; it is not a gate.
+    structure_holding = daily_bullish if daily_persistent is None else daily_persistent
     if overextended:
         return "EXTENDED"
-    if chop or rotational or not daily_bullish:
+    if chop or rotational or not structure_holding:
         return "WEAK"
-    daily_ready = daily_bullish and hma_aligned and kama_rising and trend_commitment and score >= 70
+    daily_ready = structure_holding and hma_aligned and trend_commitment and adx_confirmed and score >= 75
     if daily_ready and htf_state == "BULLISH":
         return "READY"
     if daily_ready and htf_state in {"IMPROVING", "NEUTRAL"}:
         return "EARLY"
-    if daily_bullish and kama_rising and htf_state in {"BULLISH", "IMPROVING", "NEUTRAL"} and score >= 60:
+    if structure_holding and htf_state in {"BULLISH", "IMPROVING", "NEUTRAL"} and score >= 60:
         return "EARLY"
     if htf_state in {"BEARISH", "DETERIORATING"}:
         return "WEAK"

@@ -10,9 +10,9 @@ from pine_hull.engine import PineConfig, load_state, pine_metrics, run_daily
 from pine_hull.preview import render_daily_signals
 
 
-def _frame(rows: int = 330, *, final_low: float | None = None) -> pd.DataFrame:
+def _frame(rows: int = 330, *, final_low: float | None = None, end: float = 260.0) -> pd.DataFrame:
     dates = pd.bdate_range("2025-01-02", periods=rows)
-    close = pd.Series(np.linspace(100.0, 260.0, rows))
+    close = pd.Series(np.linspace(100.0, end, rows))
     frame = pd.DataFrame({
         "trade_date": dates,
         "open": close - 0.3,
@@ -37,7 +37,7 @@ def _database(path: Path, frame: pd.DataFrame) -> None:
 
 
 def test_pine_core_reports_ready_for_clean_uptrend() -> None:
-    metrics = pine_metrics(_frame())
+    metrics = pine_metrics(_frame(end=200.0))
     assert metrics["available"] is True
     assert metrics["daily_bullish"] is True
     assert metrics["weekly_bullish"] is True
@@ -47,11 +47,11 @@ def test_pine_core_reports_ready_for_clean_uptrend() -> None:
 
 def test_pine_daily_state_is_independent_and_freezes_entry_levels(tmp_path: Path) -> None:
     db_path, state_path = tmp_path / "prices.db", tmp_path / "pine_state.json"
-    _database(db_path, _frame())
+    _database(db_path, _frame(end=200.0))
     result = run_daily(db_path, state_path=state_path, config=PineConfig(capital_base=300_000.0))
     assert len(result["created"]) == 1
     position = result["created"][0]
-    assert position["entry"] == 260.0
+    assert position["entry"] == 200.0
     assert position["target1"] > position["entry"]
     saved = load_state(state_path)
     assert saved["positions"][0]["trade_id"].startswith("PINE-")

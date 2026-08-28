@@ -37,6 +37,14 @@ def test_ready_requires_all_entry_gates():
     assert candidate.metrics["ready_gates"]["READY_MARKET_CAP"]
 
 
+def test_revised_ready_liquidity_and_high_liquidity_badge():
+    candidate, _ = evaluate_symbol("STANDARD", history(turnover=70.0, recent_turnover=110.0), metadata=META)
+    assert candidate is not None and candidate.state == "READY"
+    assert candidate.metrics["liquidity_tier"] == "STANDARD"
+    high, _ = evaluate_symbol("HIGH", history(turnover=120.0, recent_turnover=240.0), metadata=META)
+    assert high is not None and high.metrics["liquidity_tier"] == "HIGH"
+
+
 def test_early_radar_does_not_require_verified_market_cap():
     frame = history(rows=140, last_breakout=False, turnover=30.0, recent_turnover=50.0)
     candidate, audit = evaluate_symbol("EARLY", frame, metadata={"series": "EQ", "active": 1})

@@ -198,7 +198,7 @@ def evaluate_symbol(symbol: str, frame: pd.DataFrame, *, metadata: Mapping[str, 
     }
     confirming_gates = {
         "CONFIRMING_HISTORY": len(data) >= config.confirming_history,
-        "CONFIRMING_TURNOVER": median_turnover20 >= config.confirming_turnover_lacs,
+        "CONFIRMING_TURNOVER": median_turnover20 >= config.confirming_turnover_lacs and turnover_5 >= config.confirming_recent_turnover_lacs,
         "CONFIRMING_TREND": above_ema20 and ema20_rising,
         "CONFIRMING_PARTICIPATION": turnover_ratio >= 1.1 or delivery_improving,
         "CONFIRMING_DISTANCE": distance_atr <= config.extended_distance_atr,
@@ -227,6 +227,8 @@ def evaluate_symbol(symbol: str, frame: pd.DataFrame, *, metadata: Mapping[str, 
         "distance_atr": round(distance_atr, 2), "risk_pct": round(risk_pct, 2),
         "market_cap_cr": round(float(market_cap), 2) if cap_verified else None,
         "market_cap_verified": cap_verified, "circuit_proxy": circuit_proxy,
+        "liquidity_tier": "HIGH" if median_turnover20 >= config.high_liquidity_turnover_lacs and turnover_5 >= config.high_liquidity_recent_lacs else "STANDARD",
+        "max_position_value_lacs": round(turnover_5 * 0.0025, 3),
         "consecutive_circuit_proxy": circuit_count, "executability": "UNAVAILABLE" if circuit_proxy else "EOD_GATES_PASSED",
         "turnover_source": turnover_source, "ready_gates": ready_gates, "confirming_gates": confirming_gates,
     }

@@ -114,7 +114,11 @@ def kama(values: Iterable[float] | pd.Series, length: int = 30) -> pd.Series:
 
 
 def fixed_hybrid_hull_signals(frame: pd.DataFrame) -> dict[str, float | bool]:
-    """Return the agreed EOD Hybrid Hull 55/HMA21/HMA51/ATR14x3.5/KAMA30 state."""
+    """Return EOD Hull structure using multi-session persistence.
+
+    KAMA is retained as a diagnostic for backward-compatible reports, but is
+    deliberately not used by the selection or readiness gates.
+    """
     required = {"trade_date", "open", "high", "low", "close"}
     missing = required.difference(frame.columns)
     if missing:
@@ -127,7 +131,8 @@ def fixed_hybrid_hull_signals(frame: pd.DataFrame) -> dict[str, float | bool]:
     atr14 = atr(data, 14)
     kama30 = kama(close, 30)
     if len(data) < 56 or pd.isna(hull55.iloc[-1]) or pd.isna(atr14.iloc[-1]):
-        return {"daily_bullish": False, "weekly_bullish": False, "kama_rising": False,
+        return {"daily_bullish": False, "daily_persistent": False,
+                "hull_slope_improving": False, "weekly_bullish": False, "kama_rising": False,
                 "stretched": False, "chop": True, "trail_stop": 0.0,
                 "hull55": 0.0, "hma21": 0.0, "hma51": 0.0, "atr14": 0.0,
                 "distance_atr": 0.0}
@@ -139,12 +144,16 @@ def fixed_hybrid_hull_signals(frame: pd.DataFrame) -> dict[str, float | bool]:
         last_close > float(hull55.iloc[-1]) > float(hull55.iloc[-2])
         and float(hma21.iloc[-1]) > float(hma51.iloc[-1])
     )
+    above_hull_5 = close.tail(5).reset_index(drop=True) > hull55.tail(5).reset_index(drop=True)
+    hull_slopes_5 = hull55.diff().tail(5)
+    hull_slope_improving = bool((hull_slopes_5 >= 0).sum() >= 2 and hull55.iloc[-1] >= hull55.iloc[-3])
+    hma_aligned = bool(float(hma21.iloc[-1]) > float(hma51.iloc[-1]))
+    daily_persistent = bool(above_hull_5.sum() >= 3 and hull_slope_improving and hma_aligned)
     kama_rising = bool(float(kama30.iloc[-1]) > float(kama30.iloc[-2]) and daily_bullish)
-    kama_slope = abs(float(kama30.iloc[-1] - kama30.iloc[-2])) / last_atr if last_atr > 0 else 0.0
-    kama_band = ((kama30.rolling(20).max() - kama30.rolling(20).min()) /
-                 kama30.replace(0, np.nan)).iloc[-1]
+    price_band = (close.tail(20).max() - close.tail(20).min()) / max(last_close, 1.0)
     rotation = abs(distance_atr) < 0.4 and abs(float(hull55.iloc[-1] - hull55.iloc[-2])) < last_atr * 0.15
-    chop = bool((kama_slope < 0.072 and pd.notna(kama_band) and kama_band < 0.025) or rotation)
+    low_hull_impulse = abs(float(hull55.iloc[-1] - hull55.iloc[-2])) < last_atr * 0.08
+    chop = bool((low_hull_impulse and price_band < 0.025) or rotation)
 
     weekly_close = data.set_index(pd.to_datetime(data["trade_date"]))["close"].resample("W-FRI").last().dropna()
     weekly21, weekly51 = hma(weekly_close, 21), hma(weekly_close, 51)
@@ -154,6 +163,9 @@ def fixed_hybrid_hull_signals(frame: pd.DataFrame) -> dict[str, float | bool]:
     )
     return {
         "daily_bullish": daily_bullish,
+        "daily_persistent": daily_persistent,
+        "hull_above_sessions_5": int(above_hull_5.sum()),
+        "hull_slope_improving": hull_slope_improving,
         "weekly_bullish": weekly_bullish,
         "kama_rising": kama_rising,
         "stretched": bool(distance_atr > 1.5),

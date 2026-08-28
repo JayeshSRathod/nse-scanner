@@ -59,6 +59,15 @@ def test_pine_full_alignment_is_ready() -> None:
     ) == "READY"
 
 
+def test_pine_kama_is_diagnostic_not_a_ready_gate() -> None:
+    assert pine_timing_state(
+        daily_bullish=True, daily_persistent=True, hma_aligned=True,
+        kama_rising=False, trend_commitment=True, adx_confirmed=True,
+        chop=False, rotational=False, overextended=False, score=80,
+        htf_state="BULLISH",
+    ) == "READY"
+
+
 def test_pine_overextended_is_not_ready() -> None:
     assert pine_timing_state(
         daily_bullish=True, hma_aligned=True, kama_rising=True, trend_commitment=True,

@@ -60,11 +60,10 @@ def assess_promotion(position: Position, frame: pd.DataFrame) -> PromotionDecisi
         reasons.append(f"minimum_{MIN_SESSIONS[position.horizon]}_sessions_not_reached")
     if current_r is None or current_r < 1.0:
         reasons.append("one_r_profit_cushion_not_reached")
-    for key, reason in (("daily_bullish", "daily_hybrid_hull_not_aligned"),
-                        ("weekly_bullish", "weekly_hma21_hma51_not_aligned"),
-                        ("kama_rising", "kama30_not_rising")):
-        if not signals[key]:
-            reasons.append(reason)
+    if not signals.get("daily_persistent", signals.get("daily_bullish", False)):
+        reasons.append("daily_hull_structure_not_persistent")
+    if not signals.get("weekly_bullish", False):
+        reasons.append("weekly_hma21_hma51_not_aligned")
     if signals["stretched"]:
         reasons.append("price_extended_above_hybrid_hull")
     if signals["chop"]:
@@ -72,7 +71,8 @@ def assess_promotion(position: Position, frame: pd.DataFrame) -> PromotionDecisi
     return PromotionDecision(
         position.trade_id, position.symbol, position.horizon, target,
         "PROMOTE" if target and not reasons else "HOLD", held, current_r,
-        bool(signals["daily_bullish"]), bool(signals["weekly_bullish"]), bool(signals["kama_rising"]),
+        bool(signals.get("daily_persistent", signals.get("daily_bullish", False))),
+        bool(signals["weekly_bullish"]), bool(signals["kama_rising"]),
         bool(signals["stretched"]), bool(signals["chop"]), tuple(reasons or ("all_carry_forward_rules_passed",)),
     )
 

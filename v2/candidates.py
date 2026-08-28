@@ -106,8 +106,7 @@ def _can_surface_early(primary: HorizonScore, metrics: dict[str, float | bool | 
         not stale_data
         and regime.upper() not in {"BEAR", "BEARISH"}
         and primary.score >= 70.0
-        and bool(metrics.get("daily_bullish"))
-        and bool(metrics.get("kama_rising"))
+        and (bool(metrics.get("daily_persistent")) or bool(metrics.get("hull_slope_improving")))
         and htf_state in {"BULLISH", "IMPROVING", "NEUTRAL"}
         and blocks.issubset(_ALLOWED_EARLY_BLOCKS)
     )

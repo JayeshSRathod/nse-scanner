@@ -62,7 +62,7 @@ def render_monthly_portfolio_message(review_date: str, snapshot: PortfolioSnapsh
         current_r = "-" if d.current_r is None else f"{d.current_r:+.2f}R"
         lines += ["", f"{d.symbol} | {HORIZON_LABELS.get(d.current_horizon, d.current_horizon)}",
                   f"Held: {d.sessions_held} sessions | Current R: {current_r}",
-                  f"Daily Hull: {'Up' if d.daily_bullish else 'Not aligned'} | Weekly: {'Up' if d.weekly_bullish else 'Not aligned'} | KAMA30: {'Rising' if d.kama_rising else 'Not rising'}",
+                  f"Daily structure: {'Holding' if d.daily_bullish else 'Needs confirmation'} | Weekly: {'Up' if d.weekly_bullish else 'Not aligned'}",
                   f"Action: {_action(d)}"]
     lines += ["", "Promotion never widens a stop or creates an automatic trade.",
               "Daily V2 lifecycle stops and exits remain authoritative."]

@@ -40,7 +40,10 @@ def alignment(frame: pd.DataFrame) -> dict:
         fast = _hma(series, min(3, max(2, len(series) // 2)))
         slow = _hma(series, min(5, max(3, len(series) - 1)))
         states[label] = bool(pd.notna(fast.iloc[-1]) and pd.notna(slow.iloc[-1]) and fast.iloc[-1] > slow.iloc[-1] and fast.iloc[-1] >= fast.iloc[-2])
-    return {"timeframes": states, "aligned": all(states.values()), "state": "READY" if all(states.values()) else "WATCH"}
+    aligned_count = sum(states.values())
+    confirmed = bool(states["daily"] and aligned_count >= 3)
+    return {"timeframes": states, "aligned_count": aligned_count,
+            "aligned": confirmed, "state": "CONFIRMING" if confirmed else "WATCH"}
 
 
 def run_local(db_path: str = "nse_scanner.db", as_of: str | None = None, top_n: int = 25,
@@ -52,8 +55,10 @@ def run_local(db_path: str = "nse_scanner.db", as_of: str | None = None, top_n: 
     frames = {symbol: frame for symbol, frame in prices.groupby("symbol")}
     for row in rows:
         confirmation = alignment(frames[row["symbol"]])
-        row.update({"hull_state": confirmation["state"], "timeframes": confirmation["timeframes"],
-                    "paper_entry_enabled": confirmation["state"] == "READY",
+        ready = bool(row["discovery_score"] >= 75 and confirmation["aligned"])
+        row.update({"hull_state": "READY" if ready else confirmation["state"],
+                    "timeframes": confirmation["timeframes"],
+                    "paper_entry_enabled": ready,
                     "reason": "python_hull_rules_active"})
     report = {"system": "OLD_NSE_HULL_PAPER", "generated_at": datetime.now().astimezone().isoformat(),
             "as_of_date": result.as_of_date, "parity": "PYTHON_RULES_ACTIVE", "paper_entries_enabled": True,
@@ -83,7 +88,9 @@ def render_radar(report: dict) -> str:
         for row in report["shortlist"][:10]:
             aligned = ", ".join(name.upper() for name, ok in row.get("timeframes", {}).items() if ok) or "none"
             label = "Watch for entry" if row.get("hull_state") == "READY" else "Watchlist—wait for confirmation"
-            lines.append(f"• <b>{row['symbol']}</b> — discovery {row['discovery_score']:.1f}/100 | {label} | aligned: {aligned}")
+            signals = ", ".join(str(item).replace("_", " ") for item in row.get("early_signals", ())[:2])
+            reason = signals or "movement structure improving"
+            lines.append(f"• <b>{row['symbol']}</b> — opportunity {row['discovery_score']:.1f}/100 | {label} | {reason}")
     return "\n".join(lines)
 
 
@@ -99,8 +106,8 @@ def render_paper_trades(report: dict) -> str:
         symbol = row["symbol"]
         url = f"https://www.tradingview.com/chart/?symbol=NSE%3A{symbol}"
         lines.extend(["━━━━━━━━━━━━━━━━━━", f"🟢 <a href=\"{url}\">{symbol}</a> — WATCH FOR ENTRY — NOT ENTERED",
-                      f"Discovery: {row['discovery_score']:.1f}/100 | Rank: {row['discovery_rank']}",
-                      "Hull: Daily, Weekly, Monthly, 3M and 6M aligned", "",
+                      f"Opportunity score: {row['discovery_score']:.1f}/100 | Rank: {row['discovery_rank']}",
+                      "Price structure is holding across at least three checked periods", "",
                       "Next step: Wait for the next-session mechanical trigger.",
                       "⚠️ Watch for entry is not a paper entry. It never uses the same closing price; wait for the next-session trigger."])
     lines.extend(["", "💼 <b>OLD+HULL — PAPER PORTFOLIO</b>",

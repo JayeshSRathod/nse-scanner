@@ -6,14 +6,28 @@ from old_nse_hull.discovery import discover
 from old_nse_hull.engine import render_paper_trades, render_radar
 
 
-def test_discovery_uses_momentum_shortlist_without_paper_entry():
+def test_discovery_uses_acceleration_shortlist_without_paper_entry():
     days = pd.bdate_range("2025-01-01", periods=70)
     rows = []
     for symbol, start in (("AAA", 100), ("BBB", 80)):
         for index, day in enumerate(days):
             rows.append({"symbol": symbol, "trade_date": day, "close": start + index * (2 if symbol == "AAA" else 1), "volume": 100_000})
     result = discover(pd.DataFrame(rows))
-    assert result.shortlist.iloc[0]["symbol"] == "AAA"
+    assert set(result.shortlist["symbol"]) == {"AAA", "BBB"}
+    assert {"rs_acceleration", "price_acceleration", "early_signal_count"}.issubset(result.shortlist.columns)
+
+
+def test_discovery_can_surface_fresh_acceleration_without_positive_1m_return():
+    days = pd.bdate_range("2025-01-01", periods=80)
+    close = pd.Series([100 - index * 0.12 for index in range(70)] + [91.6, 91.7, 91.8, 91.9, 92.0,
+                       92.1, 92.25, 92.4, 92.6, 92.8])
+    frame = pd.DataFrame({"symbol": "TURN", "trade_date": days, "close": close,
+                          "volume": [100_000] * 75 + [140_000] * 5})
+    result = discover(frame)
+    assert not result.shortlist.empty
+    row = result.shortlist.iloc[0]
+    assert row["momentum_1m"] < 0
+    assert row["early_signal_count"] >= 4
 
 
 def test_paper_radar_identifies_the_active_python_hull_rules():
