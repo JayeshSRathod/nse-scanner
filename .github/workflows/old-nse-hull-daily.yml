@@ -2,8 +2,9 @@ name: Old NSE Hull Daily Paper Radar
 
 on:
   schedule:
-    # 02:30 UTC is 08:00 IST. The report uses the latest completed EOD session.
-    - cron: '30 2 * * 1-5'
+    # 23:05 UTC Sunday-Thursday = 04:35 IST Monday-Friday.
+    # Runs after the shared data pipeline and leaves buffer for GitHub queue delays.
+    - cron: '5 23 * * 0-4'
   workflow_dispatch:
   pull_request:
     paths:
