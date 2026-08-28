@@ -2,8 +2,9 @@ name: Hull Pine EOD Paper System
 
 on:
   schedule:
-    # 02:45 UTC is 08:15 IST, after the shared data pipeline.
-    - cron: '45 2 * * 1-5'
+    # 23:25 UTC Sunday-Thursday = 04:55 IST Monday-Friday.
+    # Runs after the shared data pipeline and Old NSE Hull report.
+    - cron: '25 23 * * 0-4'
   workflow_dispatch:
 
 env:
