@@ -2,7 +2,7 @@
   "trade_date": "2026-08-27",
   "created": [
     {
-      "trade_id": "PINE-20260827-18DAAE93",
+      "trade_id": "PINE-20260827-EEE30B25",
       "symbol": "AUBANK",
       "state": "OPEN",
       "entry_date": "2026-08-27",
@@ -23,7 +23,7 @@
       "daily_hull_bullish": true
     },
     {
-      "trade_id": "PINE-20260827-596364F6",
+      "trade_id": "PINE-20260827-579D857C",
       "symbol": "GROWWDEFNC",
       "state": "OPEN",
       "entry_date": "2026-08-27",
@@ -44,7 +44,7 @@
       "daily_hull_bullish": true
     },
     {
-      "trade_id": "PINE-20260827-5CB6FA26",
+      "trade_id": "PINE-20260827-04509396",
       "symbol": "MODEFENCE",
       "state": "OPEN",
       "entry_date": "2026-08-27",
@@ -1059,6 +1059,9 @@
       "daily_hull_bullish": true,
       "entry": 617.55,
       "entry_date": "2026-08-26",
+      "exit_date": "2026-08-27",
+      "exit_price": 599.25,
+      "exit_reason": "HULL_STRUCTURE_EXIT",
       "htf_state": "DETERIORATING",
       "htf_weekly_bullish": false,
       "initial_stop": 581.51,
@@ -1074,15 +1077,15 @@
       "target1": 644.33,
       "target2": 653.26,
       "timing_state": "WEAK",
-      "trade_id": "PINE-20260826-E58CCEC8",
-      "exit_date": "2026-08-27",
-      "exit_price": 599.25,
-      "exit_reason": "HULL_STRUCTURE_EXIT"
+      "trade_id": "PINE-20260826-E58CCEC8"
     },
     {
       "daily_hull_bullish": true,
       "entry": 97.4,
       "entry_date": "2026-08-26",
+      "exit_date": "2026-08-27",
+      "exit_price": 97.95,
+      "exit_reason": "HULL_STRUCTURE_EXIT",
       "htf_state": "BULLISH",
       "htf_weekly_bullish": true,
       "initial_stop": 94.82,
@@ -1098,15 +1101,15 @@
       "target1": 100.51,
       "target2": 101.54,
       "timing_state": "READY",
-      "trade_id": "PINE-20260826-FD3B09FB",
-      "exit_date": "2026-08-27",
-      "exit_price": 97.95,
-      "exit_reason": "HULL_STRUCTURE_EXIT"
+      "trade_id": "PINE-20260826-FD3B09FB"
     },
     {
       "daily_hull_bullish": true,
       "entry": 107.3,
       "entry_date": "2026-08-26",
+      "exit_date": "2026-08-27",
+      "exit_price": 107.31,
+      "exit_reason": "HULL_STRUCTURE_EXIT",
       "htf_state": "BULLISH",
       "htf_weekly_bullish": true,
       "initial_stop": 102.5,
@@ -1122,13 +1125,82 @@
       "target1": 110.86,
       "target2": 112.04,
       "timing_state": "READY",
-      "trade_id": "PINE-20260826-26B6C00B",
+      "trade_id": "PINE-20260826-26B6C00B"
+    },
+    {
+      "daily_hull_bullish": true,
+      "entry": 1091.0,
+      "entry_date": "2026-08-27",
+      "htf_state": "BULLISH",
+      "htf_weekly_bullish": true,
+      "initial_stop": 1056.53,
+      "last_price": 1091.0,
+      "prior_hma21": 1112.38,
+      "quantity": 54,
+      "realised_pnl": 0.0,
+      "state": "CLOSED",
+      "stop": 1056.53,
+      "symbol": "AUBANK",
+      "t1_hit": false,
+      "t2_hit": false,
+      "target1": 1128.53,
+      "target2": 1148.11,
+      "timing_state": "READY",
+      "trade_id": "PINE-20260827-18DAAE93",
+      "exit_date": "2026-08-27",
+      "exit_price": 1091.0,
+      "exit_reason": "HULL_STRUCTURE_EXIT"
+    },
+    {
+      "daily_hull_bullish": true,
+      "entry": 97.95,
+      "entry_date": "2026-08-27",
+      "htf_state": "BULLISH",
+      "htf_weekly_bullish": true,
+      "initial_stop": 95.11,
+      "last_price": 97.95,
+      "prior_hma21": 98.47,
+      "quantity": 612,
+      "realised_pnl": 0.0,
+      "state": "CLOSED",
+      "stop": 95.11,
+      "symbol": "GROWWDEFNC",
+      "t1_hit": false,
+      "t2_hit": false,
+      "target1": 100.93,
+      "target2": 101.93,
+      "timing_state": "READY",
+      "trade_id": "PINE-20260827-596364F6",
+      "exit_date": "2026-08-27",
+      "exit_price": 97.95,
+      "exit_reason": "HULL_STRUCTURE_EXIT"
+    },
+    {
+      "daily_hull_bullish": true,
+      "entry": 107.31,
+      "entry_date": "2026-08-27",
+      "htf_state": "BULLISH",
+      "htf_weekly_bullish": true,
+      "initial_stop": 102.87,
+      "last_price": 107.31,
+      "prior_hma21": 108.4,
+      "quantity": 15,
+      "realised_pnl": 0.0,
+      "state": "CLOSED",
+      "stop": 102.87,
+      "symbol": "MODEFENCE",
+      "t1_hit": false,
+      "t2_hit": false,
+      "target1": 110.71,
+      "target2": 111.84,
+      "timing_state": "READY",
+      "trade_id": "PINE-20260827-5CB6FA26",
       "exit_date": "2026-08-27",
       "exit_price": 107.31,
       "exit_reason": "HULL_STRUCTURE_EXIT"
     },
     {
-      "trade_id": "PINE-20260827-18DAAE93",
+      "trade_id": "PINE-20260827-EEE30B25",
       "symbol": "AUBANK",
       "state": "OPEN",
       "entry_date": "2026-08-27",
@@ -1149,7 +1221,7 @@
       "daily_hull_bullish": true
     },
     {
-      "trade_id": "PINE-20260827-596364F6",
+      "trade_id": "PINE-20260827-579D857C",
       "symbol": "GROWWDEFNC",
       "state": "OPEN",
       "entry_date": "2026-08-27",
@@ -1170,7 +1242,7 @@
       "daily_hull_bullish": true
     },
     {
-      "trade_id": "PINE-20260827-5CB6FA26",
+      "trade_id": "PINE-20260827-04509396",
       "symbol": "MODEFENCE",
       "state": "OPEN",
       "entry_date": "2026-08-27",
@@ -1256,7 +1328,7 @@
       "trade_id": "PINE-20260825-9B38039C"
     },
     {
-      "trade_id": "PINE-20260827-18DAAE93",
+      "trade_id": "PINE-20260827-EEE30B25",
       "symbol": "AUBANK",
       "state": "OPEN",
       "entry_date": "2026-08-27",
@@ -1277,7 +1349,7 @@
       "daily_hull_bullish": true
     },
     {
-      "trade_id": "PINE-20260827-596364F6",
+      "trade_id": "PINE-20260827-579D857C",
       "symbol": "GROWWDEFNC",
       "state": "OPEN",
       "entry_date": "2026-08-27",
@@ -1298,7 +1370,7 @@
       "daily_hull_bullish": true
     },
     {
-      "trade_id": "PINE-20260827-5CB6FA26",
+      "trade_id": "PINE-20260827-04509396",
       "symbol": "MODEFENCE",
       "state": "OPEN",
       "entry_date": "2026-08-27",
