@@ -1,6 +1,13 @@
 name: Hull Pine Weekly Review
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hull-pine-weekly.yml'
+      - 'scripts/run_pine_hull_period.py'
+      - 'pine_hull/engine.py'
+      - 'pine_hull/telegram.py'
   schedule:
     - cron: '20 2 * * 6'
   workflow_dispatch:

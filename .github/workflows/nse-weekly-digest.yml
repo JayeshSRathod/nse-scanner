@@ -1,6 +1,12 @@
 name: NSE Weekly Digest
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/nse-weekly-digest.yml'
+      - 'nse_weekly_digest.py'
+      - 'telegram_dashboard.py'
   schedule:
     # Saturday 07:30 IST. GitHub schedules are UTC.
     - cron: '0 2 * * 6'
