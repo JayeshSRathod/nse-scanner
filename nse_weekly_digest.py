@@ -9,6 +9,8 @@ import os, sys, json, sqlite3, logging, requests
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from telegram_dashboard import dashboard_keyboard
+
 try: import config
 except ImportError: print("ERROR: config.py"); sys.exit(1)
 
@@ -36,6 +38,11 @@ log = logging.getLogger(__name__)
 
 SEP_BOLD = "\u2501" * 17
 SEP_THIN = "\u2500" * 18
+
+
+def _link(symbol):
+    safe = _h(symbol)
+    return f'<a href="https://www.tradingview.com/chart/?symbol=NSE%3A{safe}">{safe}</a>'
 
 def _fmt_pl(entry, current):
     entry=float(entry); current=float(current)
@@ -316,9 +323,9 @@ def format_weekly_digest(analysis, week_dates):
 
 
 def format_triggered_weekly_digest(analysis, week_dates):
-    """Weekly report separating confirmed model trades from list research."""
+    """Plain-language weekly report separating paper entries from watchlists."""
     if analysis.get("empty"):
-        return f"Weekly Digest\n\n{analysis.get('reason', 'No data')}"
+        return f"📅 {_b('NSE SCANNER V3 — WEEKLY REVIEW')}\n{_b('PAPER REVIEW')}\n\n{analysis.get('reason', 'No data')}"
 
     start = min(week_dates).strftime('%d-%b')
     end = max(week_dates).strftime('%d-%b-%Y')
@@ -329,41 +336,112 @@ def format_triggered_weekly_digest(analysis, week_dates):
     avg_w = sum(t['return_pct'] for t in winners) / len(winners) if winners else 0
     avg_l = sum(t['return_pct'] for t in non_winners) / len(non_winners) if non_winners else 0
 
-    msg = f"{_b('Weekly Digest — ' + start + ' to ' + end)}\n"
-    msg += _i('EOD model review. A trade counts only after its BUY trigger was crossed.') + "\n"
+    msg = f"📅 {_b('NSE SCANNER V3 — WEEKLY REVIEW')}\n"
+    msg += f"{_b(start + ' to ' + end + ' • PAPER')}\n"
+    msg += _i('A paper entry counts only when price crossed its stated entry trigger on a later session.') + "\n"
     msg += SEP_BOLD + "\n\n"
-    msg += f"{_b('Confirmed model setups')}\n"
-    msg += f"Triggered: {len(trades)} | Hit rate: {_b(str(hit_rate) + '%')}\n"
+    msg += f"{_b('New paper entries and progress')}\n"
+    msg += f"Entries triggered: {len(trades)} | Positive so far: {_b(str(hit_rate) + '%')}\n"
     msg += f"Positive: {len(winners)} ({_fmt_return(avg_w)} avg)\n"
     msg += f"Flat / negative: {len(non_winners)} ({_fmt_return(avg_l)} avg)\n"
     if not trades:
-        msg += _i('No BUY_TRIGGER setup crossed its entry price this week.') + "\n"
+        msg += _i('No watch-for-entry stock crossed its stated entry price this week.') + "\n"
     msg += SEP_THIN + "\n\n"
 
     if trades:
-        msg += f"{_b('Model trade outcomes')}\n"
+        msg += f"{_b('Paper position progress')}\n"
         for trade in sorted(trades, key=lambda item: item['return_pct'], reverse=True)[:6]:
-            state = 'STOP' if trade['outcome'] == 'STOP' else 'OPEN'
-            targets = ' T2 hit' if trade['t2_hit'] else ' T1 hit' if trade['t1_hit'] else ''
-            msg += (f"{state} {_code(trade['symbol'])} {_fmt_price(trade['entry'])} -> "
-                    f"{_fmt_price(trade['exit_price'])} ({_fmt_return(trade['return_pct'])}){targets}\n")
+            state = 'Protective stop reached' if trade['outcome'] == 'STOP' else 'Paper position open'
+            targets = ' • Second target reached' if trade['t2_hit'] else ' • First target reached' if trade['t1_hit'] else ''
+            msg += (f"• {_link(trade['symbol'])} — {state}\n"
+                    f"  {_fmt_price(trade['entry'])} → {_fmt_price(trade['exit_price'])} "
+                    f"({_fmt_return(trade['return_pct'])}){targets}\n")
         msg += SEP_THIN + "\n\n"
 
     top = analysis.get('top_performers', [])
     if top:
-        msg += f"{_b('Research-list movement (not entries)')}\n"
+        msg += f"{_b('Watchlist movement — not entries')}\n"
         for item in top[:5]:
-            msg += f"• {_code(item['symbol'])} {_fmt_return(item['week_return_pct'])}\n"
+            msg += f"• {_link(item['symbol'])} moved {_fmt_return(item['week_return_pct'])}\n"
         msg += SEP_THIN + "\n\n"
 
-    msg += f"{_b('Research-list churn')}\n"
+    msg += f"{_b('Watchlist changes')}\n"
     msg += (f"Stayed all week: {analysis['stayed']} | New: {len(analysis['new_this_week'])} | "
             f"Exited: {len(analysis['exited_this_week'])}\n")
     msg += f"Churn rate: {analysis['churn_pct']}%\n"
     if analysis['new_this_week']:
         msg += f"New: {', '.join(analysis['new_this_week'][:8])}\n"
-    msg += "\n" + SEP_THIN + "\n" + _i('Next digest: next Saturday')
+    msg += "\n" + SEP_THIN + "\n" + _i('Next: Review watch-for-entry stocks only after their stated trigger.')
+    msg += "\nResearch and paper tracking only — not investment advice."
     return msg
+
+
+def _read_json(path, default):
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return default
+
+
+def format_v3_weekly_review(daily, state, week_dates):
+    """Build the weekly topic from the current V3 output and durable paper state."""
+    start = min(week_dates).strftime('%d-%b')
+    end = max(week_dates).strftime('%d-%b-%Y')
+    tables = state.get("tables", {}) if isinstance(state, dict) else {}
+    positions = tables.get("v2_positions", [])
+    active = [row for row in positions if row.get("state") in {"OPEN", "PARTIAL", "TRAILING"}]
+    week_set = {day.isoformat() for day in week_dates}
+    events = [row for row in tables.get("v2_position_events", []) if str(row.get("event_date", ""))[:10] in week_set]
+    new_entries = [row for row in events if row.get("event_type") in {"CREATE", "ENTRY", "OPEN"}]
+    exits = [row for row in events if row.get("to_state") == "CLOSED" or row.get("event_type") == "EXIT"]
+    snapshots = sorted(
+        (row for row in tables.get("v2_portfolio_snapshots", []) if str(row.get("portfolio_date")) in week_set),
+        key=lambda row: row.get("portfolio_date", ""),
+    )
+    pnl_change = 0.0
+    if snapshots:
+        pnl_change = float(snapshots[-1].get("total_pnl", 0) or 0) - float(snapshots[0].get("total_pnl", 0) or 0)
+
+    regime = str(daily.get("regime", "UNKNOWN")).upper()
+    regime_text = {"BULL": "Supportive", "BULLISH": "Supportive", "NEUTRAL": "Mixed",
+                   "BEAR": "Weak — new entries restricted", "BEARISH": "Weak — new entries restricted"}.get(regime, "Not available")
+    candidates = list(daily.get("dashboard_candidates", []))
+    ready = [row for row in candidates if row.get("timing_state") == "READY" or row.get("classification") == "ACTION"]
+    waiting = [row for row in candidates if row not in ready]
+
+    lines = [
+        "📅 <b>NSE SCANNER V3 — WEEKLY REVIEW</b>",
+        f"<b>{start} to {end} • PAPER</b>",
+        f"Latest market data: {daily.get('trade_date') or 'Not available'} EOD",
+        f"Market condition: <b>{regime_text}</b>", "",
+        "📂 <b>Paper portfolio</b>",
+        f"New paper entries: {len(new_entries)} • Exits: {len(exits)} • Still open: {len(active)}",
+        f"Change in recorded P&amp;L this week: {_fmt_price(pnl_change)}", "",
+    ]
+    if active:
+        for row in active[:5]:
+            entry = float(row.get("entry", 0) or 0)
+            latest = float(row.get("last_price", entry) or entry)
+            move = ((latest / entry) - 1) * 100 if entry else 0.0
+            lines.extend([
+                "━━━━━━━━━━━━━━", f"📂 {_link(row.get('symbol', ''))} — PAPER POSITION OPEN",
+                f"Entry {_fmt_price(entry)} → Latest {_fmt_price(latest)} ({_fmt_return(move)})",
+                f"Protect below {_fmt_price(row.get('stop', 0))}",
+                "Next: Continue only while price stays above the protection level.",
+            ])
+    else:
+        lines.append("No open V3 paper positions. No portfolio action required.")
+
+    lines.extend(["", "👀 <b>Current opportunity list</b>",
+                  f"Watch for entry: {len(ready)} • Waiting for confirmation: {len(waiting)}"])
+    for row in (ready + waiting)[:5]:
+        label = "Watch for entry" if row in ready else "Watchlist—wait for confirmation"
+        lines.append(f"• {_link(row.get('symbol', ''))} — {label} • Opportunity score {float(row.get('score', 0) or 0):.0f}/100")
+    if not candidates:
+        lines.append("No current V3 opportunity passed the display threshold.")
+    lines.extend(["", "Next: Act only after a stated entry trigger; do not treat a watchlist item as an entry.",
+                  "Research and paper tracking only — not investment advice."])
+    return "\n".join(lines)
 
 
 def generate_weekly_digest(week_ending=None, dry_run=False):
@@ -376,25 +454,9 @@ def generate_weekly_digest(week_ending=None, dry_run=False):
     week_dates = get_week_dates(week_ending)
     if not week_dates: return False
 
-    history = load_history()
-    week_hist = get_week_history(history, week_dates)
-    if not week_hist: print("No history for this week"); return False
-
-    all_syms = set()
-    for d in week_hist: all_syms.update(d.get('symbols',[]))
-
-    week_prices = {}
-    model_trades = []
-    try:
-        conn = sqlite3.connect(getattr(config,'DB_PATH','nse_scanner.db'))
-        week_prices = get_week_prices(list(all_syms), week_dates, conn)
-        model_trades = get_confirmed_model_trades(week_hist, week_dates, conn)
-        conn.close()
-    except Exception as e: log.warning(f"DB: {e}")
-
-    analysis = analyze_week(week_hist, week_prices)
-    analysis['model_trades'] = model_trades
-    message = format_triggered_weekly_digest(analysis, week_dates)
+    daily = _read_json("output/v2_daily_run.json", {})
+    state = _read_json("v2_portfolio_state.json", {})
+    message = format_v3_weekly_review(daily, state, week_dates)
 
     if dry_run:
         import re; print(re.sub(r'<[^>]+>','',message))
@@ -403,14 +465,24 @@ def generate_weekly_digest(week_ending=None, dry_run=False):
         cid = os.getenv("V3_TELEGRAM_CHAT_ID", "").strip()
         if token and cid:
             try:
-                payload = {'chat_id':cid, 'text':message, 'parse_mode':'HTML'}
+                payload = {'chat_id':cid, 'text':message, 'parse_mode':'HTML',
+                           'disable_web_page_preview': True,
+                           'reply_markup': dashboard_keyboard('v3')}
                 topic_id = os.getenv("V3_WEEKLY_TOPIC_ID")
                 if topic_id and topic_id.isdigit():
                     payload["message_thread_id"] = int(topic_id)
+                else:
+                    log.error("V3_WEEKLY_TOPIC_ID is missing or invalid")
+                    return False
                 r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
-                    data=payload, timeout=10)
-                return r.status_code == 200
-            except: pass
+                    json=payload, timeout=20)
+                r.raise_for_status()
+                return bool(r.json().get('ok'))
+            except (requests.RequestException, ValueError) as exc:
+                log.error("Telegram weekly delivery failed: %s", type(exc).__name__)
+                return False
+        log.error("V3 Telegram credentials are missing")
+        return False
     return True
 
 
@@ -425,4 +497,4 @@ if __name__ == "__main__":
         for f in ["%d-%m-%Y","%Y-%m-%d"]:
             try: we=datetime.strptime(a.week_ending,f).date(); break
             except: pass
-    generate_weekly_digest(week_ending=we, dry_run=a.dry_run)
+    raise SystemExit(0 if generate_weekly_digest(week_ending=we, dry_run=a.dry_run) else 1)

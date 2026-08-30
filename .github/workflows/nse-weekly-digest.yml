@@ -35,7 +35,7 @@ jobs:
 
       - name: Restore saved daily prices
         run: |
-          python -c "import config; from nse_market_store import restore_prices; print('Restored snapshots:', restore_prices(config.DB_PATH, min_days=1))"
+          python -c "import config; from nse_loader import init_database; from nse_market_store import restore_prices; init_database(config.DB_PATH); print('Restored snapshots:', restore_prices(config.DB_PATH, min_days=1))"
 
       - name: Send weekly model digest
         env:

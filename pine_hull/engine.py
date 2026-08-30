@@ -372,12 +372,27 @@ def render_period_message(state_path: str | Path, *, period: str) -> str:
     closed = [position for position in positions if position.get("state") == "CLOSED"]
     active = [position for position in positions if _active(position)]
     realised = sum(_number(position.get("realised_pnl")) for position in closed)
-    title = "📅 PINE HULL — WEEKLY DIGEST" if period == "weekly" else "📆 PINE HULL — MONTHLY REVIEW"
-    lines = [title, f"Data through: {state.get('last_run') or '-'}", f"Paper positions open: {len(active)} | Closed: {len(closed)}", f"Realised P&L: {_price(realised)}", ""]
+    title = "📅 HULL SCANNER — WEEKLY REVIEW" if period == "weekly" else "📆 HULL SCANNER — MONTHLY REVIEW"
+    lines = [title, "PAPER REVIEW — NO LIVE ORDERS", f"Latest scanner run: {state.get('last_run') or 'No completed run recorded'}",
+             f"Open paper positions: {len(active)} | Historical closed: {len(closed)}",
+             f"Realised result: {_price(realised)}", ""]
     if active:
-        lines.append("Carry-forward positions:")
+        lines.append("Open paper positions")
         for position in active[:12]:
-            lines.append(f"• {position['symbol']} — {position['state']} | protect below {_price(position['stop'])}")
+            entry = _number(position.get("entry"))
+            current = _number(position.get("last_price"), entry)
+            move = ((current / entry) - 1.0) * 100 if entry else 0.0
+            symbol = position["symbol"]
+            link = f'<a href="https://www.tradingview.com/chart/?symbol=NSE%3A{symbol}">{symbol}</a>'
+            lines.extend([
+                "━━━━━━━━━━━━━━",
+                f"📂 {link} — PAPER POSITION OPEN",
+                f"Entry {_price(entry)} → Latest {_price(current)}",
+                f"Price move so far: {move:+.2f}%",
+                f"Protect below: {_price(position['stop'])}",
+                "Next: Continue only while price stays above the protection level.",
+            ])
     else:
-        lines.append("No Pine Hull paper positions are open.")
+        lines.extend(["No Hull paper positions are open.", "Next: No action until a new entry trigger is confirmed."])
+    lines.extend(["", "Research and paper tracking only — not investment advice."])
     return "\n".join(lines)
