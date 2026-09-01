@@ -1,11 +1,11 @@
 {
-  "trade_date": "2026-08-28",
+  "trade_date": "2026-08-31",
   "regime": "NEUTRAL",
   "benchmark_source": "OFFICIAL_INDEX_HISTORY",
   "freshness": {
-    "as_of": "2026-08-28",
-    "price_date": "2026-08-28",
-    "index_date": "2026-08-28",
+    "as_of": "2026-08-31",
+    "price_date": "2026-08-31",
+    "index_date": "2026-08-31",
     "price_age_days": 0,
     "index_age_days": 0,
     "prices_stale": false,
@@ -17,16 +17,16 @@
   "selected": 0,
   "created_positions": 0,
   "portfolio_positions": 0,
-  "candidate_message": "\ud83d\udcca <b>NSE V3 \u2014 FRESH OPPORTUNITIES</b>\n<b>Data:</b> 2026-08-28 EOD\n<b>Market regime:</b> NEUTRAL\nData Status: Fresh\nBenchmark: Official NIFTY index history\n\nScanner Funnel\nUniverse Loaded: 2163\nTradable/Evaluated: 0\nQuality Qualified: 0\nFresh Actionable: 0\nFocus Watchlist: 0\n\nOpportunity stages\n\ud83d\udd35 Early watchlist: 0 | \ud83d\udfe2 Watch for entry: 0\n\ud83d\udfe1 Wait for confirmation: 0 | \ud83d\udfe0 Wait for pullback: 0\n\u26aa No action yet: 0\n\nNo new candidates qualified today.\n\n<b>Reason</b>\n\u2022 No candidate crossed the qualification threshold\n\u2022 Existing leaders remain under lifecycle monitoring",
-  "portfolio_message": "\ud83e\udded <b>NSE V3 \u2014 PORTFOLIO LIFECYCLE</b>\n<b>Data:</b> 2026-08-28 EOD\nOpen Positions: 0 | Pending Setups: 0\n\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\nNo active positions or lifecycle changes today.",
-  "portfolio_summary_message": "\ud83d\udcbc <b>NSE V3 \u2014 DAILY PORTFOLIO SUMMARY</b>\n<b>Data:</b> 2026-08-28 EOD\n\nCapital Base: \u20b9300,000.00\nCommitted Capital: \u20b90.00\nCurrent Market Value: \u20b90.00\nRealised P&L: \u20b90.00\nUnrealised P&L: \u20b90.00\nTotal P&L: \u20b90.00\nDaily Change: \u20b90.00\nPortfolio Return: +0.00%\n\nOpen Positions: 0\nPending Setups: 0\nInitial Risk: \u20b90.00\nOpen Risk to Stops: \u20b90.00\nTotal / Average R: +0.00R / +0.00R\nWinners / Losers / Flat: 0 / 0 / 0\nBest / Worst: N/A (no open positions)",
+  "candidate_message": "\ud83d\udcca <b>NSE V3 \u2014 FRESH OPPORTUNITIES</b>\n<b>Data:</b> 2026-08-31 EOD\n<b>Market regime:</b> NEUTRAL\nData Status: Fresh\nBenchmark: Official NIFTY index history\n\nScanner Funnel\nUniverse Loaded: 2163\nTradable/Evaluated: 0\nQuality Qualified: 0\nFresh Actionable: 0\nFocus Watchlist: 0\n\nOpportunity stages\n\ud83d\udd35 Early watchlist: 0 | \ud83d\udfe2 Watch for entry: 0\n\ud83d\udfe1 Wait for confirmation: 0 | \ud83d\udfe0 Wait for pullback: 0\n\u26aa No action yet: 0\n\nNo new candidates qualified today.\n\n<b>Reason</b>\n\u2022 No candidate crossed the qualification threshold\n\u2022 Existing leaders remain under lifecycle monitoring",
+  "portfolio_message": "\ud83e\udded <b>NSE V3 \u2014 PORTFOLIO LIFECYCLE</b>\n<b>Data:</b> 2026-08-31 EOD\nOpen Positions: 0 | Pending Setups: 0\n\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\nNo active positions or lifecycle changes today.",
+  "portfolio_summary_message": "\ud83d\udcbc <b>NSE V3 \u2014 DAILY PORTFOLIO SUMMARY</b>\n<b>Data:</b> 2026-08-31 EOD\n\nCapital Base: \u20b9300,000.00\nCommitted Capital: \u20b90.00\nCurrent Market Value: \u20b90.00\nRealised P&L: \u20b90.00\nUnrealised P&L: \u20b90.00\nTotal P&L: \u20b90.00\nDaily Change: \u20b90.00\nPortfolio Return: +0.00%\n\nOpen Positions: 0\nPending Setups: 0\nInitial Risk: \u20b90.00\nOpen Risk to Stops: \u20b90.00\nTotal / Average R: +0.00R / +0.00R\nWinners / Losers / Flat: 0 / 0 / 0\nBest / Worst: N/A (no open positions)",
   "delivery": {
     "sent": true,
     "message_count": 3,
     "reason": "sent"
   },
   "portfolio_snapshot": {
-    "portfolio_date": "2026-08-28",
+    "portfolio_date": "2026-08-31",
     "capital_base": 300000.0,
     "committed_capital": 0,
     "market_value": 0,
@@ -42,10 +42,10 @@
   "watch_count": 0,
   "candidate_message_count": 1,
   "diagnostics": {
-    "trade_date": "2026-08-28",
+    "trade_date": "2026-08-31",
     "benchmark_source": "OFFICIAL_INDEX_HISTORY",
     "benchmark_reason": "Official index history used",
-    "benchmark_sessions": 416,
+    "benchmark_sessions": 417,
     "universe_loaded": 0,
     "history_eligible": 0,
     "quality_qualified": 0,
@@ -69,7 +69,7 @@
     "watch_average_score": 0.0,
     "watch_average_trade_plan_score": 0.0
   },
-  "admin_message": "ELIGIBILITY FUNNEL \u2014 V2_COMPATIBLE\nUniverse: 2163\nEligible: 0\nRejected: 2163\nRESTRICTED_SECURITY: 1775\nNOT_IN_CURRENT_NSE_UNIVERSE: 267\nNON_EQ_SERIES: 120\nTERMINAL_MERGER: 1\n\n\ud83d\udcca MIS ADMIN DIAGNOSTICS\nTrade Date: 2026-08-28\n\nUniverse Loaded: 0\nHistory Eligible: 0\nQuality Qualified: 0\nACTION: 0\nWATCH: 0\nREJECT: 0\n\nBenchmark: OFFICIAL_INDEX_HISTORY\nBenchmark Sessions: 416\nReason: Official index history used\n\nTop Rejection: None\nAverage ACTION Score: 0.00\nAverage ACTION RR(T1): 0.00R\nAverage WATCH Score: 0.00",
+  "admin_message": "ELIGIBILITY FUNNEL \u2014 V2_COMPATIBLE\nUniverse: 2163\nEligible: 0\nRejected: 2163\nRESTRICTED_SECURITY: 1775\nNOT_IN_CURRENT_NSE_UNIVERSE: 267\nNON_EQ_SERIES: 120\nTERMINAL_MERGER: 1\n\n\ud83d\udcca MIS ADMIN DIAGNOSTICS\nTrade Date: 2026-08-31\n\nUniverse Loaded: 0\nHistory Eligible: 0\nQuality Qualified: 0\nACTION: 0\nWATCH: 0\nREJECT: 0\n\nBenchmark: OFFICIAL_INDEX_HISTORY\nBenchmark Sessions: 417\nReason: Official index history used\n\nTop Rejection: None\nAverage ACTION Score: 0.00\nAverage ACTION RR(T1): 0.00R\nAverage WATCH Score: 0.00",
   "diagnostics_json_path": "output/v2_candidate_diagnostics.json",
   "diagnostics_text_path": "output/v2_candidate_diagnostics.txt",
   "admin_delivery": {

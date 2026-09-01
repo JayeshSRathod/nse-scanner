@@ -1,13 +1,13 @@
 {
-  "run_at": "2026-08-31T00:46:31.380742+00:00",
-  "trade_date": "2026-08-28",
+  "run_at": "2026-09-01T01:23:11.071278+00:00",
+  "trade_date": "2026-08-31",
   "status": "READY",
   "datasets": [
     {
       "dataset": "equity_master",
       "status": "FRESH",
-      "rows": 2574,
-      "source": "corporate_data/raw/equity_master/20260831T004625Z_d08f59add2ed.csv",
+      "rows": 2565,
+      "source": "corporate_data/raw/equity_master/20260901T012306Z_6fbf70b9842f.csv",
       "error": ""
     },
     {
@@ -22,33 +22,33 @@
       "status": "FRESH",
       "rows": 1,
       "source": "",
-      "error": "rejected=1"
+      "error": ""
     },
     {
       "dataset": "corporate_actions",
       "status": "FRESH",
-      "rows": 142,
+      "rows": 109,
       "source": "",
       "error": ""
     },
     {
       "dataset": "calculated_market_cap",
       "status": "FRESH",
-      "rows": 2267,
+      "rows": 2268,
       "source": "",
       "error": ""
     },
     {
       "dataset": "surveillance",
       "status": "FRESH",
-      "rows": 3138,
+      "rows": 3144,
       "source": "",
       "error": ""
     },
     {
       "dataset": "current_market_cap",
       "status": "FRESH",
-      "rows": 2255,
+      "rows": 2256,
       "source": "",
       "error": ""
     }
