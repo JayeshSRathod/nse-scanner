@@ -100,5 +100,14 @@
   },
   "2026-09-01:portfolio_pnl:6:1:d7f4e1e31279a6e8": {
     "status": "sent"
+  },
+  "2026-09-02:fresh_candidates:3:1:2711f71b7338e7de": {
+    "status": "sent"
+  },
+  "2026-09-02:lifecycle:6:1:4773064db20f7a25": {
+    "status": "sent"
+  },
+  "2026-09-02:portfolio_pnl:6:1:7499a7456cc4dde6": {
+    "status": "sent"
   }
 }
