@@ -14,6 +14,8 @@ import pandas as pd
 from .discovery import discover, load_market_data
 from .multi_horizon.config import shadow_enabled
 from .multi_horizon.engine import run_shadow
+from v2.database import V2Database
+from v2.tradeability import evaluate_tradeability, summarize as summarize_tradeability
 
 
 def _wma(series: pd.Series, length: int) -> pd.Series:
@@ -23,6 +25,33 @@ def _wma(series: pd.Series, length: int) -> pd.Series:
 
 def _hma(series: pd.Series, length: int) -> pd.Series:
     return _wma(2 * _wma(series, length // 2) - _wma(series, length), int(length ** 0.5))
+
+
+def _tradeable_prices(prices: pd.DataFrame, db_path: str | Path) -> tuple[pd.DataFrame, dict]:
+    """Apply the common current-security gate before either Old+Hull path.
+
+    The Old+Hull system retains independent PAPER scoring and state; it only
+    shares the read-only universe safety gate used by the other scanners.
+    """
+    if prices.empty:
+        return prices, {"evaluated": 0, "eligible": 0, "rejected": 0}
+    trade_date = pd.Timestamp(prices["trade_date"].max()).date().isoformat()
+    database = V2Database(db_path)
+    master = database.load_symbol_master(trade_date)
+    metadata = {str(row["symbol"]): row.to_dict() for _, row in master.iterrows()} if not master.empty else {}
+    restricted = database.load_restricted_symbols(trade_date)
+    lifecycle_registry = database.load_lifecycle_registry()
+    session_calendar = tuple(sorted(pd.to_datetime(prices["trade_date"]).dt.date.astype(str).unique()))
+    gateway = {
+        str(symbol): evaluate_tradeability(
+            str(symbol), frame, market_date=trade_date, master_row=metadata.get(str(symbol)),
+            restricted_reason=restricted.get(str(symbol)), lifecycle_event=lifecycle_registry.get(str(symbol)),
+            session_calendar=session_calendar, require_metadata=bool(metadata),
+        )
+        for symbol, frame in prices.groupby("symbol", sort=True)
+    }
+    allowed = {symbol for symbol, result in gateway.items() if result.eligible and not result.entry_blocked}
+    return prices[prices["symbol"].astype(str).isin(allowed)].copy(), summarize_tradeability(gateway)
 
 
 def alignment(frame: pd.DataFrame) -> dict:
@@ -50,6 +79,7 @@ def run_local(db_path: str = "nse_scanner.db", as_of: str | None = None, top_n: 
               comparison_state_path: str | Path | None = None, paper_state_path: str | Path | None = None) -> dict:
     """Run the frozen baseline; optionally attach a non-delivered shadow comparison."""
     prices = load_market_data(db_path, as_of)
+    prices, tradeability = _tradeable_prices(prices, db_path)
     result = discover(prices, top_n=top_n)
     rows = result.shortlist.to_dict(orient="records")
     frames = {symbol: frame for symbol, frame in prices.groupby("symbol")}
@@ -64,7 +94,7 @@ def run_local(db_path: str = "nse_scanner.db", as_of: str | None = None, top_n: 
             "as_of_date": result.as_of_date, "parity": "PYTHON_RULES_ACTIVE", "paper_entries_enabled": True,
             "eligible": result.eligible, "discovery_qualified": len(rows), "ready": sum(r["hull_state"] == "READY" for r in rows),
             "watch": sum(r["hull_state"] == "WATCH" for r in rows), "rejected": result.rejected, "shortlist": rows,
-            "state": "PAPER_EOD_ACTIVE"}
+            "state": "PAPER_EOD_ACTIVE", "tradeability": tradeability}
     if shadow_enabled():
         # The report artifact is the comparison surface during the 20-session
         # evaluation. It never changes the baseline shortlist or Telegram UX.

@@ -55,3 +55,12 @@ def test_missing_master_fails_closed_only_when_master_is_available():
                                      session_calendar=("2026-08-25",), require_metadata=False)
     assert strict.reason_code == "NOT_IN_CURRENT_NSE_UNIVERSE"
     assert bootstrap.eligible
+
+
+def test_etf_is_rejected_even_when_its_master_series_is_eq():
+    result = evaluate_tradeability("NEXT50IETF", frame("NEXT50IETF", ["2026-08-25"]),
+                                   market_date="2026-08-25",
+                                   master_row={"series": "EQ", "active": 1, "company_name": "Nifty Next 50 ETF"},
+                                   session_calendar=("2026-08-25",))
+    assert not result.eligible
+    assert result.reason_code == "ETF_SECURITY"

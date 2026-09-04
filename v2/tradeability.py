@@ -34,6 +34,20 @@ def _active(value: object) -> bool:
     return str(value).strip().lower() not in FALSE_VALUES
 
 
+def _is_etf(symbol: str, master_row: Mapping[str, object]) -> bool:
+    """Reject exchange-traded funds even when an upstream master labels them EQ.
+
+    NSE equity-series metadata alone is not enough to distinguish all ETFs.
+    Prefer an explicit instrument classification when supplied, then use the
+    security name and conventional NSE ETF ticker suffix as conservative
+    fallbacks.  This gateway is shared by every scanner.
+    """
+    fields = ("instrument_type", "instrument", "security_type", "asset_type")
+    explicit = " ".join(str(master_row.get(field) or "") for field in fields).upper()
+    name = str(master_row.get("company_name") or master_row.get("name") or "").upper()
+    return "ETF" in explicit or "ETF" in name or symbol.upper().endswith("ETF")
+
+
 def evaluate_tradeability(
     symbol: str,
     frame: pd.DataFrame,
@@ -67,6 +81,8 @@ def evaluate_tradeability(
         return TradeabilityResult(symbol, False, "NOT_IN_CURRENT_NSE_UNIVERSE", "SECURITY_MASTER", entry_blocked=True)
     if master_row is None:
         master_row = {"series": "EQ", "active": 1}
+    if _is_etf(symbol, master_row):
+        return TradeabilityResult(symbol, False, "ETF_SECURITY", "SECURITY_MASTER", entry_blocked=True)
     series = str(master_row.get("series") or "").upper()
     if series != "EQ":
         return TradeabilityResult(symbol, False, "NON_EQ_SERIES", "SECURITY_MASTER", entry_blocked=True, detail=series)

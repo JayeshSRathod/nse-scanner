@@ -7,7 +7,7 @@ from old_nse_hull.multi_horizon.engine import run_shadow
 from old_nse_hull.multi_horizon.features import latest_features
 from old_nse_hull.multi_horizon.telegram import MAX_MESSAGE_CHARS, render_messages
 from old_nse_hull.multi_horizon.comparison import summarize
-from old_nse_hull.engine import render_period_report
+from old_nse_hull.engine import _tradeable_prices, render_period_report
 from old_nse_hull.multi_horizon.paper_lifecycle import update as update_paper_lifecycle
 from old_nse_hull.multi_horizon.trade_levels import build_levels
 from old_nse_hull.multi_horizon.market_context import load_context
@@ -48,6 +48,23 @@ def test_shadow_records_lifecycle_without_touching_baseline_tables(tmp_path):
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert tables == {"old_nse_hull_multi_horizon_daily"}
         assert conn.execute("SELECT COUNT(*) FROM old_nse_hull_multi_horizon_daily").fetchone()[0] == 2
+
+
+def test_old_hull_tradeability_gate_excludes_etf_and_terminal_merger(tmp_path, monkeypatch):
+    lifecycle = tmp_path / "corporate_data" / "normalized"
+    lifecycle.mkdir(parents=True)
+    (lifecycle / "security_lifecycle_events.csv").write_text(
+        "symbol,terminal,last_trading_date,event_type,successor_symbol,notes\n"
+        "JBCHEPHARM,1,2025-07-01,AMALGAMATION,TORNTPHARM,merged\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    with sqlite3.connect(tmp_path / "scanner.db"):
+        pass
+    prices = _prices().assign(symbol=lambda frame: frame["symbol"].replace({"LEADER": "NEXT50IETF", "LAGGARD": "JBCHEPHARM"}))
+    filtered, summary = _tradeable_prices(prices, tmp_path / "scanner.db")
+    assert filtered.empty
+    assert summary["rejection_counts"] == {"ETF_SECURITY": 1, "TERMINAL_MERGER": 1}
 
 
 def test_shadow_rerun_is_idempotent_for_same_session(tmp_path):
