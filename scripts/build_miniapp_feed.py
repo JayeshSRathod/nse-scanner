@@ -29,6 +29,43 @@ def terminal_symbols() -> set[str]:
         }
 
 
+def etf_symbols() -> set[str]:
+    """Return ETF symbols from durable metadata plus unambiguous NSE tickers.
+
+    Generated reports can outlive a scanner-rule change.  The public feed must
+    therefore enforce the same ETF boundary independently instead of waiting
+    for the next scanner run to overwrite its artifacts.
+    """
+    symbols: set[str] = set()
+    path = ROOT / "corporate_data/normalized/symbol_master.csv"
+    if path.exists():
+        with path.open(encoding="utf-8", newline="") as handle:
+            for row in csv.DictReader(handle):
+                name = str(row.get("company_name") or "").upper()
+                if "ETF" in name or "EXCHANGE TRADED FUND" in name:
+                    symbols.add(str(row.get("symbol") or "").upper())
+    # NSE ETF codes are usually explicit, but a few current products use a
+    # provider/index abbreviation rather than the ETF suffix.
+    explicit_prefixes = ("HDFCNIF", "HDFCPVT", "MOSMALL", "MOMENTUM")
+    for source in (ROOT / "output/penny_microcap/daily.json", ROOT / "output/pine_hull_daily_run.json",
+                   ROOT / "output/v2_daily_run.json", ROOT / "output/old_nse_hull_daily.json"):
+        data = read_json(str(source.relative_to(ROOT)), {})
+        for symbol in report_symbols(data):
+            if symbol.endswith(("ETF", "BEES")) or symbol.startswith(explicit_prefixes):
+                symbols.add(symbol)
+    return symbols
+
+
+def report_symbols(value) -> set[str]:
+    """Extract symbol fields from a scanner report without string parsing."""
+    if isinstance(value, dict):
+        own = {str(value["symbol"]).upper()} if value.get("symbol") else set()
+        return own | set().union(*(report_symbols(child) for child in value.values()))
+    if isinstance(value, list):
+        return set().union(*(report_symbols(child) for child in value))
+    return set()
+
+
 def number(value):
     return value if isinstance(value, (int, float)) else None
 
@@ -128,12 +165,13 @@ def limit_per_scanner(rows: list[dict], maximum: int = 25) -> list[dict]:
 
 def main() -> int:
     terminal = terminal_symbols()
+    etfs = etf_symbols()
     penny = read_json("output/penny_microcap/daily.json", {})
     hull = read_json("output/pine_hull_daily_run.json", {})
     v3 = read_json("output/v2_daily_run.json", {})
     ladder = read_json("output/old_nse_hull_daily.json", {})
     items = penny_items(penny) + hull_items(hull) + v3_items(v3) + ladder_items(ladder)
-    items = [row for row in items if row["symbol"] and row["symbol"] not in terminal]
+    items = [row for row in items if row["symbol"] and row["symbol"] not in terminal and row["symbol"] not in etfs]
     items = limit_per_scanner(items)
     feed = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -147,12 +185,12 @@ def main() -> int:
         ],
         "items": items,
         "notice": "Paper tracking for research and education only. Not investment advice.",
-        "display_rule": "Up to 25 higher-ranked opportunities per scanner. Ladder requires a score of at least 75.",
+        "display_rule": "Up to 25 higher-ranked opportunities per scanner. ETFs and terminal securities are excluded. Ladder requires a score of at least 75.",
     }
     target = ROOT / "docs/data/feed.json"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(feed, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Mini App feed: {len(items)} visible rows; {len(terminal)} terminal symbols excluded")
+    print(f"Mini App feed: {len(items)} visible rows; {len(terminal)} terminal and {len(etfs)} ETF symbols excluded")
     return 0
 
 

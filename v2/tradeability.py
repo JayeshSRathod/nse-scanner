@@ -39,13 +39,19 @@ def _is_etf(symbol: str, master_row: Mapping[str, object]) -> bool:
 
     NSE equity-series metadata alone is not enough to distinguish all ETFs.
     Prefer an explicit instrument classification when supplied, then use the
-    security name and conventional NSE ETF ticker suffix as conservative
+    security name and conventional NSE ETF ticker conventions as conservative
     fallbacks.  This gateway is shared by every scanner.
     """
     fields = ("instrument_type", "instrument", "security_type", "asset_type")
     explicit = " ".join(str(master_row.get(field) or "") for field in fields).upper()
     name = str(master_row.get("company_name") or master_row.get("name") or "").upper()
-    return "ETF" in explicit or "ETF" in name or symbol.upper().endswith("ETF")
+    ticker = symbol.upper()
+    # A small group of NSE ETFs use provider/index shorthand rather than an
+    # ETF suffix (for example HDFCNIFIT and MOMENTUM50).  These are stable
+    # product-code families, unlike generic short prefixes.
+    etf_prefixes = ("HDFCNIF", "HDFCPVT", "MOSMALL", "MOMENTUM")
+    return ("ETF" in explicit or "ETF" in name or ticker.endswith(("ETF", "BEES"))
+            or ticker.startswith(etf_prefixes))
 
 
 def evaluate_tradeability(

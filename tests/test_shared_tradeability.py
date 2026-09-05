@@ -64,3 +64,12 @@ def test_etf_is_rejected_even_when_its_master_series_is_eq():
                                    session_calendar=("2026-08-25",))
     assert not result.eligible
     assert result.reason_code == "ETF_SECURITY"
+
+
+def test_nse_etf_ticker_conventions_are_rejected_without_name_metadata():
+    for symbol in ("PHARMABEES", "HDFCNIFIT", "HDFCPVTBAN", "MOSMALL250", "MOMENTUM50"):
+        result = evaluate_tradeability(symbol, frame(symbol, ["2026-08-25"]),
+                                       market_date="2026-08-25", master_row=MASTER,
+                                       session_calendar=("2026-08-25",))
+        assert not result.eligible
+        assert result.reason_code == "ETF_SECURITY"
