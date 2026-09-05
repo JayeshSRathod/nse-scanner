@@ -53,7 +53,7 @@ except ImportError as e:
 
 MINI_APP_URL = os.environ.get(
     "MINI_APP_URL",
-    "https://jayeshsrathod.github.io/nse-scanner/nse_miniapp.html"
+    "https://jayeshsrathod.github.io/nse-scanner/"
 )
 
 # Chat IDs that receive the morning scan automatically

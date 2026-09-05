@@ -3,10 +3,11 @@ from __future__ import annotations
 
 from html import escape
 
-from telegram_dashboard import status_label
+from telegram_dashboard import status_icon, status_label
 
 
-MAX_MESSAGE_CHARS = 3950
+# Leave room for the common PAPER footer and page indicator after card packing.
+MAX_MESSAGE_CHARS = 3850
 
 
 def _score(row: dict, horizon: str) -> str:
@@ -23,21 +24,19 @@ def _card(row: dict) -> str:
     atr = float(row.get("atr", 0) or 0)
     if levels.get("eligible_for_paper") and trigger:
         entry = f"₹{float(trigger):,.2f}–₹{float(trigger) + 0.15 * atr:,.2f}"
-        readiness = f"🟢 {status_label('READY')}" if str(row.get("lifecycle_status")) in {"NEW_TRIGGER", "NEWLY_QUALIFIED", "UPGRADED"} else f"🟡 {status_label('CONFIRMING')}"
+        state = "READY" if str(row.get("lifecycle_status")) in {"NEW_TRIGGER", "NEWLY_QUALIFIED", "UPGRADED"} else "CONFIRMING"
     else:
         entry = "Awaiting valid structure"
-        readiness = f"⚪ {status_label('WAIT')}"
+        state = "WAIT"
     reason = "Multi-horizon strength • confirmation present" if confirmations != "none" else "Primary horizon qualified • confirmation pending"
     return "\n".join([
         "━━━━━━━━━━━━━━",
-        f"{readiness} • <b><a href=\"{url}\">{symbol}</a></b>",
-        f"Primary: <b>{escape(str(row.get('primary_horizon', '—')))}</b> | Score: <b>{float(row.get('primary_score', 0)):.0f}/100</b>",
-        f"1M {_score(row, '1M')} ✅ • 3M {_score(row, '3M')} {'✅' if '3M' in confirmations else '⚪'}",
-        f"6M {_score(row, '6M')} {'✅' if '6M' in confirmations else '⚪'} • 12M {_score(row, '12M')} {'✅' if '12M' in confirmations else '⚪'}",
+        f"{status_icon(state)} <b><a href=\"{url}\">{symbol}</a> • {status_label(state)} • {float(row.get('primary_score', 0)):.0f}/100</b>",
         f"Entry: {entry}",
-        escape(reason),
-        f"CMP: ₹{float(row.get('close', 0)):,.2f} | ATR: {float(row.get('atr_pct', 0)):.1f}%",
-        "<b>PAPER SHADOW — NOT AN ENTRY</b>",
+        f"CMP ₹{float(row.get('close', 0)):,.2f}",
+        f"Context: {escape(reason)} • {escape(str(row.get('primary_horizon', '—')))} primary • ATR {float(row.get('atr_pct', 0)):.1f}%",
+        "Next: Await executable closed-bar confirmation",
+        "PAPER ONLY — SHADOW VALIDATION",
     ])
 
 

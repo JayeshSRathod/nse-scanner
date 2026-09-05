@@ -288,6 +288,7 @@ def run_daily(
             "prior_hma21": _number(row["hma21"]), "realised_pnl": 0.0,
             "htf_weekly_bullish": bool(row["weekly_bullish"]), "htf_state": row.get("htf_state", "NEUTRAL"),
             "timing_state": row.get("timing_state", "WEAK"), "daily_hull_bullish": bool(row["daily_bullish"]),
+            "score": _number(row.get("score")),
         }
         state["positions"].append(position)
         created.append(position)

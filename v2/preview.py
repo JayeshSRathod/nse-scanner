@@ -8,7 +8,7 @@ from .candidates import Candidate
 from .freshness import FreshnessStatus
 from .portfolio_risk import Allocation
 from .v3_telegram import currency, paginate_cards, text, ticker
-from telegram_dashboard import status_label
+from telegram_dashboard import status_icon, status_label
 
 
 HORIZON_LABELS = {"1M": "1 month", "3M": "3 months", "6M": "6 months", "12M": "12 months"}
@@ -87,21 +87,18 @@ def _action_card(candidate: Candidate, rank: int, allocations: dict[tuple[str, s
     except (TypeError, ValueError):
         cmp_value = candidate.entry
     lines = [
-        "━━━━━━━━━━━━━━", f"🆕 {ticker(candidate.symbol)} • <b>{status_label('READY')}</b>",
-        f"{text(candidate.primary_horizon)} {text(trigger.title())} • {candidate.score:.0f}/100", "",
+        "━━━━━━━━━━━━━━", f"{status_icon('READY')} {ticker(candidate.symbol)} • <b>{status_label('READY')} • {candidate.score:.0f}/100</b>",
         f"CMP: {_price(cmp_value)}",
+        f"Evidence: {text(candidate.primary_horizon)} {text(trigger.title())} • Weekly HTF {text(htf)}",
         f"Entry: {_price(candidate.entry)}–{_price(entry_high)}",
-        f"SL: {_price(candidate.stop)} • Risk: {candidate.risk_percent:.2f}%",
-        f"T1: {_price(candidate.target1)} • T2: {_price(candidate.target2)}",
-        f"R:R: 1:{candidate.reward_risk_t2:.2f}", "",
-        f"Weekly: {text(htf)} • Route: {text(route)}",
-        f"Validity: {candidate.valid_for_sessions} sessions",
+        f"SL {_price(candidate.stop)} | T1 {_price(candidate.target1)} | T2 {_price(candidate.target2)}",
+        f"Context: Route {text(route)} • Risk {candidate.risk_percent:.2f}% • Valid {candidate.valid_for_sessions} sessions",
     ]
     reasons = _reason_lines(candidate)
     if reasons:
         lines.append("")
         lines.extend(f"✅ {text(reason)}" for reason in reasons[:3])
-    lines.extend(["", "Next: Act only after trigger confirmation"])
+    lines.extend(["Next: Act only after trigger confirmation", "PAPER ONLY"])
     return "\n".join(lines)
 
 
@@ -160,13 +157,9 @@ def _watch_entry_guidance(candidate: Candidate) -> tuple[float, float, float, st
 
 def _watch_card(candidate: Candidate, rank: int) -> str:
     timing = _timing(candidate)
-    readiness = {
-        "READY": f"🟢 {status_label('READY')}", "PULLBACK_REENTRY": f"🟡 {status_label('CONFIRMING')}",
-        "EARLY": f"🔵 {status_label('EARLY')}", "HOLD_TREND": f"🟡 {status_label('CONFIRMING')}",
-        "EXTENDED": f"🟠 {status_label('EXTENDED')}", "WEAK": f"⚪ {status_label('WEAK')}",
-    }.get(timing, f"⚪ {status_label('WAIT')}")
-    lines = ["━━━━━━━━━━━━━━", f"{readiness} • {ticker(candidate.symbol)}",
-             f"{text(candidate.primary_horizon)} • Score {candidate.score:.0f}/100"]
+    state = {"READY": "READY", "PULLBACK_REENTRY": "CONFIRMING", "EARLY": "EARLY",
+             "HOLD_TREND": "CONFIRMING", "EXTENDED": "EXTENDED", "WEAK": "WEAK"}.get(timing, "WAIT")
+    lines = ["━━━━━━━━━━━━━━", f"{status_icon(state)} {ticker(candidate.symbol)} • <b>{status_label(state)} • {candidate.score:.0f}/100</b>"]
     guidance = _watch_entry_guidance(candidate)
     if guidance:
         _preferred, low, high, _basis = guidance
@@ -176,7 +169,7 @@ def _watch_card(candidate: Candidate, rank: int) -> str:
             lines.append(f"Entry: {_price(low)}–{_price(high)}")
     else:
         lines.append("Entry: Awaiting valid structure")
-    lines.append(text(_watch_reason(candidate)))
+    lines.extend([f"Context: {text(_watch_reason(candidate))}", "Next: Await executable closed-bar confirmation", "PAPER ONLY"])
     return "\n".join(lines)
 
 

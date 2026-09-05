@@ -74,8 +74,7 @@ def test_pine_signal_message_matches_compact_daily_candidate_style() -> None:
     assert "New paper entry" in message
     assert "Early watchlist" in message
     assert "Entry: ₹1,500.00–" in message
-    assert "SL: ₹1,450.00" in message
-    assert "T1: ₹1,575.00 • T2: ₹1,650.00" in message
-    assert "✅ Daily Hull bullish" in message
+    assert "SL ₹1,450.00 | T1 ₹1,575.00 | T2 ₹1,650.00" in message
+    assert "Evidence: Hull pullback continuation • Daily Hull bullish" in message
     assert "HULL PINE WATCHLIST" in message
     assert "NSE%3ATCS" in message

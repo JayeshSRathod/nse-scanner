@@ -11,6 +11,12 @@ on:
       - 'output/penny_microcap/daily.json'
       - 'output/pine_hull_daily_run.json'
       - 'corporate_data/normalized/security_lifecycle_events.csv'
+  workflow_run:
+    workflows: ["NSE Pipeline Daily Run", "Old NSE Hull Daily Paper Radar", "Hull Pine EOD Paper System", "Penny Microcap Shadow Daily"]
+    types: [completed]
+    branches: [main]
+  schedule:
+    - cron: '30 0 * * 1-5'
   workflow_dispatch:
 
 permissions:
@@ -24,6 +30,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

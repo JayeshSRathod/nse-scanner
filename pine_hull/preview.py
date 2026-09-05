@@ -4,7 +4,7 @@ from __future__ import annotations
 from html import escape
 from urllib.parse import quote
 
-from telegram_dashboard import status_label
+from telegram_dashboard import status_icon, status_label
 
 
 def _number(value: object, default: float = 0.0) -> float:
@@ -61,34 +61,30 @@ def render_daily_signals(result: dict) -> str:
         lines.extend([
             "",
             "━━━━━━━━━━━━━━",
-            f"{_rank_badge(rank)} {_ticker(position['symbol'])} • {status_label('NEW_TRIGGER')}",
-            "Hull Pullback Continuation",
-            "",
+            f"{status_icon('NEW_TRIGGER')} {_ticker(position['symbol'])} • <b>{status_label('NEW_TRIGGER')} • {_number(position.get('score')):.0f}/100</b>",
+            f"CMP {_price(position.get('last_price', entry))}",
+            "Evidence: Hull pullback continuation • Daily Hull bullish",
             f"Entry: {_price(entry)}–{_price(entry_high)}",
-            f"SL: {_price(position['initial_stop'])}",
-            f"T1: {_price(position['target1'])} • T2: {_price(position['target2'])}",
-            "",
-            f"Weekly: {weekly}",
-            "✅ Daily Hull bullish",
-            "✅ HMA21 > HMA51",
-            "✅ KAMA30 rising",
-            "",
-            "PAPER — entry requires trigger confirmation.",
+            f"SL {_price(position['initial_stop'])} | T1 {_price(position['target1'])} | T2 {_price(position['target2'])}",
+            f"Context: Weekly {weekly} • HMA21 > HMA51 • KAMA30 rising",
+            "Next: Act only after trigger confirmation",
+            "PAPER ONLY",
         ])
 
     if watch:
         lines.extend(["", "👀 <b>HULL PINE WATCHLIST</b>", f"{result.get('trade_date', '-')} EOD • {len(watch)} stocks"])
         for item in watch:
             timing = str(item.get("timing_state", "EARLY"))
-            readiness = f"⚪ {status_label('EXTENDED')}" if item.get("overextended") else f"🔵 {status_label('EARLY')}" if timing == "EARLY" else f"🟡 {status_label('CONFIRMING')}"
+            state = "EXTENDED" if item.get("overextended") else "EARLY" if timing == "EARLY" else "CONFIRMING"
             reason = "Hull rising • commitment pending"
             if item.get("overextended"):
                 reason = "Extended price • wait for reset"
             elif item.get("chop") or item.get("rotational"):
-                readiness, reason = f"⚪ {status_label('WAIT')}", "Sideways movement • confirmation missing"
+                state, reason = "WAIT", "Sideways movement • confirmation missing"
             low, high = _watch_range(item)
-            lines.extend(["", "━━━━━━━━━━━━━━", f"{readiness} • {_ticker(item['symbol'])}",
-                          f"Entry: {_price(low)}–{_price(high)}", reason])
+            lines.extend(["", "━━━━━━━━━━━━━━", f"{status_icon(state)} {_ticker(item['symbol'])} • <b>{status_label(state)} • {_number(item.get('score')):.0f}/100</b>",
+                          f"CMP {_price(item.get('close'))}", f"Entry: {_price(low)}–{_price(high)}", f"Context: {reason}",
+                          "Next: Await executable closed-bar confirmation", "PAPER ONLY"])
         lines.extend(["", "🟢 Watch for entry • 🟡 Wait for confirmation • 🔵 Early watchlist • ⚪ No action yet", "PAPER — enter only after trigger confirmation."])
 
     return "\n".join(lines)

@@ -107,7 +107,7 @@ def test_shadow_cards_paginate_between_complete_cards_only():
                                                       "average_overlap": 8}}})
     assert len(messages) > 1
     assert all(len(message) <= MAX_MESSAGE_CHARS + 80 for message in messages)
-    assert sum(message.count("PAPER SHADOW — NOT AN ENTRY") for message in messages) == 40
+    assert sum(message.count("PAPER ONLY — SHADOW VALIDATION") for message in messages) == 40
 
 
 def test_period_report_keeps_shadow_promotion_blocked_before_20_sessions(tmp_path):

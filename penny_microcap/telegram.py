@@ -29,9 +29,9 @@ def _link(symbol: str) -> str:
 def _card(row: dict) -> str:
     state, metrics = row["state"], row.get("metrics", {})
     lines = ["━━━━━━━━━━━━━━", f'{ICONS.get(state, "⚪")} <b>{_link(row["symbol"])} • {status_label(state)} • {row["score"]:.0f}/100</b>',
-             f'CMP ₹{row["close"]:.2f}', f'5D {metrics.get("return_5d_pct", 0):+.1f}% • Turnover {metrics.get("turnover_ratio", 0):.1f}× normal']
+             f'CMP ₹{row["close"]:.2f}', f'Evidence: 5D {metrics.get("return_5d_pct", 0):+.1f}% • Turnover {metrics.get("turnover_ratio", 0):.1f}× normal']
     if row.get("entry_low") is not None:
-        lines.append(f'Probable entry ₹{row["entry_low"]:.2f}–₹{row["entry_high"]:.2f}')
+        lines.append(f'Entry: ₹{row["entry_low"]:.2f}–₹{row["entry_high"]:.2f}')
     if metrics.get("liquidity_tier") == "HIGH":
         lines.append("Liquidity: <b>High</b>")
     if state == "CIRCUIT_LOCKED":

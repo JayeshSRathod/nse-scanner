@@ -21,9 +21,19 @@ STATUS_LABELS = {
     "WEAK": "No action yet",
 }
 
+STATUS_ICONS = {
+    "EARLY": "🔵", "EARLY_RADAR": "🔵", "CONFIRMING": "🟡", "READY": "🟢",
+    "NEW_TRIGGER": "🟢", "NEWLY_QUALIFIED": "🟢", "OPEN": "🟢",
+    "EXTENDED": "🟠", "CIRCUIT_LOCKED": "🔴", "WAIT": "⚪", "WEAK": "⚪",
+}
+
 
 def status_label(state: object, default: str = "No action yet") -> str:
     return STATUS_LABELS.get(str(state or "").upper(), default)
+
+
+def status_icon(state: object, default: str = "⚪") -> str:
+    return STATUS_ICONS.get(str(state or "").upper(), default)
 
 
 def dashboard_url(scanner: str) -> str:
