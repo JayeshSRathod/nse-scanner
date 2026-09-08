@@ -11,8 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from old_nse_hull.delivery import send_message, send_radar, send_trades
-from old_nse_hull.engine import render_paper_trades, render_radar, run_local, save_report
+from old_nse_hull.delivery import send_message, send_radar
+from old_nse_hull.engine import render_radar, run_local, save_report
 from old_nse_hull.multi_horizon.telegram import render_messages as render_shadow_messages
 
 
@@ -50,10 +50,8 @@ def main() -> int:
     print(message)
     if args.send_telegram:
         delivery = send_radar(message)
-        trades_delivery = send_trades(render_paper_trades(report))
         print(f"[TELEGRAM] daily: {'SENT' if delivery.sent else 'FAILED'} ({delivery.reason})")
-        print(f"[TELEGRAM] portfolio: {'SENT' if trades_delivery.sent else 'FAILED'} ({trades_delivery.reason})")
-        if not delivery.sent or not trades_delivery.sent:
+        if not delivery.sent:
             return 2
     if args.send_shadow_preview:
         preview_sent = 0

@@ -9,8 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from old_nse_hull.delivery import send_period
-from old_nse_hull.engine import render_period_report, run_local
+from old_nse_hull.delivery import send_message, send_period
+from old_nse_hull.engine import render_period_report, render_validation_report, run_local
 from old_nse_hull.multi_horizon.comparison import summarize
 
 
@@ -23,9 +23,14 @@ def main() -> int:
     parser.add_argument("--shadow-state", default="old_nse_hull_shadow_state.json")
     parser.add_argument("--send-telegram", action="store_true")
     args = parser.parse_args()
-    message = render_period_report(run_local(args.db), args.period, summarize(args.shadow_state))
+    report, summary = run_local(args.db), summarize(args.shadow_state)
+    message = render_period_report(report, args.period)
     print(message)
     if args.send_telegram and not send_period(message, args.period).sent:
+        return 2
+    validation = render_validation_report(summary)
+    print("\n" + validation)
+    if args.send_telegram and not send_message(validation, "validation").sent:
         return 2
     return 0
 

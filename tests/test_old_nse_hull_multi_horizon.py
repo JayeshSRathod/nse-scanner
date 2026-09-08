@@ -96,7 +96,7 @@ def test_shadow_comparison_ledger_is_idempotent_and_tracks_validation(tmp_path):
     assert persisted["sessions"].values().__iter__().__next__()["overlap_symbols"] == ["LEADER"]
 
 
-def test_shadow_cards_paginate_between_complete_cards_only():
+def test_shadow_validation_is_a_single_non_watchlist_message():
     candidates = [{"symbol": f"S{index}", "lifecycle_status": "NEWLY_QUALIFIED", "primary_horizon": "1M",
                    "primary_score": 80, "confluence_score": 75, "confirming_horizons": ["3M"],
                    "close": 123.45, "atr_pct": 3.2, "score_1m": 80, "score_3m": 75,
@@ -105,17 +105,18 @@ def test_shadow_cards_paginate_between_complete_cards_only():
                                "comparison_summary": {"sessions_observed": 1, "target_sessions": 20,
                                                       "average_baseline_candidates": 25, "average_shadow_candidates": 40,
                                                       "average_overlap": 8}}})
-    assert len(messages) > 1
-    assert all(len(message) <= MAX_MESSAGE_CHARS + 80 for message in messages)
-    assert sum(message.count("PAPER ONLY — SHADOW VALIDATION") for message in messages) == 40
+    assert len(messages) == 1
+    assert "SYSTEM VALIDATION" in messages[0]
+    assert "NOT A WATCHLIST" in messages[0]
+    assert "S0" not in messages[0]
 
 
 def test_period_report_keeps_shadow_promotion_blocked_before_20_sessions(tmp_path):
     summary = summarize(tmp_path / "missing.json")
     report = {"as_of_date": "2026-08-20", "discovery_qualified": 4, "ready": 1, "watch": 3}
     text = render_period_report(report, "weekly", summary)
-    assert "Sessions: 0/20" in text
-    assert "BLOCKED - observation window incomplete" in text
+    assert "WEEKLY SUMMARY" in text
+    assert "Technical model comparison is reported separately" in text
 
 
 def test_trade_levels_reject_a_wide_structural_stop_without_clamping():

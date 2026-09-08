@@ -39,7 +39,7 @@ def _card(row: dict) -> str:
     elif state == "EXTENDED":
         lines.extend([f'Distance {metrics.get("distance_atr", 0):.1f} ATR', "Next: Do not chase; wait for reset"])
     elif state == "READY":
-        lines.extend([f'SL ₹{row["stop"]:.2f} • T1 ₹{row["target1"]:.2f} • T2 ₹{row["target2"]:.2f}', "Next: PAPER entry only after next-session fill rules"])
+        lines.extend([f'Planned SL ₹{row["stop"]:.2f} • T1 ₹{row["target1"]:.2f} • T2 ₹{row["target2"]:.2f}', "Next: The simulator adds this only if the next-session entry rule is met."])
     elif state == "CONFIRMING":
         lines.append("Next: Await executable closed-bar confirmation")
     else:
@@ -64,7 +64,7 @@ TOPIC_TITLES = {
 
 def _header(report: dict, title: str) -> str:
     counts = report.get("counts", {})
-    return "\n".join([title, f'<b>{report.get("as_of_date", "N/A")} EOD • PAPER ONLY</b>',
+    return "\n".join([title, f'<b>{report.get("as_of_date", "N/A")} EOD • SIMULATED WATCHLIST — NO LIVE ORDERS</b>',
         f'Universe {report.get("universe_symbols", 0)} • Selected {report.get("selected", 0)}',
         f'Watch for entry {counts.get("READY",0)} • Waiting for confirmation {counts.get("CONFIRMING",0)} • Early watchlist {counts.get("EARLY_RADAR",0)}', ""])
 
@@ -72,9 +72,9 @@ def _header(report: dict, title: str) -> str:
 def render_topic_messages(report: dict, topic: str, *, limit: int = 3400, cards_per_page: int = 7) -> list[str]:
     if topic == "portfolio":
         positions = report.get("portfolio", [])
-        header = _header(report, "📂 <b>PENNY PAPER PORTFOLIO</b>")
+        header = _header(report, "📂 <b>PENNY PORTFOLIO</b>")
         if not positions:
-            return [header + "No open PAPER positions. READY candidates remain watchlist items until fill rules execute.\n\n⚠️ HIGH-RISK MICROCAP RESEARCH — NOT ADVICE"]
+            return [header + "No simulated positions are open. Watchlist candidates remain watchlist items until the entry rule is met.\n\n⚠️ HIGH-RISK MICROCAP RESEARCH — NOT ADVICE"]
         rows = positions
     elif topic == "system":
         counts = report.get("counts", {})
@@ -85,7 +85,7 @@ def render_topic_messages(report: dict, topic: str, *, limit: int = 3400, cards_
             f'Qualified: {report.get("selected", 0)}',
             f'Early watchlist {counts.get("EARLY_RADAR", 0)} • Waiting for confirmation {counts.get("CONFIRMING", 0)} • Watch for entry {counts.get("READY", 0)}',
             f'Circuit risk {counts.get("CIRCUIT_LOCKED", 0)} • Wait for pullback {counts.get("EXTENDED", 0)}',
-            f'Strategy: {html.escape(str(report.get("strategy_version", "N/A")))} • PAPER',
+            f'Strategy: {html.escape(str(report.get("strategy_version", "N/A")))} • simulated research only',
         ])]
     elif topic in TOPIC_STATES:
         rows = [r for r in report.get("candidates", []) if r["state"] in TOPIC_STATES[topic]]

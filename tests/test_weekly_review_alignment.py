@@ -40,7 +40,7 @@ def test_hull_weekly_review_is_layman_friendly(tmp_path: Path) -> None:
     }), encoding="utf-8")
     message = render_period_message(state_path, period="weekly")
     assert "HULL SCANNER — WEEKLY REVIEW" in message
-    assert "PAPER POSITION OPEN" in message
+    assert "OPEN POSITION" in message
     assert "Price move so far: +4.00%" in message
     assert "KAMA" not in message
     assert "HTF" not in message

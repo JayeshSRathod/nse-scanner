@@ -98,7 +98,7 @@ def _action_card(candidate: Candidate, rank: int, allocations: dict[tuple[str, s
     if reasons:
         lines.append("")
         lines.extend(f"✅ {text(reason)}" for reason in reasons[:3])
-    lines.extend(["Next: Act only after trigger confirmation", "PAPER ONLY"])
+    lines.extend(["Next: The simulated portfolio adds this only after trigger confirmation."])
     return "\n".join(lines)
 
 
@@ -106,8 +106,8 @@ def _action_messages(action_rows: list[Candidate], allocations: dict[tuple[str, 
     if not action_rows:
         return []
     cards = [_action_card(candidate, rank, allocations) for rank, candidate in enumerate(action_rows, 1)]
-    return paginate_cards("📊 <b>NSE V3 — FRESH OPPORTUNITIES</b>", cards,
-                          "⚠️ Screening output—not an automatic buy order.")
+    return paginate_cards("📊 <b>NSE V3 — DAILY WATCHLIST</b>\n<b>ENTRY PLANS • SIMULATED ONLY</b>", cards,
+                          "⚠️ Watchlist output — not an automatic buy order.")
 
 
 def _watch_reason(candidate: Candidate) -> str:
@@ -164,12 +164,12 @@ def _watch_card(candidate: Candidate, rank: int) -> str:
     if guidance:
         _preferred, low, high, _basis = guidance
         if low == high:
-            lines.append(f"Entry: {_price(low)} • confirmation required")
+            lines.append(f"Planned entry: {_price(low)} • confirmation required")
         else:
-            lines.append(f"Entry: {_price(low)}–{_price(high)}")
+            lines.append(f"Planned entry: {_price(low)}–{_price(high)}")
     else:
-        lines.append("Entry: Awaiting valid structure")
-    lines.extend([f"Context: {text(_watch_reason(candidate))}", "Next: Await executable closed-bar confirmation", "PAPER ONLY"])
+        lines.append("Planned entry: Awaiting a valid structure")
+    lines.extend([f"Why it is here: {text(_watch_reason(candidate))}", "Next: Wait for a confirmed end-of-day signal."])
     return "\n".join(lines)
 
 
@@ -185,7 +185,7 @@ def render_candidate_messages(
     timing_counts = Counter(_timing(row) for row in all_rows)
     benchmark = "Official NIFTY index history" if benchmark_source == "OFFICIAL_INDEX_HISTORY" else "Equal-weight NSE universe (official index history unavailable)"
     summary = [
-        "📊 <b>NSE V3 — FRESH OPPORTUNITIES</b>", f"<b>Data:</b> {text(trade_date)} EOD", f"<b>Market regime:</b> {text(regime.upper())}",
+        "📊 <b>NSE V3 — DAILY WATCHLIST</b>", "<b>SIMULATED WATCHLIST • NO LIVE ORDERS</b>", f"<b>Data:</b> {text(trade_date)} EOD", f"<b>Market regime:</b> {text(regime.upper())}",
         f"Data Status: {_status(freshness)}", f"Benchmark: {benchmark}", "", "Scanner Funnel",
         f"Universe Loaded: {evaluated if evaluated is not None else '-'}",
         f"Tradable/Evaluated: {tradable if tradable is not None else (evaluated if evaluated is not None else '-')}",
@@ -204,7 +204,7 @@ def render_candidate_messages(
         cards = [_watch_card(candidate, rank) for rank, candidate in enumerate(watch_rows, 1)]
         legend = "🟢 Watch for entry • 🟡 Wait for confirmation • 🔵 Early watchlist • 🟠 Wait for pullback • ⚪ No action yet\nScreening watchlist—not an active buy signal."
         messages.extend(paginate_cards(
-            f"👀 <b>V3 RADAR WATCHLIST</b>\n{text(trade_date)} EOD • {len(watch_rows)} stocks",
+            f"👀 <b>V3 WATCHLIST SETUPS</b>\n{text(trade_date)} EOD • {len(watch_rows)} stocks",
             cards, legend,
         ))
     return messages

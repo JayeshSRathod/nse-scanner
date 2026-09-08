@@ -45,8 +45,9 @@ def render_daily_signals(result: dict) -> str:
     created = list(result.get("created", []))
     watch = list(result.get("watch", []))
     lines = [
-        "📐 PINE HULL SIGNALS",
-        f"{len(created)} Fresh Paper Entries • {len(watch)} Watch",
+        "📐 <b>PINE HULL — DAILY WATCHLIST</b>",
+        "<b>SIMULATED WATCHLIST • NO LIVE ORDERS</b>",
+        f"{len(created)} new simulated positions • {len(watch)} watchlist setups",
         f"Data: {result.get('trade_date', '-')} close",
         "",
         "Hull55 • HMA21/51 • KAMA30 • ATR14×3.5",
@@ -61,18 +62,17 @@ def render_daily_signals(result: dict) -> str:
         lines.extend([
             "",
             "━━━━━━━━━━━━━━",
-            f"{status_icon('NEW_TRIGGER')} {_ticker(position['symbol'])} • <b>{status_label('NEW_TRIGGER')} • {_number(position.get('score')):.0f}/100</b>",
+            f"{status_icon('READY')} {_ticker(position['symbol'])} • <b>Watch for entry • {_number(position.get('score')):.0f}/100</b>",
             f"CMP {_price(position.get('last_price', entry))}",
             "Evidence: Hull pullback continuation • Daily Hull bullish",
-            f"Entry: {_price(entry)}–{_price(entry_high)}",
+            f"Planned entry: {_price(entry)}–{_price(entry_high)}",
             f"SL {_price(position['initial_stop'])} | T1 {_price(position['target1'])} | T2 {_price(position['target2'])}",
             f"Context: Weekly {weekly} • HMA21 > HMA51 • KAMA30 rising",
-            "Next: Act only after trigger confirmation",
-            "PAPER ONLY",
+            "Next: The simulated portfolio will add it only after the trigger is confirmed.",
         ])
 
     if watch:
-        lines.extend(["", "👀 <b>HULL PINE WATCHLIST</b>", f"{result.get('trade_date', '-')} EOD • {len(watch)} stocks"])
+        lines.extend(["", f"<b>More watchlist setups • {len(watch)} stocks</b>"])
         for item in watch:
             timing = str(item.get("timing_state", "EARLY"))
             state = "EXTENDED" if item.get("overextended") else "EARLY" if timing == "EARLY" else "CONFIRMING"
@@ -83,8 +83,8 @@ def render_daily_signals(result: dict) -> str:
                 state, reason = "WAIT", "Sideways movement • confirmation missing"
             low, high = _watch_range(item)
             lines.extend(["", "━━━━━━━━━━━━━━", f"{status_icon(state)} {_ticker(item['symbol'])} • <b>{status_label(state)} • {_number(item.get('score')):.0f}/100</b>",
-                          f"CMP {_price(item.get('close'))}", f"Entry: {_price(low)}–{_price(high)}", f"Context: {reason}",
-                          "Next: Await executable closed-bar confirmation", "PAPER ONLY"])
-        lines.extend(["", "🟢 Watch for entry • 🟡 Wait for confirmation • 🔵 Early watchlist • ⚪ No action yet", "PAPER — enter only after trigger confirmation."])
+                          f"CMP {_price(item.get('close'))}", f"Planned entry: {_price(low)}–{_price(high)}", f"Why it is here: {reason}",
+                          "Next: Wait for a confirmed end-of-day signal."])
+        lines.extend(["", "🟢 Watch for entry • 🟡 Wait for confirmation • 🔵 Early watchlist • ⚪ No action yet"])
 
     return "\n".join(lines)

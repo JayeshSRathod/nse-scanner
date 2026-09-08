@@ -103,67 +103,62 @@ def run_local(db_path: str = "nse_scanner.db", as_of: str | None = None, top_n: 
 
 
 def render_radar(report: dict) -> str:
-    lines = ["🧪 <b>OLD NSE + HULL — DAILY RADAR</b>", "<b>PAPER SYSTEM</b>",
-             f"<b>Data:</b> {report.get('as_of_date') or 'N/A'} EOD",
-             f"<b>Generated:</b> {report['generated_at']}", "",
-             f"Eligible EQ stocks: {report['eligible']}", f"Discovery qualified: {report['discovery_qualified']}",
-             f"Watch for entry: {report['ready']}", f"Wait for confirmation: {report['watch']}", "",
-             "Hull rules: <b>PYTHON EOD ACTIVE</b>",
-             "Watch for entry means the trend is aligned; wait for the stated trigger.",
-             "", "⚠️ <b>Paper-only output</b>",
-             "• This is a research shortlist, not a live-trading instruction.",
-             "• Watch-for-entry candidates are eligible for the separate paper lifecycle."]
+    lines = ["🪜 <b>OLD NSE + HULL — DAILY WATCHLIST</b>",
+             "<b>SIMULATED WATCHLIST • NO LIVE ORDERS</b>",
+             f"<b>Data:</b> {report.get('as_of_date') or 'N/A'} EOD", "",
+             f"Stocks checked: {report['eligible']} | Setups found: {report['discovery_qualified']}",
+             f"🟢 Watch for entry: {report['ready']} | 🟡 Wait for confirmation: {report['watch']}",
+             "A watchlist is not a position. It becomes a simulated position only after the next-session trigger."]
     if report["shortlist"]:
-        lines.extend(["", "<b>Discovery shortlist</b>"])
+        lines.extend(["", "<b>Today’s watchlist</b>"])
         for row in report["shortlist"][:10]:
-            aligned = ", ".join(name.upper() for name, ok in row.get("timeframes", {}).items() if ok) or "none"
             label = "Watch for entry" if row.get("hull_state") == "READY" else "Watchlist—wait for confirmation"
             signals = ", ".join(str(item).replace("_", " ") for item in row.get("early_signals", ())[:2])
-            reason = signals or "movement structure improving"
-            lines.append(f"• <b>{row['symbol']}</b> — opportunity {row['discovery_score']:.1f}/100 | {label} | {reason}")
+            reason = signals.replace("price accelerating", "price is improving").replace("relative strength accelerating", "strength versus peers is improving") or "price structure is improving"
+            close, atr = float(row.get("close") or 0), float(row.get("atr14") or 0)
+            entry = (f"₹{max(0.01, close + 0.10 * atr):,.2f}–₹{max(0.01, close + 0.25 * atr):,.2f}"
+                     if close > 0 and atr > 0 else "Set after confirmation")
+            symbol = row["symbol"]
+            url = f"https://www.tradingview.com/chart/?symbol=NSE%3A{symbol}"
+            icon = "🟢" if row.get("hull_state") == "READY" else "🟡"
+            lines.extend(["", "━━━━━━━━━━━━━━", f'{icon} <b><a href="{url}">{symbol}</a> • {label} • {row["discovery_score"]:.0f}/100</b>',
+                          f"CMP ₹{close:,.2f}" if close else "CMP unavailable", f"Planned entry: {entry}",
+                          f"Why it is here: {reason}", "Next: Wait for the next trading day’s confirmation."])
     return "\n".join(lines)
 
 
 def render_paper_trades(report: dict) -> str:
-    """Separate Paper Trades topic; READY is explicitly not an entry."""
-    ready = [row for row in report["shortlist"] if row.get("hull_state") == "READY"]
-    lines = ["🧭 <b>OLD+HULL — PAPER TRADE LIFECYCLE</b>",
-             f"<b>Data:</b> {report.get('as_of_date') or 'N/A'} EOD", "",
-             f"Ready setups: {len(ready)}", "Triggered today: 0", "Active paper trades: 0", "Exited today: 0", ""]
-    if not ready:
-        lines.append("No watch-for-entry setups today. No paper entry was created.")
-    for row in ready[:5]:
-        symbol = row["symbol"]
-        url = f"https://www.tradingview.com/chart/?symbol=NSE%3A{symbol}"
-        lines.extend(["━━━━━━━━━━━━━━━━━━", f"🟢 <a href=\"{url}\">{symbol}</a> — WATCH FOR ENTRY — NOT ENTERED",
-                      f"Opportunity score: {row['discovery_score']:.1f}/100 | Rank: {row['discovery_rank']}",
-                      "Price structure is holding across at least three checked periods", "",
-                      "Next step: Wait for the next-session mechanical trigger.",
-                      "⚠️ Watch for entry is not a paper entry. It never uses the same closing price; wait for the next-session trigger."])
-    lines.extend(["", "💼 <b>OLD+HULL — PAPER PORTFOLIO</b>",
-                  "⚠️ SIMULATED RESULTS — NO LIVE ORDERS", "Open paper trades: 0 | Deployed: ₹0.00 | Total P&L: ₹0.00",
-                  "Health: ✅ Radar data current · No lifecycle state created yet"])
-    return "\n".join(lines)
+    """Compatibility text for a portfolio topic before a baseline lifecycle exists."""
+    return "\n".join(["💼 <b>OLD NSE + HULL — PORTFOLIO</b>", "SIMULATED PORTFOLIO • NO LIVE ORDERS",
+                      f"Data: {report.get('as_of_date') or 'N/A'} EOD", "",
+                      "No simulated positions are being tracked for this baseline yet.",
+                      "Today’s candidates are in the Daily Watchlist; a watchlist item is not a portfolio position."])
 
 
 def render_period_report(report: dict, period: str, shadow_summary: dict | None = None) -> str:
-    title = "WEEKLY REVIEW" if period == "weekly" else "MONTHLY VALIDATION"
-    lines = [f"📅 <b>OLD NSE + HULL — {title}</b>", "🧪 <b>PAPER SYSTEM</b>",
+    title = "WEEKLY SUMMARY" if period == "weekly" else "MONTHLY SUMMARY"
+    lines = [f"📅 <b>OLD NSE + HULL — {title}</b>", "SIMULATED WATCHLIST • NO LIVE ORDERS",
              f"Latest data: {report.get('as_of_date') or 'N/A'} EOD", "",
-             f"Old NSE discovery qualified: {report['discovery_qualified']}",
-             f"Watch for entry: {report['ready']} | Wait for confirmation: {report['watch']}",
-             "Triggered entries: 0 | Closed paper trades: 0", "",
-             "System comparison: N/A — equivalent closed-lifecycle baseline unavailable.",
-             "Status: Continue PAPER observation; no live orders."]
-    if shadow_summary is not None:
-        status = "REVIEW REQUIRED - no automatic promotion" if shadow_summary.get("validation_ready") else "BLOCKED - observation window incomplete"
-        lines.extend(["", "<b>Multi-horizon shadow validation</b>",
-                      f"Sessions: {shadow_summary.get('sessions_observed', 0)}/{shadow_summary.get('target_sessions', 20)} | Remaining: {shadow_summary.get('sessions_remaining', 20)}",
-                      f"Average candidates: baseline {shadow_summary.get('average_baseline_candidates', 0)} | shadow {shadow_summary.get('average_shadow_candidates', 0)} | overlap {shadow_summary.get('average_overlap', 0)}",
-                      f"Promotion gate: <b>{status}</b>"])
-        for item in shadow_summary.get("recent_sessions", [])[-3:]:
-            lines.append(f"- {item['as_of_date']}: baseline {len(item['baseline_symbols'])} | shadow {len(item['shadow_symbols'])} | overlap {len(item['overlap_symbols'])} | new {item.get('newly_qualified', 0)} | upgraded {item.get('upgraded', 0)}")
+             f"Setups found: {report['discovery_qualified']}",
+             f"Watch for entry: {report['ready']} | Wait for confirmation: {report['watch']}", "",
+             "Portfolio status: no baseline simulated lifecycle has started yet.",
+             "Next: Use the daily watchlist for new setups. Technical model comparison is reported separately."]
     return "\n".join(lines)
+
+
+def render_validation_report(summary: dict | None) -> str:
+    """Keep experimental model comparison out of the normal user watchlist."""
+    summary = summary or {}
+    observed, target = summary.get("sessions_observed", 0), summary.get("target_sessions", 20)
+    remaining = max(0, target - observed)
+    status = "Ready for manual review" if summary.get("validation_ready") else "Still collecting evidence"
+    return "\n".join(["⚙️ <b>OLD NSE + HULL — SYSTEM VALIDATION</b>",
+                      "ADMINISTRATIVE COMPARISON • NOT A WATCHLIST", "",
+                      f"Observation progress: {observed}/{target} trading sessions ({remaining} remaining)",
+                      f"Average setups: baseline {summary.get('average_baseline_candidates', 0)} | experimental model {summary.get('average_shadow_candidates', 0)}",
+                      f"Average overlap: {summary.get('average_overlap', 0)}", "",
+                      f"Status: <b>{status}</b>",
+                      "What this means: this checks whether the experimental model agrees with the main watchlist. It does not change entries or create orders."])
 
 
 def save_report(report: dict, output: str | Path) -> None:

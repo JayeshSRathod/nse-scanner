@@ -75,5 +75,5 @@ def test_each_candidate_state_renders_only_in_its_topic():
 def test_portfolio_and_system_have_dedicated_summaries():
     report = {"as_of_date": "2026-08-25", "strategy_version": "v1", "universe_symbols": 10,
               "selected": 0, "counts": {}, "candidates": []}
-    assert "No open PAPER positions" in render_topic_messages(report, "portfolio")[0]
+    assert "No simulated positions" in render_topic_messages(report, "portfolio")[0]
     assert "HEALTHY" in render_topic_messages(report, "system")[0]

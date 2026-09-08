@@ -56,7 +56,7 @@ def test_every_action_candidate_is_present() -> None:
     for candidate in actions:
         assert candidate.symbol in joined
     assert "Fresh Actionable: 17" in messages[0]
-    assert "NSE V3 — FRESH OPPORTUNITIES" in joined
+    assert "NSE V3 — DAILY WATCHLIST" in joined
     assert all(len(message) <= 4096 for message in messages)
 
 
@@ -68,12 +68,9 @@ def test_action_card_matches_compact_mobile_layout() -> None:
     )
     action = next(message for message in messages if "ABC" in message)
     assert "ABC" in action
-    assert "3M Trend Continuation • 88/100" in action
+    assert "Watch for entry • 88/100" in action
     assert "Entry: ₹100.00–₹100.40" in action
-    assert "SL: ₹94.00" in action
-    assert "T1: ₹109.00 • T2: ₹118.00" in action
-    assert "R:R: 1:3.00" in action
-    assert "Validity: 5 sessions" in action
+    assert "SL ₹94.00 | T1 ₹109.00 | T2 ₹118.00" in action
     assert "✅ Daily trend" in action
     assert "Entry basis:" not in action
     assert "score breakdown:" not in action
@@ -87,9 +84,9 @@ def test_watchlist_is_compact_separate_and_has_preferred_entry() -> None:
         benchmark_source="OFFICIAL_INDEX_HISTORY",
     )
     assert "Fresh Actionable: 0" in messages[0]
-    watch_message = next(message for message in messages if "WATCHLIST" in message)
+    watch_message = next(message for message in messages if "WATCH1" in message)
     assert "WATCH1" in watch_message and "WATCH2" in watch_message
-    assert "Entry: ₹" in watch_message
+    assert "Planned entry: ₹" in watch_message
     assert "Trade plan wait" in watch_message
 
 
@@ -100,8 +97,8 @@ def test_watch_entry_uses_slower_structure_for_long_horizon() -> None:
         evaluated=100, quality_qualified=1,
         benchmark_source="OFFICIAL_INDEX_HISTORY",
     )
-    watch_message = next(message for message in messages if "WATCHLIST" in message)
-    assert "Entry: ₹" in watch_message
+    watch_message = next(message for message in messages if "LONGWATCH" in message)
+    assert "Planned entry: ₹" in watch_message
     assert "not an active buy signal" in watch_message
 
 

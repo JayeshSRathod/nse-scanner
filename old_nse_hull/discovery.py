@@ -60,6 +60,11 @@ def discover(prices: pd.DataFrame, top_n: int = 25) -> DiscoveryResult:
         near_breakout = bool(close.iloc[-1] >= prior_high * 0.97)
         ema_reclaim = bool(close.iloc[-1] >= ema20.iloc[-1] and ema20.iloc[-1] >= ema20.iloc[-4])
         hull_proxy_up = bool(close.rolling(10).mean().iloc[-1] >= close.rolling(10).mean().iloc[-3])
+        high = pd.to_numeric(data.get("high", close), errors="coerce")
+        low = pd.to_numeric(data.get("low", close), errors="coerce")
+        prior_close = close.shift(1)
+        true_range = pd.concat([high - low, (high - prior_close).abs(), (low - prior_close).abs()], axis=1).max(axis=1)
+        atr14 = float(true_range.tail(14).mean()) if true_range.notna().any() else 0.0
         signals = {
             "price_accelerating": ret5 > prior5 or ret10 > prior10,
             "relative_strength_accelerating": ret5 > returns[0] * 5.0 / 22.0,
@@ -80,6 +85,7 @@ def discover(prices: pd.DataFrame, top_n: int = 25) -> DiscoveryResult:
                      "volume_ratio": volume_ratio,
                      "trend_transition": float(ema_reclaim) + float(hull_proxy_up),
                      "breakout_proximity": float(near_breakout),
+                     "close": float(close.iloc[-1]), "atr14": atr14,
                      "early_signal_count": sum(signals.values()),
                      "early_signals": tuple(name for name, passed in signals.items() if passed),
                      "volume_20d": float(volume.tail(20).mean())})

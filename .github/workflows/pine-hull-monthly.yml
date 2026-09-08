@@ -23,9 +23,10 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Initialise and restore shared market data
         run: python -c "import config; from nse_loader import init_database; from nse_market_store import restore_prices; init_database(config.DB_PATH); print(restore_prices(config.DB_PATH, min_days=1))"
-      - name: Send Momentum Ladder monthly PAPER review
+      - name: Send Momentum Ladder monthly summary and validation
         env:
           LADDER_TELEGRAM_BOT_TOKEN: ${{ secrets.LADDER_TELEGRAM_BOT_TOKEN }}
           LADDER_TELEGRAM_CHAT_ID: ${{ secrets.LADDER_TELEGRAM_CHAT_ID }}
           LADDER_REVIEW_TOPIC_ID: ${{ secrets.LADDER_REVIEW_TOPIC_ID }}
+          LADDER_VALIDATION_TOPIC_ID: ${{ secrets.LADDER_VALIDATION_TOPIC_ID }}
         run: python scripts/run_old_nse_hull_period.py monthly --send-telegram

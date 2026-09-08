@@ -6,7 +6,8 @@ from html import escape
 from telegram_dashboard import status_icon, status_label
 
 
-# Leave room for the common PAPER footer and page indicator after card packing.
+# Kept for compatibility with callers/tests; validation now has one compact
+# explanatory message instead of a second public candidate watchlist.
 MAX_MESSAGE_CHARS = 3850
 
 
@@ -41,27 +42,18 @@ def _card(row: dict) -> str:
 
 
 def render_messages(report: dict) -> list[str]:
-    """Split only between complete cards; never truncate HTML or a candidate."""
+    """Render the experimental comparison in the dedicated validation topic."""
     shadow = report.get("multi_horizon_shadow", {})
     summary = shadow.get("comparison_summary", {})
-    title = [
-        "🪜 <b>LADDER RADAR WATCHLIST</b>",
-        "<b>PAPER RESEARCH • BASELINE TELEGRAM UNCHANGED</b>",
-        f"Data: {escape(str(shadow.get('as_of_date', 'N/A')))} EOD",
-        f"Data health: {escape(str(shadow.get('data_health', {}).get('status', 'N/A')))} | Market context: {escape(str(shadow.get('market_context', {}).get('regime', 'AWAITING_DATA')))}",
-        f"Validation: {summary.get('sessions_observed', 0)}/{summary.get('target_sessions', 20)} sessions | "
-        f"Baseline avg {summary.get('average_baseline_candidates', 0)} | Shadow avg {summary.get('average_shadow_candidates', 0)} | Overlap avg {summary.get('average_overlap', 0)}",
-    ]
-    cards = [_card(row) for row in shadow.get("candidates", [])]
-    if not cards:
-        cards = ["No shadow-qualified candidates today. PAPER observation continues."]
-    messages, current = [], "\n".join(title)
-    for card in cards:
-        if len(current) + len(card) + 2 > MAX_MESSAGE_CHARS:
-            messages.append(current)
-            current = "\n".join(title[:2]) + "\n" + card
-        else:
-            current += "\n" + card
-    messages.append(current)
-    total = len(messages)
-    return [f"{message}\n\n🟢 Watch for entry • 🟡 Wait for confirmation • ⚪ No action yet\n<i>Shadow preview {index}/{total}. No live-trading instruction.</i>" for index, message in enumerate(messages, 1)]
+    observed, target = summary.get("sessions_observed", 0), summary.get("target_sessions", 20)
+    remaining = max(0, target - observed)
+    status = "Ready for manual review" if summary.get("validation_ready") else "Still collecting evidence"
+    return ["\n".join([
+        "⚙️ <b>MOMENTUM LADDER — SYSTEM VALIDATION</b>",
+        "ADMINISTRATIVE COMPARISON • NOT A WATCHLIST", f"Data: {escape(str(shadow.get('as_of_date', 'N/A')))} EOD", "",
+        f"Progress: {observed}/{target} sessions ({remaining} remaining)",
+        f"Average setups: main watchlist {summary.get('average_baseline_candidates', 0)} | experimental model {summary.get('average_shadow_candidates', 0)}",
+        f"Average overlap: {summary.get('average_overlap', 0)}", "",
+        f"Status: <b>{status}</b>",
+        "What this means: this compares two research models. It does not alter today’s watchlist or create orders.",
+    ])]

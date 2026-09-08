@@ -34,9 +34,8 @@ def test_paper_radar_identifies_the_active_python_hull_rules():
     report = {"generated_at": "2026-08-19T06:00:00+05:30", "as_of_date": "2026-08-18", "eligible": 2,
               "discovery_qualified": 1, "ready": 0, "watch": 1, "shortlist": [{"symbol": "AAA", "discovery_score": 90.0}]}
     text = render_radar(report)
-    assert "PAPER SYSTEM" in text
-    assert "PYTHON EOD ACTIVE" in text
-    assert "live-trading instruction" in text
+    assert "DAILY WATCHLIST" in text
+    assert "SIMULATED WATCHLIST" in text
     assert "Watch for entry: 0" in text
 
 
@@ -68,5 +67,5 @@ def test_paper_trade_topic_never_treats_ready_as_entered():
     report = {"as_of_date": "2026-08-18", "shortlist": [{"symbol": "AAA", "discovery_score": 90.0,
               "discovery_rank": 1, "hull_state": "READY"}]}
     text = render_paper_trades(report)
-    assert "WATCH FOR ENTRY — NOT ENTERED" in text
-    assert "same closing price" in text
+    assert "PORTFOLIO" in text
+    assert "No simulated positions" in text

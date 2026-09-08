@@ -325,13 +325,13 @@ def render_daily_signals(result: dict) -> str:
     ready_count = sum(1 for row in created if row.get("timing_state") == "READY")
     extended_count = sum(1 for row in watch if row.get("timing_state") == "EXTENDED")
     lines = [
-        "📐 PINE HULL OPPORTUNITY MAP", f"Data: {result['trade_date']} close",
+        "📐 PINE HULL — DAILY WATCHLIST", "SIMULATED WATCHLIST • NO LIVE ORDERS", f"Data: {result['trade_date']} close",
         "Hull55 • HMA21/51 • KAMA30 • ATR14×3.5", "",
         f"🟠 EARLY {early_count} | 🟢 READY {ready_count} | 🔴 EXTENDED {extended_count}",
-        f"Fresh paper entries: {len(created)} | Watch: {len(watch)}",
+        f"New simulated positions: {len(created)} | Watchlist setups: {len(watch)}",
     ]
     if not created:
-        lines.extend(["", "No fresh Pine Core paper entry met the closed-bar rules today."])
+        lines.extend(["", "No new simulated position met the confirmed end-of-day rules today."])
     for index, position in enumerate(created, 1):
         badge = {1: "🥇", 2: "🥈", 3: "🥉"}.get(index, f"#{index}")
         timing = str(position.get("timing_state", "READY"))
@@ -341,7 +341,7 @@ def render_daily_signals(result: dict) -> str:
             "", f"Entry       {_price(position['entry'])}", f"SL          {_price(position['initial_stop'])}",
             f"T1          {_price(position['target1'])}", f"T2          {_price(position['target2'])}", "",
             "✓ Daily Hull bullish", "✓ HMA21 > HMA51", "✓ KAMA30 rising", "✓ Trend commitment confirmed",
-            "", "Paper entry frozen at EOD signal close.",
+            "", "The simulated entry was recorded after the end-of-day signal.",
         ])
     if watch:
         lines.extend(["", "🟡 PINE WATCH — EARLY / EXTENDED"])
@@ -356,14 +356,16 @@ def render_daily_signals(result: dict) -> str:
 
 
 def render_portfolio_message(result: dict) -> str:
-    lines = ["📈 PINE HULL — PAPER PORTFOLIO", f"Data through: {result['trade_date']} close", f"Open: {len(result['open_positions'])} | Total P&L: {_price(result['total_pnl'])}", f"Realised: {_price(result['realised_pnl'])} | Unrealised: {_price(result['unrealised_pnl'])}", ""]
+    lines = ["📈 PINE HULL — PORTFOLIO", "SIMULATED PORTFOLIO • NO LIVE ORDERS",
+             f"Data through: {result['trade_date']} close", f"Open: {len(result['open_positions'])} | Total result: {_price(result['total_pnl'])}",
+             f"Closed-position result: {_price(result['realised_pnl'])} | Open-position result: {_price(result['unrealised_pnl'])}", ""]
     if not result["open_positions"]:
-        return "\n".join(lines + ["No open Pine Hull paper positions."])
+        return "\n".join(lines + ["No simulated Pine Hull positions are open."])
     for position in result["open_positions"]:
         return_pct = ((_number(position['last_price']) / _number(position['entry'])) - 1.0) * 100 if _number(position['entry']) else 0.0
         htf = position.get("htf_state") or ("BULLISH" if position.get("htf_weekly_bullish") else "NEUTRAL")
         timing = position.get("timing_state", "HOLD_TREND")
-        lines.extend([f"{position['symbol']} — {position['state']} | Timing {timing}", f"Entry {_price(position['entry'])} → Close {_price(position['last_price'])} ({return_pct:+.2f}%)", f"SL {_price(position['stop'])} | T1 {_price(position['target1'])}{' ✅' if position.get('t1_hit') else ''} | T2 {_price(position['target2'])}{' ✅' if position.get('t2_hit') else ''}", f"Weekly HTF: {htf}", "Action: Hold only while price respects the current trailing stop.", ""])
+        lines.extend([f"{position['symbol']} — {position['state']} | Timing {timing}", f"Entry {_price(position['entry'])} → Close {_price(position['last_price'])} ({return_pct:+.2f}%)", f"SL {_price(position['stop'])} | T1 {_price(position['target1'])}{' ✅' if position.get('t1_hit') else ''} | T2 {_price(position['target2'])}{' ✅' if position.get('t2_hit') else ''}", f"Weekly trend: {htf}", "Action: Hold only while price stays above the current trailing stop.", ""])
     return "\n".join(lines).strip()
 
 
@@ -374,11 +376,11 @@ def render_period_message(state_path: str | Path, *, period: str) -> str:
     active = [position for position in positions if _active(position)]
     realised = sum(_number(position.get("realised_pnl")) for position in closed)
     title = "📅 HULL SCANNER — WEEKLY REVIEW" if period == "weekly" else "📆 HULL SCANNER — MONTHLY REVIEW"
-    lines = [title, "PAPER REVIEW — NO LIVE ORDERS", f"Latest scanner run: {state.get('last_run') or 'No completed run recorded'}",
-             f"Open paper positions: {len(active)} | Historical closed: {len(closed)}",
-             f"Realised result: {_price(realised)}", ""]
+    lines = [title, "SIMULATED PORTFOLIO REVIEW • NO LIVE ORDERS", f"Latest scanner run: {state.get('last_run') or 'No completed run recorded'}",
+             f"Open positions: {len(active)} | Closed positions: {len(closed)}",
+             f"Result from closed positions: {_price(realised)}", ""]
     if active:
-        lines.append("Open paper positions")
+        lines.append("Open positions")
         for position in active[:12]:
             entry = _number(position.get("entry"))
             current = _number(position.get("last_price"), entry)
@@ -387,13 +389,13 @@ def render_period_message(state_path: str | Path, *, period: str) -> str:
             link = f'<a href="https://www.tradingview.com/chart/?symbol=NSE%3A{symbol}">{symbol}</a>'
             lines.extend([
                 "━━━━━━━━━━━━━━",
-                f"📂 {link} — PAPER POSITION OPEN",
+                f"📂 {link} — OPEN POSITION",
                 f"Entry {_price(entry)} → Latest {_price(current)}",
                 f"Price move so far: {move:+.2f}%",
                 f"Protect below: {_price(position['stop'])}",
-                "Next: Continue only while price stays above the protection level.",
+                "Next: Continue only while price stays above this level.",
             ])
     else:
-        lines.extend(["No Hull paper positions are open.", "Next: No action until a new entry trigger is confirmed."])
-    lines.extend(["", "Research and paper tracking only — not investment advice."])
+        lines.extend(["No simulated positions are open.", "Next: Keep watching until a new entry trigger is confirmed."])
+    lines.extend(["", "This is a simulated research portfolio, not investment advice."])
     return "\n".join(lines)
