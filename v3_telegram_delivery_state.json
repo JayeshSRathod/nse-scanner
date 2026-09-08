@@ -118,5 +118,23 @@
   },
   "2026-09-03:portfolio_pnl:6:1:720858509aaf6afa": {
     "status": "sent"
+  },
+  "2026-09-04:fresh_candidates:3:1:64d2323b53a4ff19": {
+    "status": "sent"
+  },
+  "2026-09-04:lifecycle:6:1:1f85974b5a24e3eb": {
+    "status": "sent"
+  },
+  "2026-09-04:portfolio_pnl:6:1:a60359ee7034ab40": {
+    "status": "sent"
+  },
+  "2026-09-07:fresh_candidates:3:1:07ecef8468313615": {
+    "status": "sent"
+  },
+  "2026-09-07:lifecycle:6:1:3978bb4d61c62076": {
+    "status": "sent"
+  },
+  "2026-09-07:portfolio_pnl:6:1:9f0fe73c59527d8b": {
+    "status": "sent"
   }
 }
