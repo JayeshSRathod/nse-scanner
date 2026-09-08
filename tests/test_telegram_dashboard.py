@@ -5,7 +5,7 @@ def test_plain_language_status_contract():
     assert status_label("EARLY_RADAR") == "Early watchlist"
     assert status_label("CONFIRMING") == "Watchlist—wait for confirmation"
     assert status_label("READY") == "Watch for entry"
-    assert status_label("NEW_TRIGGER") == "New paper entry"
+    assert status_label("NEW_TRIGGER") == "New simulated position"
     assert status_label("EXTENDED") == "Wait for pullback"
     assert status_label("CIRCUIT_LOCKED") == "No entry—circuit risk"
     assert status_label("WAIT") == "No action yet"
