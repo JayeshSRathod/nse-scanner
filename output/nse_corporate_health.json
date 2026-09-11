@@ -1,13 +1,13 @@
 {
-  "run_at": "2026-09-10T00:27:05.589461+00:00",
-  "trade_date": "2026-09-09",
+  "run_at": "2026-09-11T00:22:03.177396+00:00",
+  "trade_date": "2026-09-10",
   "status": "READY",
   "datasets": [
     {
       "dataset": "equity_master",
       "status": "FRESH",
       "rows": 2568,
-      "source": "corporate_data/raw/equity_master/20260910T002657Z_9002e14e0ed6.csv",
+      "source": "corporate_data/raw/equity_master/20260911T002157Z_cba7cbaa0b23.csv",
       "error": ""
     },
     {
@@ -20,14 +20,14 @@
     {
       "dataset": "shareholding",
       "status": "FRESH",
-      "rows": 4,
+      "rows": 3,
       "source": "",
       "error": "rejected=1"
     },
     {
       "dataset": "corporate_actions",
       "status": "FRESH",
-      "rows": 175,
+      "rows": 182,
       "source": "",
       "error": ""
     },
@@ -41,7 +41,7 @@
     {
       "dataset": "surveillance",
       "status": "FRESH",
-      "rows": 3148,
+      "rows": 3149,
       "source": "",
       "error": ""
     },
