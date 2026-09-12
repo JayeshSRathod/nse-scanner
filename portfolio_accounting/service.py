@@ -53,7 +53,7 @@ def market_bars(database, day: str) -> dict:
             continue
         gate = evaluate_tradeability(str(symbol), frame, market_date=day, master_row=metadata.get(str(symbol)),
                                      restricted_reason=restricted.get(str(symbol)), lifecycle_event=registry.get(str(symbol)),
-                                     session_calendar=calendar, require_metadata=True)
+                                     session_calendar=calendar, require_metadata=bool(metadata))
         close, op = float(row['close']), float(row['open'])
         prev = float(frame.iloc[-2]['close']) if len(frame) > 1 else op
         prev_raw = row.get('prev_close')
@@ -67,6 +67,7 @@ def market_bars(database, day: str) -> dict:
             'entry_blocked': bool(one_price or (close == float(row['high']) and gap >= 9.5)),
             'exit_blocked': bool(one_price or (close == float(row['low']) and gap <= -9.5)),
             'review_required': bool(gate.stage == 'CORPORATE_LIFECYCLE' or gate.detail == 'MATERIAL_CORPORATE_ACTION_REVIEW'),
+            'metadata_available': bool(metadata),
         }
     return bars
 

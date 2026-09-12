@@ -218,3 +218,16 @@ def test_rollout_is_opt_in(monkeypatch):
     assert rollout_directory() is None
     monkeypatch.setenv('UNIFORM_PAPER_PORTFOLIOS', 'true')
     assert rollout_directory() == 'paper_portfolios'
+
+
+def test_disposable_runner_without_master_matches_existing_gateway(tmp_path):
+    from tests.test_pine_hull_engine import _database, _frame
+    from portfolio_accounting.service import market_bars
+    from v2.database import V2Database
+    frame = _frame(end=200)
+    db = tmp_path / 'market.db'
+    _database(db, frame)
+    day = frame['trade_date'].iloc[-1].date().isoformat()
+    bars = market_bars(V2Database(db), day)
+    assert bars['PINE']['entry_allowed'] is True
+    assert bars['PINE']['metadata_available'] is False

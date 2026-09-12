@@ -169,6 +169,8 @@ def _apply(state: dict, day: str, bars: dict, candidates: list[dict], config: Le
     state['events'].extend(events)
     state['last_date'] = day
     result = _summary(state, day)
+    if any(b.get('metadata_available') is False for b in bars.values()):
+        result['warnings'].append('Security master unavailable; using the existing scanner gateway fallback for this session.')
     if result['available_cash'] < -0.01:
         raise ValueError("New paper ledger cannot borrow cash")
     result['events_today'] = events
