@@ -71,6 +71,9 @@ def _header(report: dict, title: str) -> str:
 
 def render_topic_messages(report: dict, topic: str, *, limit: int = 3400, cards_per_page: int = 7) -> list[str]:
     if topic == "portfolio":
+        if report.get("uniform_portfolio") is not None:
+            from portfolio_accounting.render import render_messages as render_portfolio
+            return render_portfolio(report["uniform_portfolio"], limit=limit)
         positions = report.get("portfolio", [])
         header = _header(report, "📂 <b>PENNY PORTFOLIO</b>")
         if not positions:
