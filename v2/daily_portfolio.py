@@ -16,13 +16,24 @@ def process_portfolio_day(
     qualification_by_symbol: Mapping[str, bool] | None = None,
     invalidated_symbols: set[str] | None = None,
     partial_fraction: float = 0.5,
+    skip_processed_session: bool = False,
 ) -> dict[str, list[ProcessedEvent]]:
     """Process every non-terminal position and persist each state transition."""
     qualification_by_symbol = qualification_by_symbol or {}
     invalidated_symbols = invalidated_symbols or set()
     output: dict[str, list[ProcessedEvent]] = {}
+    processed = set()
+    if skip_processed_session:
+        with store.connect() as conn:
+            processed = {r[0] for r in conn.execute(
+                "SELECT DISTINCT trade_id FROM v2_position_events WHERE event_date=? "
+                "AND event_type IN ('ENTER','MARK','TRAIL','T1_HIT','STOP_HIT','T2_HIT','CANCEL')",
+                (trade_date,),
+            )}
 
     for position in store.open_positions():
+        if position.trade_id in processed:
+            continue
         bar = bars_by_symbol.get(position.symbol)
         if bar is None:
             continue
