@@ -172,5 +172,23 @@
   },
   "2026-09-11:portfolio_pnl:6:1:8011614f3893467d": {
     "status": "sent"
+  },
+  "2026-09-14:fresh_candidates:3:1:ccaf1a89e5faf61f": {
+    "status": "sent"
+  },
+  "2026-09-14:fresh_candidates:3:2:0c3c1f65dfd600fc": {
+    "status": "sent"
+  },
+  "2026-09-14:fresh_candidates:3:3:d8f58687287c72e8": {
+    "status": "sent"
+  },
+  "2026-09-14:fresh_candidates:3:4:d6a797993a644345": {
+    "status": "sent"
+  },
+  "2026-09-14:lifecycle:6:1:f5bd5885c21b9060": {
+    "status": "sent"
+  },
+  "2026-09-14:portfolio_pnl:6:1:36a03604297b6f20": {
+    "status": "sent"
   }
 }

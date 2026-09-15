@@ -1,10 +1,79 @@
 {
   "schema_version": 1,
-  "exported_at": "2026-09-14T00:22:17.065649+00:00",
+  "exported_at": "2026-09-15T00:49:48.287351+00:00",
   "tables": {
-    "v2_positions": [],
-    "v2_position_events": [],
-    "v2_watchlist_memory": [],
+    "v2_positions": [
+      {
+        "trade_id": "b006b039-965e-4fbd-933f-1ba4d5f0b6e8",
+        "symbol": "METROPOLIS",
+        "horizon": "SWING_1_3M",
+        "state": "READY",
+        "created_date": "2026-09-14",
+        "updated_date": "2026-09-14",
+        "entry": 609.13,
+        "initial_stop": 574.05,
+        "stop": 574.05,
+        "target1": 661.75,
+        "target2": 714.37,
+        "quantity": 85.0,
+        "remaining_quantity": 85.0,
+        "realised_quantity": 0.0,
+        "realised_pnl": 0.0,
+        "last_price": 585.5,
+        "exit_price": null,
+        "reason": "ready_carried_forward",
+        "progression_stage": "ENTRY_PENDING"
+      }
+    ],
+    "v2_position_events": [
+      {
+        "event_id": 1,
+        "trade_id": "b006b039-965e-4fbd-933f-1ba4d5f0b6e8",
+        "event_date": "2026-09-14",
+        "event_type": "CREATE",
+        "from_state": null,
+        "to_state": "WATCH",
+        "price": null,
+        "reason": "created",
+        "payload_json": "{\"trade_id\": \"b006b039-965e-4fbd-933f-1ba4d5f0b6e8\", \"symbol\": \"METROPOLIS\", \"horizon\": \"SWING_1_3M\", \"state\": \"WATCH\", \"created_date\": \"2026-09-14\", \"updated_date\": \"2026-09-14\", \"entry\": 609.13, \"initial_stop\": 574.05, \"stop\": 574.05, \"target1\": 661.75, \"target2\": 714.37, \"quantity\": 85, \"remaining_quantity\": 85, \"realised_quantity\": 0.0, \"realised_pnl\": 0.0, \"last_price\": null, \"exit_price\": null, \"reason\": \"created\", \"progression_stage\": \"ENTRY_PENDING\"}",
+        "created_at": "2026-09-15 00:49:21"
+      },
+      {
+        "event_id": 2,
+        "trade_id": "b006b039-965e-4fbd-933f-1ba4d5f0b6e8",
+        "event_date": "2026-09-14",
+        "event_type": "QUALIFY",
+        "from_state": "WATCH",
+        "to_state": "READY",
+        "price": 585.5,
+        "reason": "daily_qualification_confirmed",
+        "payload_json": "{\"trade_id\": \"b006b039-965e-4fbd-933f-1ba4d5f0b6e8\", \"symbol\": \"METROPOLIS\", \"horizon\": \"SWING_1_3M\", \"state\": \"READY\", \"created_date\": \"2026-09-14\", \"updated_date\": \"2026-09-14\", \"entry\": 609.13, \"initial_stop\": 574.05, \"stop\": 574.05, \"target1\": 661.75, \"target2\": 714.37, \"quantity\": 85.0, \"remaining_quantity\": 85.0, \"realised_quantity\": 0.0, \"realised_pnl\": 0.0, \"last_price\": 585.5, \"exit_price\": null, \"reason\": \"daily_qualification_confirmed\", \"progression_stage\": \"ENTRY_PENDING\"}",
+        "created_at": "2026-09-15 00:49:23"
+      },
+      {
+        "event_id": 3,
+        "trade_id": "b006b039-965e-4fbd-933f-1ba4d5f0b6e8",
+        "event_date": "2026-09-14",
+        "event_type": "MARK",
+        "from_state": "READY",
+        "to_state": "READY",
+        "price": 585.5,
+        "reason": "ready_carried_forward",
+        "payload_json": "{\"trade_id\": \"b006b039-965e-4fbd-933f-1ba4d5f0b6e8\", \"symbol\": \"METROPOLIS\", \"horizon\": \"SWING_1_3M\", \"state\": \"READY\", \"created_date\": \"2026-09-14\", \"updated_date\": \"2026-09-14\", \"entry\": 609.13, \"initial_stop\": 574.05, \"stop\": 574.05, \"target1\": 661.75, \"target2\": 714.37, \"quantity\": 85.0, \"remaining_quantity\": 85.0, \"realised_quantity\": 0.0, \"realised_pnl\": 0.0, \"last_price\": 585.5, \"exit_price\": null, \"reason\": \"ready_carried_forward\", \"progression_stage\": \"ENTRY_PENDING\"}",
+        "created_at": "2026-09-15 00:49:23"
+      }
+    ],
+    "v2_watchlist_memory": [
+      {
+        "symbol": "METROPOLIS",
+        "horizon": "POSITIONAL_6_12M",
+        "first_seen_date": "2026-09-14",
+        "last_seen_date": "2026-09-14",
+        "last_score": 89.16,
+        "active": 1,
+        "reason": "selected_candidate"
+      }
+    ],
     "v2_portfolio_snapshots": [
       {
         "portfolio_date": "2026-08-03",
@@ -485,6 +554,22 @@
         "pending_setups": 0,
         "snapshot_json": "{\"portfolio_date\": \"2026-09-11\", \"capital_base\": 300000.0, \"committed_capital\": 0, \"market_value\": 0, \"realised_pnl\": 0, \"unrealised_pnl\": 0, \"total_pnl\": 0, \"portfolio_return_pct\": 0.0, \"initial_risk\": 0, \"open_risk_to_stops\": 0, \"open_positions\": 0, \"pending_setups\": 0}",
         "created_at": "2026-09-14 00:22:02"
+      },
+      {
+        "portfolio_date": "2026-09-14",
+        "capital_base": 300000.0,
+        "committed_capital": 51776.05,
+        "market_value": 0.0,
+        "realised_pnl": 0.0,
+        "unrealised_pnl": 0.0,
+        "total_pnl": 0.0,
+        "portfolio_return_pct": 0.0,
+        "initial_risk": 2981.8,
+        "open_risk_to_stops": 0.0,
+        "open_positions": 0,
+        "pending_setups": 1,
+        "snapshot_json": "{\"portfolio_date\": \"2026-09-14\", \"capital_base\": 300000.0, \"committed_capital\": 51776.05, \"market_value\": 0, \"realised_pnl\": 0.0, \"unrealised_pnl\": 0, \"total_pnl\": 0.0, \"portfolio_return_pct\": 0.0, \"initial_risk\": 2981.8, \"open_risk_to_stops\": 0, \"open_positions\": 0, \"pending_setups\": 1}",
+        "created_at": "2026-09-15 00:49:23"
       }
     ]
   }
