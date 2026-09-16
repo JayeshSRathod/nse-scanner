@@ -17,12 +17,12 @@
   "selected": 0,
   "created_positions": 0,
   "portfolio_positions": 1,
-  "candidate_message": "\ud83d\udcca <b>NSE V3 \u2014 DAILY WATCHLIST</b>\n<b>SIMULATED WATCHLIST \u2022 NO LIVE ORDERS</b>\n<b>Data:</b> 2026-09-15 EOD\n<b>Market regime:</b> NEUTRAL\nData Status: Fresh\nBenchmark: Official NIFTY index history\n\nScanner Funnel\nUniverse Loaded: 2175\nTradable/Evaluated: 0\nQuality Qualified: 0\nFresh Actionable: 0\nFocus Watchlist: 0\n\nOpportunity stages\n\ud83d\udd35 Early watchlist: 0 | \ud83d\udfe2 Watch for entry: 0\n\ud83d\udfe1 Wait for confirmation: 0 | \ud83d\udfe0 Wait for pullback: 0\n\u26aa No action yet: 0\n\nNo new candidates qualified today.\n\n<b>Reason</b>\n\u2022 No candidate crossed the qualification threshold\n\u2022 Existing leaders remain under lifecycle monitoring",
+  "candidate_message": "\ud83d\udcca <b>NSE V3 \u2014 DAILY WATCHLIST</b>\n<b>SIMULATED WATCHLIST \u2022 NO LIVE ORDERS</b>\n<b>Data:</b> 2026-09-15 EOD\n<b>Market regime:</b> NEUTRAL\nData Status: Fresh\nBenchmark: Official NIFTY index history\n\nScanner Funnel\nUniverse Loaded: 2174\nTradable/Evaluated: 0\nQuality Qualified: 0\nFresh Actionable: 0\nFocus Watchlist: 0\n\nOpportunity stages\n\ud83d\udd35 Early watchlist: 0 | \ud83d\udfe2 Watch for entry: 0\n\ud83d\udfe1 Wait for confirmation: 0 | \ud83d\udfe0 Wait for pullback: 0\n\u26aa No action yet: 0\n\nNo new candidates qualified today.\n\n<b>Reason</b>\n\u2022 No candidate crossed the qualification threshold\n\u2022 Existing leaders remain under lifecycle monitoring",
   "portfolio_message": "\ud83e\udded <b>NSE V3 \u2014 PORTFOLIO LIFECYCLE</b>\n<b>Data:</b> 2026-09-15 EOD\nOpen Positions: 1 | Pending Setups: 1\n\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\nTrade ID: b006b039-965e-4fbd-933f-1ba4d5f0b6e8\nSymbol: <a href=\"https://www.tradingview.com/chart/?symbol=NSE%3AMETROPOLIS\"><b>METROPOLIS</b></a>\nHorizon: SWING_1_3M\nProgression: ENTRY_PENDING\nState: READY\n\nEntry: \u20b9609.13 | Current Close: \u20b9572.50\nInitial Stop: \u20b9574.05 | Current Stop: \u20b9574.05\nTarget 1: \u20b9661.75 | Target 2: \u20b9714.37\nCurrent R: -1.04R | Holding Period: 1 sessions\nQuantity: 85/85 open\nRealised P&L: \u20b90.00 | Unrealised P&L: \u20b9-3,113.55\n\nAction: Buy only after the entry trigger is reached.\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501",
-  "portfolio_summary_message": "\ud83d\udcbc <b>NSE V3 \u2014 DAILY PORTFOLIO SUMMARY</b>\n<b>Data:</b> 2026-09-15 EOD\n\nCapital Base: \u20b9300,000.00\nCommitted Capital: \u20b951,776.05\nCurrent Market Value: \u20b90.00\nRealised P&L: \u20b90.00\nUnrealised P&L: \u20b90.00\nTotal P&L: \u20b90.00\nDaily Change: \u20b90.00\nPortfolio Return: +0.00%\n\nOpen Positions: 0\nPending Setups: 1\nInitial Risk: \u20b92,981.80\nOpen Risk to Stops: \u20b90.00\nTotal / Average R: +0.00R / +0.00R\nWinners / Losers / Flat: 0 / 0 / 0\nBest / Worst: N/A (no open positions)\n\nHorizon P&L\nENTRY_PENDING: \u20b9-3,113.55",
+  "portfolio_summary_message": "<b>V3 \u2014 PAPER PORTFOLIO</b>\nData: 2026-09-15 EOD\n\n\nStarting capital: \u20b9300,000.00\nAvailable cash: \u20b9300,000.00\nInvested capital: \u20b90.00\nPending reservations: \u20b951,776.05 (not invested)\nHoldings value: \u20b90.00\nBooked P&L: \u20b90.00\nOpen P&L: \u20b90.00\nRecorded fees: \u20b90.00\nTotal P&L: \u20b90.00 (+0.00%)\nTotal equity: \u20b9300,000.00\nOpen: 0 | Closed: 0 | Pending: 1\nGROSS \u2014 fees not modelled or recorded\nEvidence: RECORDED_PAPER\n\nNo recorded simulated fills in this accounting ledger.\n\nPending entries are tracked separately and contribute no P&L.",
   "delivery": {
     "sent": true,
-    "message_count": 3,
+    "message_count": 2,
     "reason": "sent"
   },
   "portfolio_snapshot": {
@@ -45,7 +45,7 @@
     "trade_date": "2026-09-15",
     "benchmark_source": "OFFICIAL_INDEX_HISTORY",
     "benchmark_reason": "Official index history used",
-    "benchmark_sessions": 421,
+    "benchmark_sessions": 420,
     "universe_loaded": 0,
     "history_eligible": 0,
     "quality_qualified": 0,
@@ -69,7 +69,7 @@
     "watch_average_score": 0.0,
     "watch_average_trade_plan_score": 0.0
   },
-  "admin_message": "ELIGIBILITY FUNNEL \u2014 V2_COMPATIBLE\nUniverse: 2175\nEligible: 0\nRejected: 2175\nRESTRICTED_SECURITY: 1787\nNOT_IN_CURRENT_NSE_UNIVERSE: 269\nNON_EQ_SERIES: 117\nTERMINAL_MERGER: 1\nINACTIVE_SECURITY: 1\n\n\ud83d\udcca MIS ADMIN DIAGNOSTICS\nTrade Date: 2026-09-15\n\nUniverse Loaded: 0\nHistory Eligible: 0\nQuality Qualified: 0\nACTION: 0\nWATCH: 0\nREJECT: 0\n\nBenchmark: OFFICIAL_INDEX_HISTORY\nBenchmark Sessions: 421\nReason: Official index history used\n\nTop Rejection: None\nAverage ACTION Score: 0.00\nAverage ACTION RR(T1): 0.00R\nAverage WATCH Score: 0.00",
+  "admin_message": "ELIGIBILITY FUNNEL \u2014 V2_COMPATIBLE\nUniverse: 2174\nEligible: 0\nRejected: 2174\nRESTRICTED_SECURITY: 1787\nNOT_IN_CURRENT_NSE_UNIVERSE: 268\nNON_EQ_SERIES: 117\nTERMINAL_MERGER: 1\nINACTIVE_SECURITY: 1\n\n\ud83d\udcca MIS ADMIN DIAGNOSTICS\nTrade Date: 2026-09-15\n\nUniverse Loaded: 0\nHistory Eligible: 0\nQuality Qualified: 0\nACTION: 0\nWATCH: 0\nREJECT: 0\n\nBenchmark: OFFICIAL_INDEX_HISTORY\nBenchmark Sessions: 420\nReason: Official index history used\n\nTop Rejection: None\nAverage ACTION Score: 0.00\nAverage ACTION RR(T1): 0.00R\nAverage WATCH Score: 0.00",
   "diagnostics_json_path": "output/v2_candidate_diagnostics.json",
   "diagnostics_text_path": "output/v2_candidate_diagnostics.txt",
   "admin_delivery": {
@@ -79,25 +79,25 @@
   },
   "eligibility_funnel": {
     "mode": "V2_COMPATIBLE",
-    "universe": 2175,
+    "universe": 2174,
     "eligible": 0,
-    "rejected": 2175,
+    "rejected": 2174,
     "rejection_reasons": {
       "INACTIVE_SECURITY": 1,
       "NON_EQ_SERIES": 117,
-      "NOT_IN_CURRENT_NSE_UNIVERSE": 269,
+      "NOT_IN_CURRENT_NSE_UNIVERSE": 268,
       "RESTRICTED_SECURITY": 1787,
       "TERMINAL_MERGER": 1
     },
     "tradeability": {
-      "evaluated": 2175,
+      "evaluated": 2174,
       "eligible": 0,
-      "rejected": 2175,
-      "entry_blocked": 2175,
+      "rejected": 2174,
+      "entry_blocked": 2174,
       "rejection_counts": {
         "INACTIVE_SECURITY": 1,
         "NON_EQ_SERIES": 117,
-        "NOT_IN_CURRENT_NSE_UNIVERSE": 269,
+        "NOT_IN_CURRENT_NSE_UNIVERSE": 268,
         "RESTRICTED_SECURITY": 1787,
         "TERMINAL_MERGER": 1
       },
@@ -116,5 +116,56 @@
       }
     }
   },
-  "dashboard_candidates": []
+  "dashboard_candidates": [],
+  "uniform_portfolio": {
+    "schema_version": 1,
+    "scanner": "V3",
+    "mode": "PAPER",
+    "as_of_date": "2026-09-15",
+    "provenance": "RECORDED_PAPER",
+    "execution_model": "LEGACY_V3_RECORDED_FILLS",
+    "starting_capital": 300000.0,
+    "available_cash": 300000.0,
+    "invested_capital": 0,
+    "reserved_capital": 51776.05,
+    "market_value": 0,
+    "realised_pnl": 0,
+    "unrealised_pnl": 0,
+    "fees": 0,
+    "total_pnl": 0,
+    "equity": 300000.0,
+    "return_pct": 0.0,
+    "open_positions": 0,
+    "closed_positions": 0,
+    "pending_setups": 1,
+    "positions": [],
+    "pending": [
+      {
+        "trade_id": "b006b039-965e-4fbd-933f-1ba4d5f0b6e8",
+        "symbol": "METROPOLIS",
+        "horizon": "SWING_1_3M",
+        "state": "READY",
+        "created_date": "2026-09-14",
+        "updated_date": "2026-09-15",
+        "entry": 609.13,
+        "initial_stop": 574.05,
+        "stop": 574.05,
+        "target1": 661.75,
+        "target2": 714.37,
+        "quantity": 85.0,
+        "remaining_quantity": 85.0,
+        "realised_quantity": 0.0,
+        "realised_pnl": 0.0,
+        "last_price": 572.5,
+        "exit_price": null,
+        "reason": "ready_carried_forward",
+        "progression_stage": "ENTRY_PENDING",
+        "reserved_capital": 51776.05
+      }
+    ],
+    "legacy_records": [],
+    "warnings": [],
+    "reconciliation_residual": 0.0,
+    "cost_basis": "GROSS \u2014 fees not modelled or recorded"
+  }
 }
