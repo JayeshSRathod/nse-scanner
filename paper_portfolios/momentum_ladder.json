@@ -1,0 +1,201 @@
+{
+  "schema_version": 1,
+  "scanner": "Momentum Ladder",
+  "mode": "PAPER",
+  "as_of_date": "2026-09-15",
+  "provenance": "FORWARD_PAPER_COHORT",
+  "execution_model": "NEXT_SESSION_OHLC_STOP_FIRST_V1",
+  "starting_capital": 300000.0,
+  "available_cash": 300000.0,
+  "invested_capital": 0,
+  "reserved_capital": 0.0,
+  "market_value": 0,
+  "realised_pnl": 0,
+  "unrealised_pnl": 0,
+  "fees": 0,
+  "total_pnl": 0,
+  "equity": 300000.0,
+  "return_pct": 0.0,
+  "open_positions": 0,
+  "closed_positions": 0,
+  "pending_setups": 8,
+  "positions": [],
+  "pending": [
+    {
+      "symbol": "GRANULES",
+      "score": 93.85,
+      "entry": 875.49,
+      "entry_high": 901.7547000000001,
+      "stop": 808.78,
+      "target1": 975.56,
+      "target2": 1042.28,
+      "max_stop_pct": 8.0,
+      "trade_id": "Momentum Ladder:GRANULES:2026-09-15",
+      "created_date": "2026-09-15",
+      "sessions_waited": 0,
+      "status": "PENDING",
+      "reserved_capital": 0.0
+    },
+    {
+      "symbol": "TALBROAUTO",
+      "score": 92.17,
+      "entry": 422.86,
+      "entry_high": 435.54580000000004,
+      "stop": 397.59,
+      "target1": 460.77,
+      "target2": 486.04,
+      "max_stop_pct": 8.0,
+      "trade_id": "Momentum Ladder:TALBROAUTO:2026-09-15",
+      "created_date": "2026-09-15",
+      "sessions_waited": 0,
+      "status": "PENDING",
+      "reserved_capital": 0.0
+    },
+    {
+      "symbol": "YATHARTH",
+      "score": 90.27,
+      "entry": 985.05,
+      "entry_high": 1014.6015,
+      "stop": 945.67,
+      "target1": 1044.12,
+      "target2": 1083.5,
+      "max_stop_pct": 8.0,
+      "trade_id": "Momentum Ladder:YATHARTH:2026-09-15",
+      "created_date": "2026-09-15",
+      "sessions_waited": 0,
+      "status": "PENDING",
+      "reserved_capital": 0.0
+    },
+    {
+      "symbol": "LAURUSLABS",
+      "score": 89.78,
+      "entry": 1931.89,
+      "entry_high": 1989.8467,
+      "stop": 1799.24,
+      "target1": 2130.86,
+      "target2": 2263.51,
+      "max_stop_pct": 8.0,
+      "trade_id": "Momentum Ladder:LAURUSLABS:2026-09-15",
+      "created_date": "2026-09-15",
+      "sessions_waited": 0,
+      "status": "PENDING",
+      "reserved_capital": 0.0
+    },
+    {
+      "symbol": "ONEPOINT",
+      "score": 88.95,
+      "entry": 56.91,
+      "entry_high": 58.6173,
+      "stop": 52.98,
+      "target1": 62.81,
+      "target2": 66.74,
+      "max_stop_pct": 8.0,
+      "trade_id": "Momentum Ladder:ONEPOINT:2026-09-15",
+      "created_date": "2026-09-15",
+      "sessions_waited": 0,
+      "status": "PENDING",
+      "reserved_capital": 0.0
+    },
+    {
+      "symbol": "GLAND",
+      "score": 88.92,
+      "entry": 2904.39,
+      "entry_high": 2991.5217,
+      "stop": 2780.78,
+      "target1": 3089.8,
+      "target2": 3213.4,
+      "max_stop_pct": 8.0,
+      "trade_id": "Momentum Ladder:GLAND:2026-09-15",
+      "created_date": "2026-09-15",
+      "sessions_waited": 0,
+      "status": "PENDING",
+      "reserved_capital": 0.0
+    },
+    {
+      "symbol": "GPTHEALTH",
+      "score": 88.91,
+      "entry": 159.93,
+      "entry_high": 164.7279,
+      "stop": 148.81,
+      "target1": 176.6,
+      "target2": 187.72,
+      "max_stop_pct": 8.0,
+      "trade_id": "Momentum Ladder:GPTHEALTH:2026-09-15",
+      "created_date": "2026-09-15",
+      "sessions_waited": 0,
+      "status": "PENDING",
+      "reserved_capital": 0.0
+    },
+    {
+      "symbol": "AUROPHARMA",
+      "score": 88.11,
+      "entry": 1663.76,
+      "entry_high": 1713.6728,
+      "stop": 1613.21,
+      "target1": 1739.57,
+      "target2": 1790.12,
+      "max_stop_pct": 8.0,
+      "trade_id": "Momentum Ladder:AUROPHARMA:2026-09-15",
+      "created_date": "2026-09-15",
+      "sessions_waited": 0,
+      "status": "PENDING",
+      "reserved_capital": 0.0
+    }
+  ],
+  "legacy_records": [],
+  "warnings": [
+    "Security master unavailable; using the existing scanner gateway fallback for this session."
+  ],
+  "reconciliation_residual": 0.0,
+  "cost_basis": "GROSS \u2014 fees not modelled or recorded",
+  "events_today": [
+    {
+      "date": "2026-09-15",
+      "event": "PENDING",
+      "trade_id": "Momentum Ladder:GRANULES:2026-09-15",
+      "symbol": "GRANULES"
+    },
+    {
+      "date": "2026-09-15",
+      "event": "PENDING",
+      "trade_id": "Momentum Ladder:TALBROAUTO:2026-09-15",
+      "symbol": "TALBROAUTO"
+    },
+    {
+      "date": "2026-09-15",
+      "event": "PENDING",
+      "trade_id": "Momentum Ladder:YATHARTH:2026-09-15",
+      "symbol": "YATHARTH"
+    },
+    {
+      "date": "2026-09-15",
+      "event": "PENDING",
+      "trade_id": "Momentum Ladder:LAURUSLABS:2026-09-15",
+      "symbol": "LAURUSLABS"
+    },
+    {
+      "date": "2026-09-15",
+      "event": "PENDING",
+      "trade_id": "Momentum Ladder:ONEPOINT:2026-09-15",
+      "symbol": "ONEPOINT"
+    },
+    {
+      "date": "2026-09-15",
+      "event": "PENDING",
+      "trade_id": "Momentum Ladder:GLAND:2026-09-15",
+      "symbol": "GLAND"
+    },
+    {
+      "date": "2026-09-15",
+      "event": "PENDING",
+      "trade_id": "Momentum Ladder:GPTHEALTH:2026-09-15",
+      "symbol": "GPTHEALTH"
+    },
+    {
+      "date": "2026-09-15",
+      "event": "PENDING",
+      "trade_id": "Momentum Ladder:AUROPHARMA:2026-09-15",
+      "symbol": "AUROPHARMA"
+    }
+  ]
+}
