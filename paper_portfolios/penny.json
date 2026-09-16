@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "scanner": "Penny",
+  "mode": "PAPER",
+  "as_of_date": "2026-09-15",
+  "provenance": "FORWARD_PAPER_COHORT",
+  "execution_model": "NEXT_SESSION_OHLC_STOP_FIRST_V1",
+  "starting_capital": 300000.0,
+  "available_cash": 300000.0,
+  "invested_capital": 0,
+  "reserved_capital": 0,
+  "market_value": 0,
+  "realised_pnl": 0,
+  "unrealised_pnl": 0,
+  "fees": 0,
+  "total_pnl": 0,
+  "equity": 300000.0,
+  "return_pct": 0.0,
+  "open_positions": 0,
+  "closed_positions": 0,
+  "pending_setups": 0,
+  "positions": [],
+  "pending": [],
+  "legacy_records": [],
+  "warnings": [
+    "Security master unavailable; using the existing scanner gateway fallback for this session."
+  ],
+  "reconciliation_residual": 0.0,
+  "cost_basis": "GROSS \u2014 fees not modelled or recorded",
+  "events_today": []
+}
