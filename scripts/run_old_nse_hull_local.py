@@ -14,6 +14,7 @@ if str(ROOT) not in sys.path:
 from old_nse_hull.delivery import send_message, send_radar
 from old_nse_hull.engine import render_radar, run_local, save_report
 from old_nse_hull.multi_horizon.telegram import render_messages as render_shadow_messages
+from portfolio_accounting.config import rollout_directory
 
 
 def main() -> int:
@@ -25,6 +26,7 @@ def main() -> int:
     parser.add_argument("--output", default="output/old_nse_hull_daily.json")
     parser.add_argument("--html", default="output/old_nse_hull_daily.html")
     parser.add_argument("--send-telegram", action="store_true")
+    parser.add_argument("--uniform-portfolio-dir", default=rollout_directory(), help="Opt-in PAPER ledger and reports; requires --multi-horizon-shadow")
     parser.add_argument("--multi-horizon-shadow", action="store_true",
                         help="Enable comparison-only multi-horizon output; Telegram remains baseline-only.")
     parser.add_argument("--shadow-state", default="old_nse_hull_shadow_state.json",
@@ -35,11 +37,24 @@ def main() -> int:
     parser.add_argument("--send-shadow-preview", action="store_true",
                         help="Send clearly labelled PAPER shadow cards to the Ladder validation topic.")
     args = parser.parse_args()
+    if args.uniform_portfolio_dir and not args.multi_horizon_shadow:
+        parser.error("--uniform-portfolio-dir requires --multi-horizon-shadow")
     if args.multi_horizon_shadow:
         import os
         os.environ["OLD_NSE_HULL_MULTI_HORIZON_MODE"] = "shadow"
     report = run_local(args.db, args.date, comparison_state_path=args.shadow_state if args.multi_horizon_shadow else None,
                        paper_state_path=args.paper_state if args.multi_horizon_shadow else None)
+    portfolio_messages = []
+    if args.uniform_portfolio_dir:
+        from portfolio_accounting.service import update_portfolio, write_reports
+        from portfolio_accounting.adapters import legacy_records
+        from v2.database import V2Database
+        report["uniform_portfolio"] = update_portfolio(
+            "Momentum Ladder", report, V2Database(args.db),
+            Path(args.uniform_portfolio_dir) / "momentum_ladder.sqlite",
+            legacy=legacy_records(args.paper_state),
+        )
+        portfolio_messages = write_reports(report["uniform_portfolio"], args.uniform_portfolio_dir)
     save_report(report, args.output)
     message = render_radar(report)
     Path(args.html).write_text(message, encoding="utf-8")
@@ -48,11 +63,16 @@ def main() -> int:
         shadow_messages = render_shadow_messages(report)
         Path(args.shadow_preview_html).write_text("\n\n<hr/>\n\n".join(shadow_messages), encoding="utf-8")
     print(message)
+    for portfolio_message in portfolio_messages:
+        print(portfolio_message)
     if args.send_telegram:
         delivery = send_radar(message)
         print(f"[TELEGRAM] daily: {'SENT' if delivery.sent else 'FAILED'} ({delivery.reason})")
         if not delivery.sent:
             return 2
+        for portfolio_message in portfolio_messages:
+            if not send_message(portfolio_message, "trades").sent:
+                return 2
     if args.send_shadow_preview:
         preview_sent = 0
         preview_errors: list[str] = []

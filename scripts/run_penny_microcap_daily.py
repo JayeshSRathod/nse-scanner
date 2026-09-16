@@ -16,6 +16,7 @@ from nse_market_store import restore_prices
 from penny_microcap.engine import scan_market
 from penny_microcap.telegram import render_topic_messages, send_messages
 from v2.database import V2Database
+from portfolio_accounting.config import rollout_directory
 
 
 def main() -> int:
@@ -25,6 +26,7 @@ def main() -> int:
     parser.add_argument("--output", default="output/penny_microcap/daily.json")
     parser.add_argument("--restore-snapshots", action="store_true")
     parser.add_argument("--send-telegram", action="store_true")
+    parser.add_argument("--uniform-portfolio-dir", default=rollout_directory(), help="Opt-in PAPER accounting directory; persist this directory between sessions")
     args = parser.parse_args()
     if args.restore_snapshots:
         init_database(args.db); print("Restored snapshots:", restore_prices(args.db, min_days=1))
@@ -37,6 +39,12 @@ def main() -> int:
     lifecycle_registry = database.load_lifecycle_registry()
     report = scan_market(prices, symbol_master=master, restricted=restricted,
                          lifecycle_registry=lifecycle_registry)
+    if args.uniform_portfolio_dir:
+        from portfolio_accounting.service import update_portfolio, write_reports
+        snapshot = update_portfolio("Penny", report, database, Path(args.uniform_portfolio_dir) / "penny.sqlite")
+        report["uniform_portfolio"] = snapshot
+        report["portfolio"] = [p for p in snapshot["positions"] if p["remaining_quantity"]]
+        write_reports(snapshot, args.uniform_portfolio_dir)
     topic_order = ("early_radar", "confirming", "ready", "circuit_risk", "portfolio", "system")
     messages = {topic: render_topic_messages(report, topic) for topic in topic_order}
     deliveries = {

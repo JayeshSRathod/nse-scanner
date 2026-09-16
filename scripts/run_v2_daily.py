@@ -24,6 +24,7 @@ def main() -> int:
     parser.add_argument("--max-open-positions", type=int, default=8)
     parser.add_argument("--restore-snapshots", action="store_true")
     parser.add_argument("--send-telegram", action="store_true")
+    parser.add_argument("--uniform-portfolio-dir", help="Opt-in common PAPER portfolio reports")
     parser.add_argument("--output", default="output/v2_daily")
     args = parser.parse_args()
 
@@ -38,6 +39,7 @@ def main() -> int:
         top_n=args.top_n,
         minimum_score=args.minimum_score,
         send_telegram=args.send_telegram,
+        uniform_portfolio_dir=args.uniform_portfolio_dir,
         portfolio_config=PortfolioConfig(
             capital_base=args.capital,
             risk_per_trade_pct=args.risk_per_trade_pct,

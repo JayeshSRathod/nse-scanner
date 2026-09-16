@@ -53,6 +53,7 @@ class DailyRunResult:
     admin_delivery: DeliveryResult = DeliveryResult(False, 0, "not_attempted")
     eligibility_funnel: dict | None = None
     dashboard_candidates: tuple[dict, ...] = ()
+    uniform_portfolio: dict | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -87,7 +88,11 @@ def run_daily(
     portfolio_config: PortfolioConfig = PortfolioConfig(),
     diagnostics_output_dir: str | Path = "output",
     strict_v3_eligibility: bool = True,
+    uniform_portfolio_dir: str | Path | None = None,
 ) -> DailyRunResult:
+    if uniform_portfolio_dir is None:
+        from portfolio_accounting.config import rollout_directory
+        uniform_portfolio_dir = rollout_directory()
     run_date = pd.Timestamp(as_of or date.today()).date()
     database = V2Database(db_path)
     database.ensure_v3_schema()
@@ -246,6 +251,7 @@ def run_daily(
     process_portfolio_day(
         store, run_date.isoformat(), latest_bars,
         qualification_by_symbol=qualification, invalidated_symbols=invalidated,
+        skip_processed_session=uniform_portfolio_dir is not None,
     )
     for position in store.open_positions():
         candidate = candidate_by_symbol.get(position.symbol)
@@ -276,6 +282,14 @@ def run_daily(
         float(previous_snapshot["total_pnl"]) if previous_snapshot and previous_snapshot["portfolio_date"] != run_date.isoformat() else None,
         all_positions,
     )
+    uniform_portfolio = None
+    uniform_messages = None
+    if uniform_portfolio_dir is not None:
+        from portfolio_accounting.adapters import read_v3
+        from portfolio_accounting.service import write_reports
+        uniform_portfolio = read_v3(db_path, run_date.isoformat(), portfolio_config.capital_base)
+        uniform_messages = write_reports(uniform_portfolio, uniform_portfolio_dir)
+        portfolio_summary_message = "\n\n".join(uniform_messages)
 
     candidate_messages = render_candidate_messages(
         selected, watches, regime, run_date.isoformat(), freshness=freshness,
@@ -289,11 +303,11 @@ def run_daily(
         message_thread_id=topic_id("DAILY") or topic_id("CANDIDATES"), message_type="fresh_candidates", scan_date=run_date.isoformat(),
     )
     portfolio_delivery = send_messages(
-        [portfolio_message], enabled=send_telegram,
+        uniform_messages or [portfolio_message], enabled=send_telegram,
         message_thread_id=topic_id("PORTFOLIO"), message_type="lifecycle", scan_date=run_date.isoformat(),
     )
     summary_delivery = send_messages(
-        [portfolio_summary_message], enabled=send_telegram,
+        [portfolio_summary_message], enabled=send_telegram and uniform_messages is None,
         message_thread_id=topic_id("PORTFOLIO"), message_type="portfolio_pnl", scan_date=run_date.isoformat(),
     )
     delivery = DeliveryResult(
@@ -316,4 +330,5 @@ def run_daily(
         diagnostics_text_path=str(diagnostics_text), admin_delivery=admin_delivery,
         eligibility_funnel=eligibility_funnel,
         dashboard_candidates=tuple(dashboard_candidates.values()),
+        uniform_portfolio=uniform_portfolio,
     )

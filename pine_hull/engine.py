@@ -33,6 +33,7 @@ class PineConfig:
     max_open_positions: int = 8
     max_new_positions: int = 3
     atr_multiplier: float = 3.5
+    cash_accounting: bool = False
 
 
 def _number(value: object, default: float = 0.0) -> float:
@@ -182,15 +183,17 @@ def _active(position: dict) -> bool:
 
 
 def _allocation(entry: float, stop: float, positions: list[dict], config: PineConfig) -> int:
-    active = [position for position in positions if _active(position)]
+    active = [position for position in positions if _active(position) or
+              (config.cash_accounting and position.get("state") == "CORPORATE_ACTION_REVIEW")]
     if len(active) >= config.max_open_positions or entry <= stop:
         return 0
     used = sum(_number(position.get("entry")) * int(position.get("quantity", 0)) for position in active)
+    realised = sum(_number(p.get("realised_pnl")) - _number(p.get("fees")) for p in positions) if config.cash_accounting else 0.0
     per_share_risk = entry - stop
     limits = [
         floor(config.capital_base * config.risk_per_trade_pct / per_share_risk),
         floor(config.capital_base * config.max_position_pct / entry),
-        floor(max(0.0, config.capital_base - used) / entry),
+        floor(max(0.0, config.capital_base + realised - used) / entry),
     ]
     return max(0, min(limits))
 
@@ -204,6 +207,7 @@ def _update_position(position: dict, frame: pd.DataFrame, metrics: dict, trade_d
     last = frame.sort_values("trade_date").iloc[-1]
     high, low, close = _number(last["high"]), _number(last["low"]), _number(last["close"])
     position["last_price"] = round(close, 2)
+    position["mark_date"] = trade_date
     position["htf_weekly_bullish"] = bool(metrics.get("weekly_bullish"))
     position["htf_state"] = str(metrics.get("htf_state", "NEUTRAL"))
     position["timing_state"] = str(metrics.get("timing_state", "WEAK"))
@@ -243,6 +247,9 @@ def run_daily(
         raise RuntimeError("No Pine-compatible daily price history")
     trade_date = pd.Timestamp(prices["trade_date"].max()).date().isoformat()
     state = load_state(state_path, config)
+    already_processed = config.cash_accounting and state.get("last_run") == trade_date
+    if config.cash_accounting and state.get("last_run") and state["last_run"] > trade_date:
+        raise ValueError("Hull accounting cannot advance an older date; use a dated state copy")
     master = database.load_symbol_master(trade_date)
     metadata = {str(row["symbol"]): row.to_dict() for _, row in master.iterrows()} if not master.empty else {}
     restricted = database.load_restricted_symbols(trade_date)
@@ -259,20 +266,20 @@ def run_daily(
               if gateway[symbol].eligible and not gateway[symbol].entry_blocked}
     for position in state["positions"]:
         gate = gateway.get(str(position.get("symbol")))
-        if _active(position) and gate and (not gate.eligible or gate.entry_blocked):
+        if not already_processed and _active(position) and gate and (not gate.eligible or gate.entry_blocked):
             position["state"] = "CORPORATE_ACTION_REVIEW"
             position["review_reason"] = gate.reason_code
             position["successor_symbol"] = gate.successor_symbol
             _position_event(state, trade_date, position, "CORPORATE_ACTION_REVIEW")
     metrics = {symbol: pine_metrics(frame, atr_multiplier=config.atr_multiplier) for symbol, frame in frames.items()}
     for position in state["positions"]:
-        if _active(position) and position["symbol"] in frames:
+        if not already_processed and _active(position) and position["symbol"] in frames:
             _update_position(position, frames[position["symbol"]], metrics[position["symbol"]], trade_date, state, config)
 
     active_symbols = {position["symbol"] for position in state["positions"] if _active(position)}
     candidates = []
     for symbol, row in metrics.items():
-        if row.get("state") == "READY" and symbol not in active_symbols and _number(row.get("initial_stop")) < _number(row.get("close")):
+        if not already_processed and row.get("state") == "READY" and symbol not in active_symbols and _number(row.get("initial_stop")) < _number(row.get("close")):
             candidates.append((symbol, row))
     candidates.sort(key=lambda item: (-_number(item[1].get("score")), item[0]))
     created: list[dict] = []
@@ -285,6 +292,7 @@ def run_daily(
             "state": "OPEN", "entry_date": trade_date, "entry": _number(row["close"]), "initial_stop": _number(row["initial_stop"]),
             "stop": _number(row["initial_stop"]), "target1": _number(row["target1"]), "target2": _number(row["target2"]),
             "quantity": quantity, "last_price": _number(row["close"]), "t1_hit": False, "t2_hit": False,
+            "mark_date": trade_date,
             "prior_hma21": _number(row["hma21"]), "realised_pnl": 0.0,
             "htf_weekly_bullish": bool(row["weekly_bullish"]), "htf_state": row.get("htf_state", "NEUTRAL"),
             "timing_state": row.get("timing_state", "WEAK"), "daily_hull_bullish": bool(row["daily_bullish"]),
@@ -295,7 +303,8 @@ def run_daily(
         _position_event(state, trade_date, position, "ENTRY")
 
     state["last_run"] = trade_date
-    save_state(state, state_path)
+    if not already_processed:
+        save_state(state, state_path)
     open_positions = [position for position in state["positions"] if _active(position)]
     closed_positions = [position for position in state["positions"] if position.get("state") == "CLOSED"]
     realised = sum(_number(position.get("realised_pnl")) for position in closed_positions)

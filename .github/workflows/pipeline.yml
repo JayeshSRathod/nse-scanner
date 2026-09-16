@@ -14,6 +14,7 @@ on:
         default: false
 
 env:
+  UNIFORM_PAPER_PORTFOLIOS: ${{ vars.UNIFORM_PAPER_PORTFOLIOS || 'false' }}
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   V2_GO_LIVE_DATE: '2026-08-04'
   V3_ACTIVATION_DATE: '2026-08-19'
@@ -71,6 +72,9 @@ jobs:
           git add portfolio.json 2>/dev/null || true
           git add v2_portfolio_state.json 2>/dev/null || true
           git add -f output/v2_daily_run.json 2>/dev/null || true
+          if [[ "$UNIFORM_PAPER_PORTFOLIOS" == "true" ]]; then
+            git add -f paper_portfolios/v3.json paper_portfolios/v3.html
+          fi
           if git diff --cached --quiet; then
             echo "No scanner state changes to commit."
           else

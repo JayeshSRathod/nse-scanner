@@ -15,6 +15,7 @@ from nse_market_store import restore_prices
 from pine_hull.engine import PineConfig, render_portfolio_message, run_daily
 from pine_hull.preview import render_daily_signals
 from pine_hull.telegram import send_portfolio, send_signals
+from portfolio_accounting.config import rollout_directory
 
 
 def main() -> int:
@@ -26,14 +27,25 @@ def main() -> int:
     parser.add_argument("--capital", type=float, default=300_000.0)
     parser.add_argument("--restore-snapshots", action="store_true")
     parser.add_argument("--send-telegram", action="store_true")
+    parser.add_argument("--uniform-portfolio-dir", default=rollout_directory(), help="Opt-in common PAPER accounting reports")
     args = parser.parse_args()
     if args.restore_snapshots:
         init_database(args.db)
         print("Restored snapshots:", restore_prices(args.db, min_days=1))
-    result = run_daily(args.db, state_path=args.state_file, as_of=args.date, config=PineConfig(capital_base=args.capital))
+    result = run_daily(args.db, state_path=args.state_file, as_of=args.date,
+                       config=PineConfig(capital_base=args.capital, cash_accounting=bool(args.uniform_portfolio_dir)))
     signals, portfolio = render_daily_signals(result), render_portfolio_message(result)
+    portfolio_pages = [portfolio]
+    if args.uniform_portfolio_dir:
+        from portfolio_accounting.adapters import hull_snapshot
+        from portfolio_accounting.service import write_reports
+        snapshot = hull_snapshot(json.loads(Path(args.state_file).read_text(encoding="utf-8")))
+        result["uniform_portfolio"] = snapshot
+        portfolio_pages = write_reports(snapshot, args.uniform_portfolio_dir)
+        portfolio = "\n\n".join(portfolio_pages)
     signals_delivery = send_signals([signals], enabled=args.send_telegram)
-    portfolio_delivery = send_portfolio(portfolio, enabled=args.send_telegram)
+    portfolio_deliveries = [send_portfolio(page, enabled=args.send_telegram) for page in portfolio_pages]
+    portfolio_delivery = next((d for d in portfolio_deliveries if not d.sent), portfolio_deliveries[-1])
     payload = {**result, "delivery": {"signals": signals_delivery.__dict__, "portfolio": portfolio_delivery.__dict__}}
     destination = Path(args.output)
     destination.parent.mkdir(parents=True, exist_ok=True)
