@@ -6,6 +6,7 @@ on:
     paths:
       - 'v2/**'
       - 'portfolio_accounting/**'
+      - 'daily_research/**'
       - 'scripts/**'
       - 'tests/**'
       - '.github/workflows/**'
@@ -15,6 +16,7 @@ on:
     paths:
       - 'v2/**'
       - 'portfolio_accounting/**'
+      - 'daily_research/**'
       - 'scripts/**'
       - 'tests/**'
       - '.github/workflows/**'
