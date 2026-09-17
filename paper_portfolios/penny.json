@@ -2,7 +2,7 @@
   "schema_version": 1,
   "scanner": "Penny",
   "mode": "PAPER",
-  "as_of_date": "2026-09-15",
+  "as_of_date": "2026-09-16",
   "provenance": "FORWARD_PAPER_COHORT",
   "execution_model": "NEXT_SESSION_OHLC_STOP_FIRST_V1",
   "starting_capital": 300000.0,
