@@ -1,0 +1,13 @@
+# Selected Momentum Ladder daily PAPER profile
+
+Profile `LADDER_DAILY_20260922` is activated by repository variable `MOMENTUM_LADDER_FINAL=true`. The existing daily workflow runs at04:35 IST Monday-Friday. Signals use the latest completed daily NSE data. A qualifying stock is a watchlist setup, not an order or guaranteed daily pick.
+
+Rules: EMA14 crosses above EMA21 within five observed sessions, fast remains above slow, score>=65, five-session pending expiry, prior completed-session EMA14>EMA21 check before filling. Trend close>SMA50>SMA150>SMA200 earns25 points; relative-return percentile earns up to25; volume>=1.8x20-session mean earns10; RSI14 within50-70 earns8. ADX14>=20 with expanding Bollinger width earns2. Existing horizon-dependent trigger/location scoring remains. Delivery points are omitted consistently with the evaluated technical profile. UNITDSPR is excluded. Daily security eligibility and OHLC/data-quality gates remain active.
+
+Initial stop: prior10 low minus0.25ATR14, max8% initial distance. TP1 at1.5 planned R activates structural trailing, effective next session, only tightening. TP2 at2.5R is reference only. No partial booking, forced holding duration, added quantity or5% drawdown exit. CapitalINR300,000;1% planned risk per trade,20% allocation per stock,5% aggregate planned risk and8 positions. Fees10bps/slippage5bps per side are PAPER assumptions.
+
+A new forward cohort starts in `paper_portfolios/momentum_ladder_final.sqlite`; earlier `momentum_ladder.sqlite` and legacy JSON ledgers are retained without rewriting or migrating their trades. Active published portfolio JSON/HTML uses the selected cohort and profile identifier. Daily cards, Mini App and weekly/monthly summaries use the same active report. No historical FYERS files are included or uploaded. Historical performance is not a forecast; daily NSE data, current universe/eligibility and rolling420-session history can differ from the research data.
+
+Validation: run `python -m pytest -q tests/test_final_ladder.py`. Manual workflow input `deliver=false` generates artifacts without sending Telegram or persisting state; scheduled runs deliver and persist. Setting the variable false restores the older routing, but historical ledger continuity still requires review before any rollback. Never move new trades into an older cohort or erase either ledger.
+
+No broker order placement. Delivery uses the existing Ladder bot and configured daily/portfolio topics. Retries reuse immutable completed-session ledger results. Missing exchange sessions are caught up in date order; missing held-stock candles freeze the holding for review. A missing/out-of-range historical ledger date fails rather than silently skipping stops.

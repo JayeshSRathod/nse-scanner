@@ -78,6 +78,9 @@ def item(row: dict, scanner: str, stage: str) -> dict:
         "symbol": str(row.get("symbol", "")).upper(),
         "stage": stage,
         "score": number(row.get("score")),
+        "score_max": row.get("score_max", 100),
+        "target2_label": row.get("target2_label", "Second target"),
+        "continuation_note": row.get("continuation_note", ""),
         "price": number(row.get("close", row.get("last_price", entry))),
         "entry_low": number(row.get("entry_low", entry)),
         "entry_high": number(row.get("entry_high", entry)),
@@ -131,11 +134,14 @@ def v3_items(data: dict) -> list[dict]:
 
 def ladder_items(data: dict) -> list[dict]:
     rows = []
+    threshold = 65 if data.get("strategy_profile") == "LADDER_DAILY_20260922" else 75
     for row in data.get("shortlist", []):
         stage = "Watch for entry" if row.get("hull_state") == "READY" else "Watchlist—wait for confirmation"
         normalized = dict(row)
         normalized["score"] = row.get("discovery_score")
-        if number(normalized.get("score")) is not None and normalized["score"] >= 75:
+        if threshold == 65:
+            normalized.update(score_max=95, target2_label="TP2 reference", continuation_note="After TP1, follow the trailing stop; no fixed TP2 exit.")
+        if number(normalized.get("score")) is not None and normalized["score"] >= threshold:
             rows.append(item(normalized, "ladder", stage))
     return rows
 
@@ -185,7 +191,7 @@ def main() -> int:
         ],
         "items": items,
         "notice": "Paper tracking for research and education only. Not investment advice.",
-        "display_rule": "Up to 25 higher-ranked opportunities per scanner. ETFs and terminal securities are excluded. Ladder requires a score of at least 75.",
+        "display_rule": "Up to 25 higher-ranked opportunities per scanner. ETFs and terminal securities are excluded. Ladder uses the active profile: score65+ for the selected daily profile,75+ for the earlier radar.",
     }
     target = ROOT / "docs/data/feed.json"
     target.parent.mkdir(parents=True, exist_ok=True)

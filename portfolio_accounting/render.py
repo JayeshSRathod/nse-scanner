@@ -42,6 +42,9 @@ def render_messages(snapshot: dict, limit: int = 3400) -> list[str]:
     if s['pending_setups']:
         blocks.append("Pending entries are tracked separately and contribute no P&L.")
     blocks.extend(escape(w) for w in s['warnings'])
+    if s.get('strategy_profile') == 'LADDER_DAILY_20260922':
+        blocks = [b.replace(' | T2:', ' | TP2 reference:') for b in blocks]
+        blocks.append('After TP1, follow the stored structural trailing stop. TP2 is a reference, not a forced exit.')
     pages, page = [], header
     for block in blocks:
         if len(header + block) > limit:
