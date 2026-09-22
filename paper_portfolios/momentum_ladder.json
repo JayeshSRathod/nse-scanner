@@ -2,20 +2,20 @@
   "schema_version": 1,
   "scanner": "Momentum Ladder",
   "mode": "PAPER",
-  "as_of_date": "2026-09-18",
+  "as_of_date": "2026-09-21",
   "provenance": "FORWARD_PAPER_COHORT",
   "execution_model": "NEXT_SESSION_OHLC_STOP_FIRST_V1",
   "starting_capital": 300000.0,
   "available_cash": 28462.929999999993,
   "invested_capital": 277267.07,
   "reserved_capital": 0,
-  "market_value": 290259.45999999996,
+  "market_value": 289567.88999999996,
   "realised_pnl": 5730.0,
-  "unrealised_pnl": 12992.390000000001,
+  "unrealised_pnl": 12300.819999999998,
   "fees": 0.0,
-  "total_pnl": 18722.39,
-  "equity": 318722.38999999996,
-  "return_pct": 6.240796666666666,
+  "total_pnl": 18030.82,
+  "equity": 318030.81999999995,
+  "return_pct": 6.010273333333333,
   "open_positions": 8,
   "closed_positions": 1,
   "pending_setups": 0,
@@ -40,14 +40,14 @@
       "remaining_quantity": 118.0,
       "realised_pnl": 0.0,
       "fees": 0.0,
-      "last_price": 476.7,
-      "mark_date": "2026-09-18",
+      "last_price": 467.3,
+      "mark_date": "2026-09-21",
       "target1_hit": true,
       "invested_capital": 49897.48,
-      "market_value": 56250.6,
-      "unrealised_pnl": 6353.119999999997,
-      "total_pnl": 6353.119999999997,
-      "return_pct": 12.732346403064836
+      "market_value": 55141.4,
+      "unrealised_pnl": 5243.92,
+      "total_pnl": 5243.92,
+      "return_pct": 10.50938845007804
     },
     {
       "symbol": "YATHARTH",
@@ -99,13 +99,13 @@
       "remaining_quantity": 22.0,
       "realised_pnl": 0.0,
       "fees": 0.0,
-      "last_price": 1954.0,
-      "mark_date": "2026-09-18",
+      "last_price": 2017.5,
+      "mark_date": "2026-09-21",
       "invested_capital": 42501.58,
-      "market_value": 42988.0,
-      "unrealised_pnl": 486.4199999999978,
-      "total_pnl": 486.4199999999978,
-      "return_pct": 1.1444750995139423
+      "market_value": 44385.0,
+      "unrealised_pnl": 1883.4199999999978,
+      "total_pnl": 1883.4199999999978,
+      "return_pct": 4.431411726340522
     },
     {
       "symbol": "ONEPOINT",
@@ -127,13 +127,13 @@
       "remaining_quantity": 729.0,
       "realised_pnl": 0.0,
       "fees": 0.0,
-      "last_price": 59.64,
-      "mark_date": "2026-09-18",
+      "last_price": 60.03,
+      "mark_date": "2026-09-21",
       "invested_capital": 41618.61,
-      "market_value": 43477.56,
-      "unrealised_pnl": 1858.949999999998,
-      "total_pnl": 1858.949999999998,
-      "return_pct": 4.466631634261687
+      "market_value": 43761.87,
+      "unrealised_pnl": 2143.2599999999984,
+      "total_pnl": 2143.2599999999984,
+      "return_pct": 5.149763531266418
     },
     {
       "symbol": "GLAND",
@@ -155,13 +155,13 @@
       "remaining_quantity": 20.0,
       "realised_pnl": 0.0,
       "fees": 0.0,
-      "last_price": 2961.9,
-      "mark_date": "2026-09-18",
+      "last_price": 2940.2,
+      "mark_date": "2026-09-21",
       "invested_capital": 58087.799999999996,
-      "market_value": 59238.0,
-      "unrealised_pnl": 1150.2000000000044,
-      "total_pnl": 1150.2000000000044,
-      "return_pct": 1.980105977503029
+      "market_value": 58804.0,
+      "unrealised_pnl": 716.1999999999989,
+      "total_pnl": 716.1999999999989,
+      "return_pct": 1.2329611381391599
     },
     {
       "symbol": "GPTHEALTH",
@@ -183,13 +183,13 @@
       "remaining_quantity": 98.0,
       "realised_pnl": 0.0,
       "fees": 0.0,
-      "last_price": 166.21,
-      "mark_date": "2026-09-18",
+      "last_price": 165.32,
+      "mark_date": "2026-09-21",
       "invested_capital": 15673.140000000001,
-      "market_value": 16288.58,
-      "unrealised_pnl": 615.44,
-      "total_pnl": 615.44,
-      "return_pct": 3.9267179390983555
+      "market_value": 16201.359999999999,
+      "unrealised_pnl": 528.2199999999987,
+      "total_pnl": 528.2199999999987,
+      "return_pct": 3.3702244732070197
     },
     {
       "symbol": "AUROPHARMA",
@@ -211,13 +211,13 @@
       "remaining_quantity": 36.0,
       "realised_pnl": 0.0,
       "fees": 0.0,
-      "last_price": 1734.0,
-      "mark_date": "2026-09-18",
+      "last_price": 1713.4,
+      "mark_date": "2026-09-21",
       "invested_capital": 59895.36,
-      "market_value": 62424.0,
-      "unrealised_pnl": 2528.6400000000003,
-      "total_pnl": 2528.6400000000003,
-      "return_pct": 4.221762754243401
+      "market_value": 61682.4,
+      "unrealised_pnl": 1787.0400000000036,
+      "total_pnl": 1787.0400000000036,
+      "return_pct": 2.98360340433717
     },
     {
       "symbol": "GRANULES",
@@ -239,13 +239,13 @@
       "remaining_quantity": 10.0,
       "realised_pnl": 0.0,
       "fees": 0.0,
-      "last_price": 875.5,
-      "mark_date": "2026-09-18",
+      "last_price": 875.15,
+      "mark_date": "2026-09-21",
       "invested_capital": 8754.9,
-      "market_value": 8755.0,
-      "unrealised_pnl": 0.09999999999990905,
-      "total_pnl": 0.09999999999990905,
-      "return_pct": 0.0011422175010555125
+      "market_value": 8751.5,
+      "unrealised_pnl": -3.4000000000003183,
+      "total_pnl": -3.4000000000003183,
+      "return_pct": -0.03883539503592638
     },
     {
       "symbol": "TFCILTD",
@@ -267,13 +267,13 @@
       "remaining_quantity": 6.0,
       "realised_pnl": 0.0,
       "fees": 0.0,
-      "last_price": 139.62,
-      "mark_date": "2026-09-18",
+      "last_price": 140.06,
+      "mark_date": "2026-09-21",
       "invested_capital": 838.1999999999999,
-      "market_value": 837.72,
-      "unrealised_pnl": -0.4799999999999045,
-      "total_pnl": -0.4799999999999045,
-      "return_pct": -0.057265569076581306
+      "market_value": 840.36,
+      "unrealised_pnl": 2.160000000000082,
+      "total_pnl": 2.160000000000082,
+      "return_pct": 0.2576950608446769
     }
   ],
   "pending": [],
@@ -283,28 +283,5 @@
   ],
   "reconciliation_residual": -5.820766091346741e-11,
   "cost_basis": "GROSS \u2014 fees not modelled or recorded",
-  "events_today": [
-    {
-      "date": "2026-09-18",
-      "event": "TARGET_1",
-      "trade_id": "Momentum Ladder:TALBROAUTO:2026-09-15",
-      "symbol": "TALBROAUTO"
-    },
-    {
-      "date": "2026-09-18",
-      "event": "ENTRY",
-      "trade_id": "Momentum Ladder:GRANULES:2026-09-15",
-      "symbol": "GRANULES",
-      "price": 875.49,
-      "quantity": 10
-    },
-    {
-      "date": "2026-09-18",
-      "event": "ENTRY",
-      "trade_id": "Momentum Ladder:TFCILTD:2026-09-17",
-      "symbol": "TFCILTD",
-      "price": 139.7,
-      "quantity": 6
-    }
-  ]
+  "events_today": []
 }
