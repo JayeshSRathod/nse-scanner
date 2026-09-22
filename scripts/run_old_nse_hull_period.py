@@ -23,6 +23,15 @@ def main() -> int:
     parser.add_argument("--shadow-state", default="old_nse_hull_shadow_state.json")
     parser.add_argument("--send-telegram", action="store_true")
     args = parser.parse_args()
+    import os, json
+    if os.getenv('MOMENTUM_LADDER_FINAL','false').lower()=='true':
+        from old_nse_hull.final_ladder.render import period_message
+        report=json.loads((ROOT/'output/old_nse_hull_daily.json').read_text(encoding='utf-8'))
+        if report.get('strategy_profile')!='LADDER_DAILY_20260922':
+            raise ValueError('Final Ladder profile has not produced a daily report yet')
+        message=period_message(report,args.period)
+        print(message)
+        return 2 if args.send_telegram and not send_period(message,args.period).sent else 0
     report, summary = run_local(args.db), summarize(args.shadow_state)
     message = render_period_report(report, args.period)
     print(message)
