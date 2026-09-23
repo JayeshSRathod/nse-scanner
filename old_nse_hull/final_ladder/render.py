@@ -1,5 +1,8 @@
 """User-facing selected-profile daily cards and period summaries."""
 from html import escape
+from urllib.parse import quote
+
+from telegram_dashboard import dashboard_url
 
 def daily_messages(report):
     header=f"<b>Momentum Ladder | Daily PAPER watchlist</b>\nData: {escape(report['as_of_date'])} EOD\nEMA14/21 | Volume1.8x | RSI50-70 | Score65+\n"
@@ -12,10 +15,11 @@ def daily_messages(report):
             f"TP1: INR {l['target_1']:.2f}; then follow structural trailing stop\n"
             "Why: Recent EMA14/21 crossover and qualifying technical score.\n"
             "Next: Wait for entry trigger; setup expires after 5 sessions.\n")
+        block += f'<a href="https://www.tradingview.com/chart/?symbol=NSE%3A{quote(r["symbol"], safe="")}">📈 Open {escape(r["symbol"])} chart</a>\n'
         if len(page)+len(block)>3400:pages.append(page);page=header
         page+=block
     if not report['shortlist']:page+='\nNo stocks meet the selected entry rules today. Do not force an entry.\n'
-    page+='\nWatchlist setups are not filled positions. PAPER tracking only.'
+    page+=f'\n<a href="{escape(dashboard_url("ladder"), quote=True)}">📊 Open Momentum Ladder dashboard</a>\nWatchlist setups are not filled positions. PAPER tracking only.'
     pages.append(page)
     return pages
 
