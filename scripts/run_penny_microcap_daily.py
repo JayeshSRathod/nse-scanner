@@ -14,6 +14,7 @@ if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
 from nse_loader import init_database
 from nse_market_store import restore_prices
 from penny_microcap.engine import scan_market
+from penny_microcap.config import PennyConfig
 from penny_microcap.telegram import render_topic_messages, send_messages
 from v2.database import V2Database
 from portfolio_accounting.config import rollout_directory
@@ -26,8 +27,11 @@ def main() -> int:
     parser.add_argument("--output", default="output/penny_microcap/daily.json")
     parser.add_argument("--restore-snapshots", action="store_true")
     parser.add_argument("--send-telegram", action="store_true")
+    parser.add_argument("--ladder-inspired", action="store_true", help="Experimental Penny EMA14/21 scoring and recent crossover gate")
     parser.add_argument("--uniform-portfolio-dir", default=rollout_directory(), help="Opt-in PAPER accounting directory; persist this directory between sessions")
     args = parser.parse_args()
+    if args.ladder_inspired and (args.send_telegram or args.uniform_portfolio_dir):
+        parser.error("Research profile requires --uniform-portfolio-dir '' and no --send-telegram; keep a separate forward cohort before activation")
     if args.restore_snapshots:
         init_database(args.db); print("Restored snapshots:", restore_prices(args.db, min_days=1))
     database = V2Database(args.db)
@@ -38,7 +42,8 @@ def main() -> int:
     restricted = database.load_restricted_symbols(as_of)
     lifecycle_registry = database.load_lifecycle_registry()
     report = scan_market(prices, symbol_master=master, restricted=restricted,
-                         lifecycle_registry=lifecycle_registry)
+                         lifecycle_registry=lifecycle_registry,
+                         config=PennyConfig(ladder_inspired=args.ladder_inspired))
     if args.uniform_portfolio_dir:
         from portfolio_accounting.service import update_portfolio, write_reports
         snapshot = update_portfolio("Penny", report, database, Path(args.uniform_portfolio_dir) / "penny.sqlite")
