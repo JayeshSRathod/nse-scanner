@@ -6,10 +6,11 @@ import os
 import re
 import time
 from dataclasses import dataclass
+from urllib.parse import quote
 
 import requests
 
-from telegram_dashboard import dashboard_keyboard, status_label
+from telegram_dashboard import dashboard_keyboard, dashboard_url, status_label
 
 
 ICONS = {"READY": "🟢", "CONFIRMING": "🟡", "EARLY_RADAR": "🔵", "CIRCUIT_LOCKED": "🔴", "EXTENDED": "🟠"}
@@ -44,6 +45,7 @@ def _card(row: dict) -> str:
         lines.append("Next: Await executable closed-bar confirmation")
     else:
         lines.append("Next: Confirm sustained participation")
+    lines.append(f'<a href="https://www.tradingview.com/chart/?symbol=NSE%3A{quote(row["symbol"], safe="")}">📈 Open {html.escape(row["symbol"])} chart</a>')
     return "\n".join(lines)
 
 
@@ -96,7 +98,8 @@ def render_topic_messages(report: dict, topic: str, *, limit: int = 3400, cards_
     else:
         raise ValueError(f"Unknown Penny topic: {topic}")
 
-    footer = "\n\n⚠️ HIGH-RISK MICROCAP RESEARCH — NOT ADVICE"
+    footer = (f'\n\n<a href="{html.escape(dashboard_url("penny"), quote=True)}">📊 Open Penny dashboard</a>'
+              "\n⚠️ HIGH-RISK MICROCAP RESEARCH — NOT ADVICE")
     pages, current, cards = [], header, 0
     if not rows:
         empty = "No new circuit or extension risks." if topic == "circuit_risk" else "No qualifying candidates in this stage today."
