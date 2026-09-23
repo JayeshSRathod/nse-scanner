@@ -171,6 +171,15 @@ def test_common_messages_paginate_and_escape():
     assert 'Available cash' in pages[0]
 
 
+def test_penny_and_ladder_portfolio_messages_offer_chart_and_dashboard_links():
+    for scanner, selector in [('Penny', 'penny'), ('Momentum Ladder', 'ladder')]:
+        snapshot = build_snapshot(scanner, '2026-09-23', 10000, [holding()])
+        message = '\n'.join(render_messages(snapshot))
+        assert 'Open ABC chart</a>' in message
+        assert 'symbol=NSE%3AABC' in message
+        assert f'startapp={selector}' in message
+
+
 def test_missing_session_rejected_and_native_cash_limit():
     from pine_hull.engine import PineConfig, _allocation
     rows = [dict(state='CLOSED', realised_pnl=-10000),
