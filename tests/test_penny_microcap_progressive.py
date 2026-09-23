@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 from penny_microcap.engine import evaluate_symbol, scan_market
+from penny_microcap.config import PennyConfig
 from penny_microcap.telegram import render_messages
 
 
@@ -35,6 +36,28 @@ def test_ready_requires_all_entry_gates():
     assert candidate.state == "READY"
     assert candidate.entry_low is not None
     assert candidate.metrics["ready_gates"]["READY_MARKET_CAP"]
+
+
+def test_ladder_inspired_profile_requires_recent_cross_without_weaker_penny_gates():
+    baseline, _ = evaluate_symbol("BASE", history(), metadata=META)
+    research, _ = evaluate_symbol("RESEARCH", history(), metadata=META,
+                                  config=PennyConfig(ladder_inspired=True))
+    assert baseline.state == "READY"
+    assert research is not None and research.state != "READY"
+    assert not research.metrics["ready_gates"]["READY_RECENT_EMA14_21_CROSS"]
+    assert research.metrics["ready_gates"]["READY_MARKET_CAP"]
+    assert research.metrics["ready_gates"]["READY_DELIVERY"]
+
+
+def test_ladder_inspired_score_uses_volume_mean_and_rsi_evidence():
+    frame = history()
+    frame.loc[frame.index[-1], "volume"] *= 2
+    candidate, _ = evaluate_symbol("VOLUME", frame, metadata=META,
+                                   config=PennyConfig(ladder_inspired=True))
+    assert candidate is not None
+    assert candidate.metrics["volume_ratio_mean20"] >= 1.8
+    assert 0 <= candidate.metrics["rsi14"] <= 100
+    assert "READY_RECENT_EMA14_21_CROSS" in candidate.metrics["ready_gates"]
 
 
 def test_revised_ready_liquidity_and_high_liquidity_badge():
