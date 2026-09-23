@@ -70,6 +70,8 @@ def test_each_candidate_state_renders_only_in_its_topic():
     assert "EARLY" in early and "CONFIRM" not in early and "READYONE" not in early
     assert "CONFIRM" in confirming and "EARLY" not in confirming and "READYONE" not in confirming
     assert "READYONE" in ready and "EARLY" not in ready and "CONFIRM" not in ready
+    assert 'Open READYONE chart</a>' in ready and 'symbol=NSE%3AREADYONE' in ready
+    assert 'Open Penny dashboard</a>' in ready and 'startapp=penny' in ready
 
 
 def test_portfolio_and_system_have_dedicated_summaries():
