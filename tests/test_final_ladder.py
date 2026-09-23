@@ -80,5 +80,6 @@ def test_final_dashboard_accepts65_and_renders_watchlist():
     assert ladder_items(report)[0]['score_max']==95
     assert ladder_items(report)[0]['target2_label']=='TP2 reference'
     messages=daily_messages(report);assert 'Watch for entry' in messages[0] and 'TP1' in messages[0]
+    assert 'Open TEST chart</a>' in messages[0] and 'symbol=NSE%3ATEST' in messages[0]
+    assert 'Open Momentum Ladder dashboard</a>' in messages[0] and 'startapp=ladder' in messages[0]
     assert all(len(m)<3500 for m in messages)
-
