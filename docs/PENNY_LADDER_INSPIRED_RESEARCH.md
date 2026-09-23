@@ -21,8 +21,13 @@ The score remains capped at 100. These are evidence weights, not independent
 entry permissions. The existing 75-point READY threshold remains. The existing
 Penny T1/T2 and ledger exit logic are unchanged.
 
-The command refuses Telegram sending and uniform portfolio writes. Compare
-the resulting READY/CONFIRMING counts, lost candidates, subsequent PAPER fills,
-execution constraints and risk-adjusted outcomes against the current profile
-before enabling any scheduled delivery. A new forward ledger cohort is required
-if this profile is later activated; do not mix it into the current Penny ledger.
+The command refuses Telegram sending and uniform portfolio writes. The
+scheduled workflow now activates the selected profile and starts a separate
+forward PAPER ledger at `paper_portfolios/penny_ema14_21.sqlite`. It writes
+the active `penny.json` and `penny.html` reports from that ledger. The former
+`penny.sqlite` history is retained without migration. The daily scanner still
+sends PAPER messages through the existing Penny bot and topics. The crossover
+gate applies to new READY signals; positions entered in the previous ledger
+are not silently carried into the new cohort. Review both ledgers when assessing
+combined exposure. The workflow runs at 05:15 IST on weekdays; its source data
+are the latest restored completed daily snapshots.
