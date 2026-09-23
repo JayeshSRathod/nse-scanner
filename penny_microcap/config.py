@@ -32,3 +32,6 @@ class PennyConfig:
     ready_score: float = 75.0
     max_cards_per_message: int = 7
     telegram_message_limit: int = 3400
+    ladder_inspired: bool = False
+    crossover_window: int = 5
+    participation_volume_multiple: float = 1.8
