@@ -112,14 +112,26 @@ def evaluate_symbol(symbol: str, frame: pd.DataFrame, *, metadata: Mapping[str, 
 
     ema20 = data["close"].ewm(span=20, adjust=False).mean()
     ema50 = data["close"].ewm(span=50, adjust=False).mean()
+    ema14 = data["close"].ewm(span=14, adjust=False).mean()
+    ema21 = data["close"].ewm(span=21, adjust=False).mean()
+    crosses = (ema14 > ema21) & (ema14.shift(1) <= ema21.shift(1))
+    recent_cross = bool((ema14.iloc[-1] > ema21.iloc[-1]) and
+                        crosses.tail(config.crossover_window).any())
+    changes = data["close"].diff()
+    gains = changes.clip(lower=0).ewm(alpha=1 / 14, adjust=False, min_periods=14).mean()
+    losses = (-changes.clip(upper=0)).ewm(alpha=1 / 14, adjust=False, min_periods=14).mean()
+    rs = gains / losses.replace(0, np.nan)
+    rsi14 = _num((100 - 100 / (1 + rs)).iloc[-1], 100.0 if gains.iloc[-1] > 0 else 50.0)
     atr14s = atr(data, 14)
     atr14 = _num(atr14s.iloc[-1])
     prior_high = _num(data["high"].shift(1).rolling(20).max().iloc[-1], close)
     base_low = _num(data["low"].shift(1).rolling(20).min().iloc[-1], close)
     volume_med20 = _num(data["volume"].shift(1).tail(20).median())
+    volume_mean20 = _num(data["volume"].shift(1).tail(20).mean())
     turnover_med_prior20 = _num(turnover.shift(1).tail(20).median())
     turnover_5 = _num(turnover.tail(5).mean())
     volume_ratio = _num(data["volume"].iloc[-1] / volume_med20) if volume_med20 else 0.0
+    participation_ratio = _num(data["volume"].iloc[-1] / volume_mean20) if volume_mean20 else 0.0
     turnover_ratio = _num(turnover.tail(5).mean() / turnover_med_prior20) if turnover_med_prior20 else 0.0
     ret5 = _num((close / data["close"].iloc[-6] - 1) * 100)
     ret20 = _num((close / data["close"].iloc[-21] - 1) * 100)
@@ -181,6 +193,11 @@ def evaluate_symbol(symbol: str, frame: pd.DataFrame, *, metadata: Mapping[str, 
     risk_valid = 0 < risk_pct <= config.max_stop_risk_pct
     if risk_valid:
         score += 5
+    if config.ladder_inspired:
+        # Experimental Penny scoring: existing eligibility and circuit gates remain binding.
+        # A crossover alone never grants READY; participation and RSI add evidence.
+        score += 10 if participation_ratio >= config.participation_volume_multiple else 0
+        score += 8 if 50 <= rsi14 <= 70 else 0
     score = min(100.0, round(score, 2))
 
     market_cap = meta.get("market_cap_cr")
@@ -196,6 +213,8 @@ def evaluate_symbol(symbol: str, frame: pd.DataFrame, *, metadata: Mapping[str, 
         "READY_RISK": risk_valid,
         "READY_EXECUTABLE": not circuit_proxy and circuit_count == 0,
     }
+    if config.ladder_inspired:
+        ready_gates["READY_RECENT_EMA14_21_CROSS"] = recent_cross
     confirming_gates = {
         "CONFIRMING_HISTORY": len(data) >= config.confirming_history,
         "CONFIRMING_TURNOVER": median_turnover20 >= config.confirming_turnover_lacs and turnover_5 >= config.confirming_recent_turnover_lacs,
@@ -223,6 +242,9 @@ def evaluate_symbol(symbol: str, frame: pd.DataFrame, *, metadata: Mapping[str, 
         "history_sessions": len(data), "return_5d_pct": round(ret5, 2), "return_20d_pct": round(ret20, 2),
         "median_turnover_20_lacs": round(median_turnover20, 2), "recent_turnover_5_lacs": round(turnover_5, 2),
         "turnover_ratio": round(turnover_ratio, 2), "volume_ratio": round(volume_ratio, 2),
+        "volume_ratio_mean20": round(participation_ratio, 2),
+        "ema14_above_ema21": bool(ema14.iloc[-1] > ema21.iloc[-1]),
+        "recent_ema14_21_cross": recent_cross, "rsi14": round(rsi14, 2),
         "delivery_5": round(delivery5, 2), "delivery_20": round(delivery20, 2),
         "distance_atr": round(distance_atr, 2), "risk_pct": round(risk_pct, 2),
         "market_cap_cr": round(float(market_cap), 2) if cap_verified else None,
@@ -272,7 +294,8 @@ def scan_market(prices: pd.DataFrame, *, symbol_master: pd.DataFrame | None = No
     priority = {"READY": 0, "CONFIRMING": 1, "EARLY_RADAR": 2, "CIRCUIT_LOCKED": 3, "EXTENDED": 4}
     candidates.sort(key=lambda row: (priority.get(row["state"], 9), -row["score"], row["symbol"]))
     counts = {state: sum(row["state"] == state for row in candidates) for state in priority}
-    return {"system": "PENNY_MICROCAP_SHADOW", "strategy_version": config.strategy_version,
+    return {"system": "PENNY_MICROCAP_SHADOW", "strategy_version":
+            "penny-ema14-21-research-v1" if config.ladder_inspired else config.strategy_version,
             "mode": "PAPER", "as_of_date": as_of.date().isoformat(),
             "generated_at": datetime.now().astimezone().isoformat(), "universe_symbols": prices["symbol"].nunique(),
             "selected": len(candidates), "counts": counts, "candidates": candidates, "audit": audits,
