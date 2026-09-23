@@ -60,16 +60,14 @@ jobs:
         run: |
           SEND_FLAG="--send-telegram"
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.send_telegram }}" != "true" ]]; then SEND_FLAG=""; fi
-          python scripts/run_penny_microcap_daily.py --restore-snapshots $SEND_FLAG
+          python scripts/run_penny_microcap_daily.py --restore-snapshots --ladder-inspired --activate-penny-profile $SEND_FLAG
 
       - name: Persist isolated report
         run: |
           git config user.name "nse-scanner-bot"
           git config user.email "nse-scanner-bot@users.noreply.github.com"
           git add -f output/penny_microcap/daily.json
-          if [[ "$UNIFORM_PAPER_PORTFOLIOS" == "true" ]]; then
-            git add -f paper_portfolios/penny.sqlite paper_portfolios/penny.json paper_portfolios/penny.html
-          fi
+          git add -f paper_portfolios/penny_ema14_21.sqlite paper_portfolios/penny.json paper_portfolios/penny.html
           if git diff --cached --quiet; then
             echo "No penny shadow report changes."
           else
