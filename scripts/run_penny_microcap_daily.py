@@ -28,10 +28,15 @@ def main() -> int:
     parser.add_argument("--restore-snapshots", action="store_true")
     parser.add_argument("--send-telegram", action="store_true")
     parser.add_argument("--ladder-inspired", action="store_true", help="Experimental Penny EMA14/21 scoring and recent crossover gate")
+    parser.add_argument("--activate-penny-profile", action="store_true", help="Use a separate forward PAPER ledger and allow scheduled delivery of the EMA14/21 profile")
     parser.add_argument("--uniform-portfolio-dir", default=rollout_directory(), help="Opt-in PAPER accounting directory; persist this directory between sessions")
     args = parser.parse_args()
-    if args.ladder_inspired and (args.send_telegram or args.uniform_portfolio_dir):
+    if args.activate_penny_profile and not args.ladder_inspired:
+        parser.error("--activate-penny-profile requires --ladder-inspired")
+    if args.ladder_inspired and not args.activate_penny_profile and (args.send_telegram or args.uniform_portfolio_dir):
         parser.error("Research profile requires --uniform-portfolio-dir '' and no --send-telegram; keep a separate forward cohort before activation")
+    if args.activate_penny_profile:
+        args.uniform_portfolio_dir = args.uniform_portfolio_dir or "paper_portfolios"
     if args.restore_snapshots:
         init_database(args.db); print("Restored snapshots:", restore_prices(args.db, min_days=1))
     database = V2Database(args.db)
@@ -46,7 +51,9 @@ def main() -> int:
                          config=PennyConfig(ladder_inspired=args.ladder_inspired))
     if args.uniform_portfolio_dir:
         from portfolio_accounting.service import update_portfolio, write_reports
-        snapshot = update_portfolio("Penny", report, database, Path(args.uniform_portfolio_dir) / "penny.sqlite")
+        ledger_name = "penny_ema14_21.sqlite" if args.activate_penny_profile else "penny.sqlite"
+        snapshot = update_portfolio("Penny", report, database, Path(args.uniform_portfolio_dir) / ledger_name,
+                                    provenance="PENNY_EMA14_21_FORWARD_20260923" if args.activate_penny_profile else "FORWARD_PAPER_COHORT")
         report["uniform_portfolio"] = snapshot
         report["portfolio"] = [p for p in snapshot["positions"] if p["remaining_quantity"]]
         write_reports(snapshot, args.uniform_portfolio_dir)
