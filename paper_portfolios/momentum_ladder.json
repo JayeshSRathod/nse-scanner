@@ -2,20 +2,20 @@
   "schema_version": 1,
   "scanner": "Momentum Ladder",
   "mode": "PAPER",
-  "as_of_date": "2026-09-23",
+  "as_of_date": "2026-09-24",
   "provenance": "LADDER_DAILY_20260922",
   "execution_model": "NEXT_SESSION_OHLC_STOP_FIRST_V1",
   "starting_capital": 300000.0,
   "available_cash": 49961.10876286501,
   "invested_capital": 249789.102135,
   "reserved_capital": 0.0,
-  "market_value": 252684.88,
+  "market_value": 249594.91999999998,
   "realised_pnl": 0.0,
-  "unrealised_pnl": 2895.7778650000087,
+  "unrealised_pnl": -194.18213499998683,
   "fees": 249.789102135,
-  "total_pnl": 2645.9887628650085,
-  "equity": 302645.988762865,
-  "return_pct": 0.8819962542883362,
+  "total_pnl": -443.97123713498684,
+  "equity": 299556.028762865,
+  "return_pct": -0.14799041237832894,
   "open_positions": 6,
   "closed_positions": 0,
   "pending_setups": 2,
@@ -40,14 +40,14 @@
       "remaining_quantity": 51.0,
       "realised_pnl": 0.0,
       "fees": 41.391375345,
-      "last_price": 833.0,
-      "mark_date": "2026-09-23",
-      "highest_since_entry": 833.0,
+      "last_price": 816.3,
+      "mark_date": "2026-09-24",
+      "highest_since_entry": 837.0,
       "invested_capital": 41391.375345,
-      "market_value": 42483.0,
-      "unrealised_pnl": 1091.6246549999998,
-      "total_pnl": 1050.233279655,
-      "return_pct": 2.537323949497286
+      "market_value": 41631.299999999996,
+      "unrealised_pnl": 239.92465499999753,
+      "total_pnl": 198.53327965499753,
+      "return_pct": 0.4796489075325688
     },
     {
       "symbol": "GEOJITFSL",
@@ -69,14 +69,14 @@
       "remaining_quantity": 476.0,
       "realised_pnl": 0.0,
       "fees": 38.53717896,
-      "last_price": 81.98,
-      "mark_date": "2026-09-23",
+      "last_price": 79.17,
+      "mark_date": "2026-09-24",
       "highest_since_entry": 81.98,
       "invested_capital": 38537.17896,
-      "market_value": 39022.48,
-      "unrealised_pnl": 485.301040000003,
-      "total_pnl": 446.763861040003,
-      "return_pct": 1.1593060859585116
+      "market_value": 37684.92,
+      "unrealised_pnl": -852.2589599999981,
+      "total_pnl": -890.7961389599981,
+      "return_pct": -2.3115239957875686
     },
     {
       "symbol": "KIMS",
@@ -98,14 +98,14 @@
       "remaining_quantity": 70.0,
       "realised_pnl": 0.0,
       "fees": 55.46141684999999,
-      "last_price": 798.05,
-      "mark_date": "2026-09-23",
-      "highest_since_entry": 798.05,
+      "last_price": 800.45,
+      "mark_date": "2026-09-24",
+      "highest_since_entry": 811.2,
       "invested_capital": 55461.416849999994,
-      "market_value": 55863.5,
-      "unrealised_pnl": 402.083150000002,
-      "total_pnl": 346.621733150002,
-      "return_pct": 0.6249781430710096
+      "market_value": 56031.5,
+      "unrealised_pnl": 570.0831500000083,
+      "total_pnl": 514.6217331500084,
+      "return_pct": 0.9278914286337934
     },
     {
       "symbol": "APOLLOHOSP",
@@ -127,14 +127,14 @@
       "remaining_quantity": 6.0,
       "realised_pnl": 0.0,
       "fees": 53.276625,
-      "last_price": 9069.0,
-      "mark_date": "2026-09-23",
+      "last_price": 8888.5,
+      "mark_date": "2026-09-24",
       "highest_since_entry": 9069.0,
       "invested_capital": 53276.625,
-      "market_value": 54414.0,
-      "unrealised_pnl": 1137.375,
-      "total_pnl": 1084.098375,
-      "return_pct": 2.034848068923285
+      "market_value": 53331.0,
+      "unrealised_pnl": 54.375,
+      "total_pnl": 1.0983749999999972,
+      "return_pct": 0.002061645233721162
     },
     {
       "symbol": "ZYDUSLIFE",
@@ -156,14 +156,14 @@
       "remaining_quantity": 34.0,
       "realised_pnl": 0.0,
       "fees": 39.63796908,
-      "last_price": 1170.1,
-      "mark_date": "2026-09-23",
-      "highest_since_entry": 1170.1,
+      "last_price": 1180.3,
+      "mark_date": "2026-09-24",
+      "highest_since_entry": 1190.6,
       "invested_capital": 39637.969079999995,
-      "market_value": 39783.399999999994,
-      "unrealised_pnl": 145.4309199999998,
-      "total_pnl": 105.79295091999978,
-      "return_pct": 0.2668980106081656
+      "market_value": 40130.2,
+      "unrealised_pnl": 492.23092000000133,
+      "total_pnl": 452.59295092000133,
+      "return_pct": 1.1418167010689877
     },
     {
       "symbol": "SANSTAR",
@@ -185,14 +185,14 @@
       "remaining_quantity": 190.0,
       "realised_pnl": 0.0,
       "fees": 21.484536899999995,
-      "last_price": 111.15,
-      "mark_date": "2026-09-23",
+      "last_price": 109.4,
+      "mark_date": "2026-09-24",
       "highest_since_entry": 113.07650999999998,
       "invested_capital": 21484.536899999996,
-      "market_value": 21118.5,
-      "unrealised_pnl": -366.036899999996,
-      "total_pnl": -387.52143689999605,
-      "return_pct": -1.8037225503333802
+      "market_value": 20786.0,
+      "unrealised_pnl": -698.536899999996,
+      "total_pnl": -720.0214368999959,
+      "return_pct": -3.351347251520213
     }
   ],
   "pending": [
@@ -207,7 +207,7 @@
       "max_stop_pct": 8.0,
       "trade_id": "Momentum Ladder:CGPOWER:2026-09-22",
       "created_date": "2026-09-22",
-      "sessions_waited": 1,
+      "sessions_waited": 2,
       "status": "PENDING",
       "reserved_capital": 0.0
     },
@@ -222,7 +222,7 @@
       "max_stop_pct": 8.0,
       "trade_id": "Momentum Ladder:RADICO:2026-09-23",
       "created_date": "2026-09-23",
-      "sessions_waited": 0,
+      "sessions_waited": 1,
       "status": "PENDING",
       "reserved_capital": 0.0
     }
@@ -233,67 +233,6 @@
   ],
   "reconciliation_residual": 0.0,
   "cost_basis": "NET_OF_RECORDED_FEES",
-  "events_today": [
-    {
-      "date": "2026-09-23",
-      "event": "ENTRY",
-      "trade_id": "Momentum Ladder:SONACOMS:2026-09-22",
-      "symbol": "SONACOMS",
-      "price": 811.595595,
-      "quantity": 51
-    },
-    {
-      "date": "2026-09-23",
-      "event": "ENTRY",
-      "trade_id": "Momentum Ladder:GEOJITFSL:2026-09-22",
-      "symbol": "GEOJITFSL",
-      "price": 80.96046,
-      "quantity": 476
-    },
-    {
-      "date": "2026-09-23",
-      "event": "ENTRY",
-      "trade_id": "Momentum Ladder:KIMS:2026-09-22",
-      "symbol": "KIMS",
-      "price": 792.3059549999999,
-      "quantity": 70
-    },
-    {
-      "date": "2026-09-23",
-      "event": "ENTRY_RISK_BLOCKED",
-      "trade_id": "Momentum Ladder:CGPOWER:2026-09-22",
-      "symbol": "CGPOWER"
-    },
-    {
-      "date": "2026-09-23",
-      "event": "ENTRY",
-      "trade_id": "Momentum Ladder:APOLLOHOSP:2026-09-22",
-      "symbol": "APOLLOHOSP",
-      "price": 8879.4375,
-      "quantity": 6
-    },
-    {
-      "date": "2026-09-23",
-      "event": "ENTRY",
-      "trade_id": "Momentum Ladder:ZYDUSLIFE:2026-09-22",
-      "symbol": "ZYDUSLIFE",
-      "price": 1165.82262,
-      "quantity": 34
-    },
-    {
-      "date": "2026-09-23",
-      "event": "ENTRY",
-      "trade_id": "Momentum Ladder:SANSTAR:2026-09-22",
-      "symbol": "SANSTAR",
-      "price": 113.07650999999998,
-      "quantity": 190
-    },
-    {
-      "date": "2026-09-23",
-      "event": "PENDING",
-      "trade_id": "Momentum Ladder:RADICO:2026-09-23",
-      "symbol": "RADICO"
-    }
-  ],
+  "events_today": [],
   "strategy_profile": "LADDER_DAILY_20260922"
 }
