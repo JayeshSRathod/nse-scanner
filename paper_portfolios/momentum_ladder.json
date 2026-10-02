@@ -2,23 +2,23 @@
   "schema_version": 1,
   "scanner": "Momentum Ladder",
   "mode": "PAPER",
-  "as_of_date": "2026-09-30",
+  "as_of_date": "2026-10-01",
   "provenance": "LADDER_DAILY_20260922",
   "execution_model": "NEXT_SESSION_OHLC_STOP_FIRST_V1",
   "starting_capital": 300000.0,
-  "available_cash": 173607.82207906496,
-  "invested_capital": 119566.523385,
+  "available_cash": 130539.72522228002,
+  "invested_capital": 162591.59517,
   "reserved_capital": 0.0,
-  "market_value": 118294.84,
+  "market_value": 158849.2,
   "realised_pnl": -6452.094949999977,
-  "unrealised_pnl": -1271.6833849999946,
-  "fees": 373.55958593500003,
-  "total_pnl": -8097.337920934971,
-  "equity": 291902.662079065,
-  "return_pct": -2.6991126403116574,
-  "open_positions": 3,
+  "unrealised_pnl": -3742.3951699999952,
+  "fees": 416.58465772000005,
+  "total_pnl": -10611.074777719974,
+  "equity": 289388.92522228,
+  "return_pct": -3.537024925906658,
+  "open_positions": 4,
   "closed_positions": 3,
-  "pending_setups": 5,
+  "pending_setups": 4,
   "positions": [
     {
       "symbol": "SONACOMS",
@@ -40,14 +40,14 @@
       "remaining_quantity": 51.0,
       "realised_pnl": 0.0,
       "fees": 41.391375345,
-      "last_price": 830.0,
-      "mark_date": "2026-09-30",
+      "last_price": 805.0,
+      "mark_date": "2026-10-01",
       "highest_since_entry": 837.0,
       "invested_capital": 41391.375345,
-      "market_value": 42330.0,
-      "unrealised_pnl": 938.6246549999998,
-      "total_pnl": 897.2332796549998,
-      "return_pct": 2.1676817263898527
+      "market_value": 41055.0,
+      "unrealised_pnl": -336.37534500000015,
+      "total_pnl": -377.7667203450002,
+      "return_pct": -0.9126701328387573
     },
     {
       "symbol": "GEOJITFSL",
@@ -69,14 +69,14 @@
       "remaining_quantity": 476.0,
       "realised_pnl": 0.0,
       "fees": 38.53717896,
-      "last_price": 76.59,
-      "mark_date": "2026-09-30",
+      "last_price": 75.7,
+      "mark_date": "2026-10-01",
       "highest_since_entry": 83.24,
       "invested_capital": 38537.17896,
-      "market_value": 36456.840000000004,
-      "unrealised_pnl": -2080.3389599999973,
-      "total_pnl": -2118.876138959997,
-      "return_pct": -5.498264782586456
+      "market_value": 36033.200000000004,
+      "unrealised_pnl": -2503.9789599999976,
+      "total_pnl": -2542.5161389599975,
+      "return_pct": -6.597566836947314
     },
     {
       "symbol": "KIMS",
@@ -160,14 +160,14 @@
       "remaining_quantity": 34.0,
       "realised_pnl": 0.0,
       "fees": 39.63796908,
-      "last_price": 1162.0,
-      "mark_date": "2026-09-30",
+      "last_price": 1145.7,
+      "mark_date": "2026-10-01",
       "highest_since_entry": 1232.1,
       "invested_capital": 39637.969079999995,
-      "market_value": 39508.0,
-      "unrealised_pnl": -129.96907999999712,
-      "total_pnl": -169.60704907999713,
-      "return_pct": -0.4278903612283587
+      "market_value": 38953.8,
+      "unrealised_pnl": -684.1690799999956,
+      "total_pnl": -723.8070490799955,
+      "return_pct": -1.8260447391216232
     },
     {
       "symbol": "SANSTAR",
@@ -199,24 +199,38 @@
       "unrealised_pnl": -0.0,
       "total_pnl": -1675.1025565499954,
       "return_pct": -7.796782236204476
+    },
+    {
+      "symbol": "AJAXENGG",
+      "score": 79.61,
+      "entry": 589.384545,
+      "entry_high": 606.7627,
+      "stop": 548.78,
+      "target1": 649.54,
+      "target2": 689.85,
+      "max_stop_pct": 8.0,
+      "trade_id": "Momentum Ladder:AJAXENGG:2026-09-30",
+      "created_date": "2026-09-30",
+      "sessions_waited": 1,
+      "status": "OPEN",
+      "reserved_capital": 0.0,
+      "initial_stop": 548.78,
+      "entry_date": "2026-10-01",
+      "quantity": 73.0,
+      "remaining_quantity": 73.0,
+      "realised_pnl": 0.0,
+      "fees": 43.025071785,
+      "last_price": 586.4,
+      "mark_date": "2026-10-01",
+      "highest_since_entry": 589.384545,
+      "invested_capital": 43025.071785,
+      "market_value": 42807.2,
+      "unrealised_pnl": -217.87178500000186,
+      "total_pnl": -260.8968567850019,
+      "return_pct": -0.6063833154973594
     }
   ],
   "pending": [
-    {
-      "symbol": "RADICO",
-      "score": 91.01,
-      "entry": 4612.87,
-      "entry_high": 4751.2561,
-      "stop": 4271.36,
-      "target1": 5125.14,
-      "target2": 5466.65,
-      "max_stop_pct": 8.0,
-      "trade_id": "Momentum Ladder:RADICO:2026-09-23",
-      "created_date": "2026-09-23",
-      "sessions_waited": 5,
-      "status": "PENDING",
-      "reserved_capital": 0.0
-    },
     {
       "symbol": "CHENNPETRO",
       "score": 82.08,
@@ -228,22 +242,7 @@
       "max_stop_pct": 8.0,
       "trade_id": "Momentum Ladder:CHENNPETRO:2026-09-30",
       "created_date": "2026-09-30",
-      "sessions_waited": 0,
-      "status": "PENDING",
-      "reserved_capital": 0.0
-    },
-    {
-      "symbol": "AJAXENGG",
-      "score": 79.61,
-      "entry": 589.09,
-      "entry_high": 606.7627,
-      "stop": 548.78,
-      "target1": 649.54,
-      "target2": 689.85,
-      "max_stop_pct": 8.0,
-      "trade_id": "Momentum Ladder:AJAXENGG:2026-09-30",
-      "created_date": "2026-09-30",
-      "sessions_waited": 0,
+      "sessions_waited": 1,
       "status": "PENDING",
       "reserved_capital": 0.0
     },
@@ -258,7 +257,7 @@
       "max_stop_pct": 8.0,
       "trade_id": "Momentum Ladder:TNPL:2026-09-30",
       "created_date": "2026-09-30",
-      "sessions_waited": 0,
+      "sessions_waited": 1,
       "status": "PENDING",
       "reserved_capital": 0.0
     },
@@ -273,6 +272,21 @@
       "max_stop_pct": 8.0,
       "trade_id": "Momentum Ladder:WABAG:2026-09-30",
       "created_date": "2026-09-30",
+      "sessions_waited": 1,
+      "status": "PENDING",
+      "reserved_capital": 0.0
+    },
+    {
+      "symbol": "BANSALWIRE",
+      "score": 75.43,
+      "entry": 324.17,
+      "entry_high": 333.8951,
+      "stop": 301.2,
+      "target1": 358.62,
+      "target2": 381.58,
+      "max_stop_pct": 8.0,
+      "trade_id": "Momentum Ladder:BANSALWIRE:2026-10-01",
+      "created_date": "2026-10-01",
       "sessions_waited": 0,
       "status": "PENDING",
       "reserved_capital": 0.0
@@ -282,56 +296,22 @@
   "warnings": [
     "Security master unavailable; using the existing scanner gateway fallback for this session."
   ],
-  "reconciliation_residual": -5.820766091346741e-11,
+  "reconciliation_residual": 0.0,
   "cost_basis": "NET_OF_RECORDED_FEES",
   "events_today": [
     {
-      "date": "2026-09-30",
-      "event": "STOP",
-      "trade_id": "Momentum Ladder:KIMS:2026-09-22",
-      "symbol": "KIMS",
-      "price": 749.3351450000001,
-      "quantity": 70
-    },
-    {
-      "date": "2026-09-30",
-      "event": "STOP",
-      "trade_id": "Momentum Ladder:APOLLOHOSP:2026-09-22",
-      "symbol": "APOLLOHOSP",
-      "price": 8577.709,
-      "quantity": 6
-    },
-    {
-      "date": "2026-09-30",
-      "event": "STOP",
-      "trade_id": "Momentum Ladder:SANSTAR:2026-09-22",
-      "symbol": "SANSTAR",
-      "price": 104.47773500000001,
-      "quantity": 190
-    },
-    {
-      "date": "2026-09-30",
-      "event": "PENDING",
-      "trade_id": "Momentum Ladder:CHENNPETRO:2026-09-30",
-      "symbol": "CHENNPETRO"
-    },
-    {
-      "date": "2026-09-30",
-      "event": "PENDING",
+      "date": "2026-10-01",
+      "event": "ENTRY",
       "trade_id": "Momentum Ladder:AJAXENGG:2026-09-30",
-      "symbol": "AJAXENGG"
+      "symbol": "AJAXENGG",
+      "price": 589.384545,
+      "quantity": 73
     },
     {
-      "date": "2026-09-30",
+      "date": "2026-10-01",
       "event": "PENDING",
-      "trade_id": "Momentum Ladder:TNPL:2026-09-30",
-      "symbol": "TNPL"
-    },
-    {
-      "date": "2026-09-30",
-      "event": "PENDING",
-      "trade_id": "Momentum Ladder:WABAG:2026-09-30",
-      "symbol": "WABAG"
+      "trade_id": "Momentum Ladder:BANSALWIRE:2026-10-01",
+      "symbol": "BANSALWIRE"
     }
   ],
   "strategy_profile": "LADDER_DAILY_20260922"
