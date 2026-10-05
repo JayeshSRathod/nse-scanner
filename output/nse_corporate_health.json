@@ -1,13 +1,13 @@
 {
-  "run_at": "2026-10-02T01:47:28.411421+00:00",
+  "run_at": "2026-10-05T01:08:27.381491+00:00",
   "trade_date": "2026-10-01",
   "status": "READY",
   "datasets": [
     {
       "dataset": "equity_master",
       "status": "FRESH",
-      "rows": 2593,
-      "source": "corporate_data/raw/equity_master/20261002T014720Z_95f0d731f585.csv",
+      "rows": 2614,
+      "source": "corporate_data/raw/equity_master/20261005T010823Z_799d4c8c07ca.csv",
       "error": ""
     },
     {
@@ -19,8 +19,8 @@
     },
     {
       "dataset": "shareholding",
-      "status": "FRESH",
-      "rows": 5,
+      "status": "REUSED_LAST_VALID",
+      "rows": 0,
       "source": "",
       "error": "rejected=1"
     },
