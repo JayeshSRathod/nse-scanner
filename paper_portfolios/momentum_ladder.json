@@ -2,20 +2,20 @@
   "schema_version": 1,
   "scanner": "Momentum Ladder",
   "mode": "PAPER",
-  "as_of_date": "2026-10-05",
+  "as_of_date": "2026-10-06",
   "provenance": "LADDER_DAILY_20260922",
   "execution_model": "NEXT_SESSION_OHLC_STOP_FIRST_V1",
   "starting_capital": 300000.0,
   "available_cash": 89545.45548085505,
   "invested_capital": 203544.91159499998,
   "reserved_capital": 0.0,
-  "market_value": 198912.74,
+  "market_value": 201034.62999999998,
   "realised_pnl": -6452.094949999977,
-  "unrealised_pnl": -4632.171594999984,
+  "unrealised_pnl": -2510.281594999984,
   "fees": 457.5379741450001,
-  "total_pnl": -11541.804519144962,
-  "equity": 288458.19548085507,
-  "return_pct": -3.8472681730483203,
+  "total_pnl": -9419.91451914496,
+  "equity": 290580.085480855,
+  "return_pct": -3.1399715063816536,
   "open_positions": 6,
   "closed_positions": 3,
   "pending_setups": 2,
@@ -40,14 +40,14 @@
       "remaining_quantity": 51.0,
       "realised_pnl": 0.0,
       "fees": 41.391375345,
-      "last_price": 797.0,
-      "mark_date": "2026-10-05",
+      "last_price": 820.0,
+      "mark_date": "2026-10-06",
       "highest_since_entry": 837.0,
       "invested_capital": 41391.375345,
-      "market_value": 40647.0,
-      "unrealised_pnl": -744.3753450000002,
-      "total_pnl": -785.7667203450002,
-      "return_pct": -1.8983827277919127
+      "market_value": 41820.0,
+      "unrealised_pnl": 428.62465499999985,
+      "total_pnl": 387.2332796549998,
+      "return_pct": 0.9355409826984086
     },
     {
       "symbol": "GEOJITFSL",
@@ -69,14 +69,14 @@
       "remaining_quantity": 476.0,
       "realised_pnl": 0.0,
       "fees": 38.53717896,
-      "last_price": 76.59,
-      "mark_date": "2026-10-05",
+      "last_price": 78.68,
+      "mark_date": "2026-10-06",
       "highest_since_entry": 83.24,
       "invested_capital": 38537.17896,
-      "market_value": 36456.840000000004,
-      "unrealised_pnl": -2080.3389599999973,
-      "total_pnl": -2118.876138959997,
-      "return_pct": -5.498264782586456
+      "market_value": 37451.68,
+      "unrealised_pnl": -1085.4989599999956,
+      "total_pnl": -1124.0361389599955,
+      "return_pct": -2.9167577111098315
     },
     {
       "symbol": "KIMS",
@@ -160,14 +160,14 @@
       "remaining_quantity": 34.0,
       "realised_pnl": 0.0,
       "fees": 39.63796908,
-      "last_price": 1139.0,
-      "mark_date": "2026-10-05",
+      "last_price": 1159.5,
+      "mark_date": "2026-10-06",
       "highest_since_entry": 1232.1,
       "invested_capital": 39637.969079999995,
-      "market_value": 38726.0,
-      "unrealised_pnl": -911.9690799999971,
-      "total_pnl": -951.6070490799971,
-      "return_pct": -2.400746231875302
+      "market_value": 39423.0,
+      "unrealised_pnl": -214.96907999999712,
+      "total_pnl": -254.60704907999713,
+      "return_pct": -0.6423312167334613
     },
     {
       "symbol": "SANSTAR",
@@ -220,14 +220,14 @@
       "remaining_quantity": 73.0,
       "realised_pnl": 0.0,
       "fees": 43.025071785,
-      "last_price": 594.25,
-      "mark_date": "2026-10-05",
-      "highest_since_entry": 600.5,
+      "last_price": 585.85,
+      "mark_date": "2026-10-06",
+      "highest_since_entry": 604.9,
       "invested_capital": 43025.071785,
-      "market_value": 43380.25,
-      "unrealised_pnl": 355.1782149999998,
-      "total_pnl": 312.1531432149998,
-      "return_pct": 0.7255145204053488
+      "market_value": 42767.05,
+      "unrealised_pnl": -258.02178499999854,
+      "total_pnl": -301.04685678499857,
+      "return_pct": -0.6997009982676048
     },
     {
       "symbol": "TNPL",
@@ -249,14 +249,14 @@
       "remaining_quantity": 260.0,
       "realised_pnl": 0.0,
       "fees": 39.331655999999995,
-      "last_price": 146.49,
-      "mark_date": "2026-10-05",
+      "last_price": 145.94,
+      "mark_date": "2026-10-06",
       "highest_since_entry": 151.27559999999997,
       "invested_capital": 39331.655999999995,
-      "market_value": 38087.4,
-      "unrealised_pnl": -1244.2559999999894,
-      "total_pnl": -1283.5876559999895,
-      "return_pct": -3.2634976162712026
+      "market_value": 37944.4,
+      "unrealised_pnl": -1387.2559999999926,
+      "total_pnl": -1426.5876559999926,
+      "return_pct": -3.627072442614653
     },
     {
       "symbol": "BANSALWIRE",
@@ -278,14 +278,14 @@
       "remaining_quantity": 5.0,
       "realised_pnl": 0.0,
       "fees": 1.621660425,
-      "last_price": 323.05,
-      "mark_date": "2026-10-05",
-      "highest_since_entry": 324.332085,
+      "last_price": 325.7,
+      "mark_date": "2026-10-06",
+      "highest_since_entry": 335.2,
       "invested_capital": 1621.660425,
-      "market_value": 1615.25,
-      "unrealised_pnl": -6.410424999999975,
-      "total_pnl": -8.032085424999975,
-      "return_pct": -0.4953000826298129
+      "market_value": 1628.5,
+      "unrealised_pnl": 6.839574999999911,
+      "total_pnl": 5.217914574999911,
+      "return_pct": 0.32176369938853944
     }
   ],
   "pending": [
@@ -300,7 +300,7 @@
       "max_stop_pct": 8.0,
       "trade_id": "Momentum Ladder:CHENNPETRO:2026-09-30",
       "created_date": "2026-09-30",
-      "sessions_waited": 2,
+      "sessions_waited": 3,
       "status": "PENDING",
       "reserved_capital": 0.0
     },
@@ -315,7 +315,7 @@
       "max_stop_pct": 8.0,
       "trade_id": "Momentum Ladder:WABAG:2026-09-30",
       "created_date": "2026-09-30",
-      "sessions_waited": 2,
+      "sessions_waited": 3,
       "status": "PENDING",
       "reserved_capital": 0.0
     }
@@ -326,23 +326,6 @@
   ],
   "reconciliation_residual": 0.0,
   "cost_basis": "NET_OF_RECORDED_FEES",
-  "events_today": [
-    {
-      "date": "2026-10-05",
-      "event": "ENTRY",
-      "trade_id": "Momentum Ladder:TNPL:2026-09-30",
-      "symbol": "TNPL",
-      "price": 151.27559999999997,
-      "quantity": 260
-    },
-    {
-      "date": "2026-10-05",
-      "event": "ENTRY",
-      "trade_id": "Momentum Ladder:BANSALWIRE:2026-10-01",
-      "symbol": "BANSALWIRE",
-      "price": 324.332085,
-      "quantity": 5
-    }
-  ],
+  "events_today": [],
   "strategy_profile": "LADDER_DAILY_20260922"
 }
