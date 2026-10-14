@@ -2,20 +2,20 @@
   "schema_version": 1,
   "scanner": "Momentum Ladder",
   "mode": "PAPER",
-  "as_of_date": "2026-10-12",
+  "as_of_date": "2026-10-13",
   "provenance": "LADDER_DAILY_20260922",
   "execution_model": "NEXT_SESSION_OHLC_STOP_FIRST_V1",
   "starting_capital": 300000.0,
   "available_cash": 79624.17447529506,
   "invested_capital": 207281.138775,
   "reserved_capital": 0.0,
-  "market_value": 204439.18,
+  "market_value": 206788.62,
   "realised_pnl": -12483.706489999968,
-  "unrealised_pnl": -2841.958774999995,
+  "unrealised_pnl": -492.5187749999918,
   "fees": 610.980259705,
-  "total_pnl": -15936.645524704963,
-  "equity": 284063.35447529505,
-  "return_pct": -5.312215174901654,
+  "total_pnl": -13587.20552470496,
+  "equity": 286412.79447529506,
+  "return_pct": -4.529068508234987,
   "open_positions": 6,
   "closed_positions": 5,
   "pending_setups": 2,
@@ -40,14 +40,14 @@
       "remaining_quantity": 51.0,
       "realised_pnl": 0.0,
       "fees": 41.391375345,
-      "last_price": 798.0,
-      "mark_date": "2026-10-12",
+      "last_price": 802.95,
+      "mark_date": "2026-10-13",
       "highest_since_entry": 837.0,
       "invested_capital": 41391.375345,
-      "market_value": 40698.0,
-      "unrealised_pnl": -693.3753450000002,
-      "total_pnl": -734.7667203450002,
-      "return_pct": -1.7751686534227682
+      "market_value": 40950.450000000004,
+      "unrealised_pnl": -440.92534499999783,
+      "total_pnl": -482.31672034499786,
+      "return_pct": -1.165258985295498
     },
     {
       "symbol": "GEOJITFSL",
@@ -162,14 +162,14 @@
       "remaining_quantity": 34.0,
       "realised_pnl": 0.0,
       "fees": 39.63796908,
-      "last_price": 1134.4,
-      "mark_date": "2026-10-12",
+      "last_price": 1132.5,
+      "mark_date": "2026-10-13",
       "highest_since_entry": 1232.1,
       "invested_capital": 39637.969079999995,
-      "market_value": 38569.600000000006,
-      "unrealised_pnl": -1068.369079999994,
-      "total_pnl": -1108.007049079994,
-      "return_pct": -2.7953174060046826
+      "market_value": 38505.0,
+      "unrealised_pnl": -1132.9690799999971,
+      "total_pnl": -1172.607049079997,
+      "return_pct": -2.958292456188568
     },
     {
       "symbol": "SANSTAR",
@@ -222,14 +222,14 @@
       "remaining_quantity": 73.0,
       "realised_pnl": 0.0,
       "fees": 43.025071785,
-      "last_price": 568.3,
-      "mark_date": "2026-10-12",
+      "last_price": 573.05,
+      "mark_date": "2026-10-13",
       "highest_since_entry": 604.9,
       "invested_capital": 43025.071785,
-      "market_value": 41485.899999999994,
-      "unrealised_pnl": -1539.1717850000036,
-      "total_pnl": -1582.1968567850035,
-      "return_pct": -3.677383421209331
+      "market_value": 41832.649999999994,
+      "unrealised_pnl": -1192.4217850000036,
+      "total_pnl": -1235.4468567850035,
+      "return_pct": -2.8714579791025994
     },
     {
       "symbol": "TNPL",
@@ -282,14 +282,14 @@
       "remaining_quantity": 5.0,
       "realised_pnl": 0.0,
       "fees": 1.621660425,
-      "last_price": 319.8,
-      "mark_date": "2026-10-12",
+      "last_price": 318.2,
+      "mark_date": "2026-10-13",
       "highest_since_entry": 335.2,
       "invested_capital": 1621.660425,
-      "market_value": 1599.0,
-      "unrealised_pnl": -22.660424999999975,
-      "total_pnl": -24.282085424999977,
-      "return_pct": -1.497359437935348
+      "market_value": 1591.0,
+      "unrealised_pnl": -30.66042500000009,
+      "total_pnl": -32.28208542500009,
+      "return_pct": -1.990680966701157
     },
     {
       "symbol": "BHEL",
@@ -311,14 +311,14 @@
       "remaining_quantity": 86.0,
       "realised_pnl": 0.0,
       "fees": 37.3082448,
-      "last_price": 439.9,
-      "mark_date": "2026-10-12",
-      "highest_since_entry": 441.2,
+      "last_price": 442.35,
+      "mark_date": "2026-10-13",
+      "highest_since_entry": 442.35,
       "invested_capital": 37308.2448,
-      "market_value": 37831.4,
-      "unrealised_pnl": 523.155199999998,
-      "total_pnl": 485.846955199998,
-      "return_pct": 1.3022509040682557
+      "market_value": 38042.1,
+      "unrealised_pnl": 733.8552000000019,
+      "total_pnl": 696.5469552000019,
+      "return_pct": 1.867005427175716
     },
     {
       "symbol": "AURUM",
@@ -340,14 +340,14 @@
       "remaining_quantity": 194.0,
       "realised_pnl": 0.0,
       "fees": 44.29681734,
-      "last_price": 228.12,
-      "mark_date": "2026-10-12",
-      "highest_since_entry": 235.86,
+      "last_price": 236.43,
+      "mark_date": "2026-10-13",
+      "highest_since_entry": 249.9,
       "invested_capital": 44296.817339999994,
-      "market_value": 44255.28,
-      "unrealised_pnl": -41.53733999999548,
-      "total_pnl": -85.83415733999547,
-      "return_pct": -0.19377048396316113
+      "market_value": 45867.42,
+      "unrealised_pnl": 1570.602660000005,
+      "total_pnl": 1526.305842660005,
+      "return_pct": 3.4456331951454944
     }
   ],
   "pending": [
@@ -362,7 +362,7 @@
       "max_stop_pct": 8.0,
       "trade_id": "Momentum Ladder:BALRAMCHIN:2026-10-09",
       "created_date": "2026-10-09",
-      "sessions_waited": 1,
+      "sessions_waited": 2,
       "status": "PENDING",
       "reserved_capital": 0.0
     },
@@ -377,7 +377,7 @@
       "max_stop_pct": 8.0,
       "trade_id": "Momentum Ladder:NAVINFLUOR:2026-10-12",
       "created_date": "2026-10-12",
-      "sessions_waited": 0,
+      "sessions_waited": 1,
       "status": "PENDING",
       "reserved_capital": 0.0
     }
@@ -390,14 +390,14 @@
   "cost_basis": "NET_OF_RECORDED_FEES",
   "events_today": [
     {
-      "date": "2026-10-12",
-      "event": "ENTRY_RISK_BLOCKED",
+      "date": "2026-10-13",
+      "event": "ENTRY_GAP_BLOCKED",
       "trade_id": "Momentum Ladder:BALRAMCHIN:2026-10-09",
       "symbol": "BALRAMCHIN"
     },
     {
-      "date": "2026-10-12",
-      "event": "PENDING",
+      "date": "2026-10-13",
+      "event": "CAPACITY_BLOCKED",
       "trade_id": "Momentum Ladder:NAVINFLUOR:2026-10-12",
       "symbol": "NAVINFLUOR"
     }
