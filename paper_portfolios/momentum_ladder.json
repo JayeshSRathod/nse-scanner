@@ -2,20 +2,20 @@
   "schema_version": 1,
   "scanner": "Momentum Ladder",
   "mode": "PAPER",
-  "as_of_date": "2026-10-15",
+  "as_of_date": "2026-10-16",
   "provenance": "LADDER_DAILY_20260922",
   "execution_model": "NEXT_SESSION_OHLC_STOP_FIRST_V1",
   "starting_capital": 300000.0,
   "available_cash": 79624.17447529506,
   "invested_capital": 207281.138775,
   "reserved_capital": 0.0,
-  "market_value": 206142.5,
+  "market_value": 202603.73,
   "realised_pnl": -12483.706489999968,
-  "unrealised_pnl": -1138.6387749999917,
+  "unrealised_pnl": -4677.408774999988,
   "fees": 610.980259705,
-  "total_pnl": -14233.32552470496,
-  "equity": 285766.67447529506,
-  "return_pct": -4.74444184156832,
+  "total_pnl": -17772.095524704957,
+  "equity": 282227.9044752951,
+  "return_pct": -5.924031841568319,
   "open_positions": 6,
   "closed_positions": 5,
   "pending_setups": 2,
@@ -40,14 +40,14 @@
       "remaining_quantity": 51.0,
       "realised_pnl": 0.0,
       "fees": 41.391375345,
-      "last_price": 801.0,
-      "mark_date": "2026-10-15",
+      "last_price": 800.0,
+      "mark_date": "2026-10-16",
       "highest_since_entry": 837.0,
       "invested_capital": 41391.375345,
-      "market_value": 40851.0,
-      "unrealised_pnl": -540.3753450000002,
-      "total_pnl": -581.7667203450002,
-      "return_pct": -1.405526430315335
+      "market_value": 40800.0,
+      "unrealised_pnl": -591.3753450000002,
+      "total_pnl": -632.7667203450002,
+      "return_pct": -1.5287405046844793
     },
     {
       "symbol": "GEOJITFSL",
@@ -162,14 +162,14 @@
       "remaining_quantity": 34.0,
       "realised_pnl": 0.0,
       "fees": 39.63796908,
-      "last_price": 1140.2,
-      "mark_date": "2026-10-15",
+      "last_price": 1123.0,
+      "mark_date": "2026-10-16",
       "highest_since_entry": 1232.1,
       "invested_capital": 39637.969079999995,
-      "market_value": 38766.8,
-      "unrealised_pnl": -871.1690799999956,
-      "total_pnl": -910.8070490799955,
-      "return_pct": -2.2978146212328485
+      "market_value": 38182.0,
+      "unrealised_pnl": -1455.9690799999971,
+      "total_pnl": -1495.607049079997,
+      "return_pct": -3.773167707107958
     },
     {
       "symbol": "SANSTAR",
@@ -222,14 +222,14 @@
       "remaining_quantity": 73.0,
       "realised_pnl": 0.0,
       "fees": 43.025071785,
-      "last_price": 564.6,
-      "mark_date": "2026-10-15",
+      "last_price": 559.7,
+      "mark_date": "2026-10-16",
       "highest_since_entry": 604.9,
       "invested_capital": 43025.071785,
-      "market_value": 41215.8,
-      "unrealised_pnl": -1809.2717849999985,
-      "total_pnl": -1852.2968567849985,
-      "return_pct": -4.305156923481931
+      "market_value": 40858.100000000006,
+      "unrealised_pnl": -2166.971784999997,
+      "total_pnl": -2209.996856784997,
+      "return_pct": -5.136532642707819
     },
     {
       "symbol": "TNPL",
@@ -274,7 +274,7 @@
       "trade_id": "Momentum Ladder:BANSALWIRE:2026-10-01",
       "created_date": "2026-10-01",
       "sessions_waited": 1,
-      "status": "OPEN",
+      "status": "REVIEW",
       "reserved_capital": 0.0,
       "initial_stop": 301.2,
       "entry_date": "2026-10-05",
@@ -282,14 +282,14 @@
       "remaining_quantity": 5.0,
       "realised_pnl": 0.0,
       "fees": 1.621660425,
-      "last_price": 315.6,
-      "mark_date": "2026-10-15",
+      "last_price": 61.65,
+      "mark_date": "2026-10-16",
       "highest_since_entry": 335.2,
       "invested_capital": 1621.660425,
-      "market_value": 1578.0,
-      "unrealised_pnl": -43.66042499999992,
-      "total_pnl": -45.28208542499992,
-      "return_pct": -2.7923284509455746
+      "market_value": 308.25,
+      "unrealised_pnl": -1313.410425,
+      "total_pnl": -1315.032085425,
+      "return_pct": -81.0917048447427
     },
     {
       "symbol": "BHEL",
@@ -311,14 +311,14 @@
       "remaining_quantity": 86.0,
       "realised_pnl": 0.0,
       "fees": 37.3082448,
-      "last_price": 434.25,
-      "mark_date": "2026-10-15",
+      "last_price": 434.6,
+      "mark_date": "2026-10-16",
       "highest_since_entry": 464.0,
       "invested_capital": 37308.2448,
-      "market_value": 37345.5,
-      "unrealised_pnl": 37.255199999999945,
-      "total_pnl": -0.05304480000005185,
-      "return_pct": -0.0001421798325930676
+      "market_value": 37375.6,
+      "unrealised_pnl": 67.3552000000019,
+      "total_pnl": 30.046955200001904,
+      "return_pct": 0.08053703775419074
     },
     {
       "symbol": "AURUM",
@@ -340,15 +340,15 @@
       "remaining_quantity": 194.0,
       "realised_pnl": 0.0,
       "fees": 44.29681734,
-      "last_price": 239.1,
-      "mark_date": "2026-10-15",
-      "highest_since_entry": 254.0,
+      "last_price": 232.37,
+      "mark_date": "2026-10-16",
+      "highest_since_entry": 268.38,
       "target1_hit": true,
       "invested_capital": 44296.817339999994,
-      "market_value": 46385.4,
-      "unrealised_pnl": 2088.5826600000028,
-      "total_pnl": 2044.2858426600028,
-      "return_pct": 4.614972283378956
+      "market_value": 45079.78,
+      "unrealised_pnl": 782.9626600000045,
+      "total_pnl": 738.6658426600045,
+      "return_pct": 1.6675370534871132
     }
   ],
   "pending": [
@@ -363,7 +363,7 @@
       "max_stop_pct": 8.0,
       "trade_id": "Momentum Ladder:BALRAMCHIN:2026-10-09",
       "created_date": "2026-10-09",
-      "sessions_waited": 4,
+      "sessions_waited": 5,
       "status": "PENDING",
       "reserved_capital": 0.0
     },
@@ -378,38 +378,30 @@
       "max_stop_pct": 8.0,
       "trade_id": "Momentum Ladder:NAVINFLUOR:2026-10-12",
       "created_date": "2026-10-12",
-      "sessions_waited": 3,
+      "sessions_waited": 4,
       "status": "PENDING",
       "reserved_capital": 0.0
     }
   ],
   "legacy_records": [],
   "warnings": [
+    "Review holdings remain invested; no unverified corporate-action conversion is assumed.",
     "Security master unavailable; using the existing scanner gateway fallback for this session."
   ],
-  "reconciliation_residual": 0.0,
+  "reconciliation_residual": 5.820766091346741e-11,
   "cost_basis": "NET_OF_RECORDED_FEES",
   "events_today": [
     {
-      "date": "2026-10-15",
-      "event": "TARGET_1",
-      "trade_id": "Momentum Ladder:AURUM:2026-10-08",
-      "symbol": "AURUM"
+      "date": "2026-10-16",
+      "event": "REVIEW_REQUIRED",
+      "trade_id": "Momentum Ladder:BANSALWIRE:2026-10-01",
+      "symbol": "BANSALWIRE"
     },
     {
-      "date": "2026-10-15",
+      "date": "2026-10-16",
       "event": "ENTRY_GAP_BLOCKED",
       "trade_id": "Momentum Ladder:BALRAMCHIN:2026-10-09",
       "symbol": "BALRAMCHIN"
-    },
-    {
-      "date": "2026-10-15",
-      "event": "TRAIL_FOR_NEXT_SESSION",
-      "trade_id": "Momentum Ladder:AURUM:2026-10-08",
-      "symbol": "AURUM",
-      "previous_stop": 212.94,
-      "new_stop": 217.4937154508046,
-      "context_date": "2026-10-15"
     }
   ],
   "strategy_profile": "LADDER_DAILY_20260922"
