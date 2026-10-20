@@ -340,5 +340,11 @@
   },
   "2026-10-16:lifecycle:6:1:3880b161613ead3c": {
     "status": "sent"
+  },
+  "2026-10-19:fresh_candidates:3:1:c9f0bd296bd50b60": {
+    "status": "sent"
+  },
+  "2026-10-19:lifecycle:6:1:547da74d7ca0796c": {
+    "status": "sent"
   }
 }
