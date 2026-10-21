@@ -346,5 +346,17 @@
   },
   "2026-10-19:lifecycle:6:1:547da74d7ca0796c": {
     "status": "sent"
+  },
+  "2026-10-20:fresh_candidates:3:1:e602e02dd60bd9e2": {
+    "status": "sent"
+  },
+  "2026-10-20:fresh_candidates:3:2:588eb19f164708cc": {
+    "status": "sent"
+  },
+  "2026-10-20:fresh_candidates:3:3:d9df9414eb2e9be9": {
+    "status": "sent"
+  },
+  "2026-10-20:lifecycle:6:1:8a88d4b1aed9459a": {
+    "status": "sent"
   }
 }
