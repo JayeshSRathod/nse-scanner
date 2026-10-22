@@ -2,7 +2,7 @@
   "schema_version": 1,
   "scanner": "V3",
   "mode": "PAPER",
-  "as_of_date": "2026-10-20",
+  "as_of_date": "2026-10-21",
   "provenance": "RECORDED_PAPER",
   "execution_model": "LEGACY_V3_RECORDED_FILLS",
   "starting_capital": 300000.0,
