@@ -2,7 +2,7 @@
   "schema_version": 1,
   "scanner": "Hull",
   "mode": "PAPER",
-  "as_of_date": "2026-10-23",
+  "as_of_date": "2026-10-26",
   "provenance": "RECORDED_PAPER",
   "execution_model": "LEGACY_HULL_RECORDED_FILLS",
   "starting_capital": 300000.0,
