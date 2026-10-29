@@ -1554,9 +1554,16 @@
       "state": "CLOSED",
       "symbol": "LEMONTREE",
       "trade_id": "PINE-20261021-55CB7DFA"
+    },
+    {
+      "date": "2026-10-28",
+      "event": "ENTRY",
+      "state": "OPEN",
+      "symbol": "PNB",
+      "trade_id": "PINE-20261028-F0B4CE3E"
     }
   ],
-  "last_run": "2026-10-27",
+  "last_run": "2026-10-28",
   "positions": [
     {
       "daily_hull_bullish": true,
@@ -4338,6 +4345,29 @@
       "target2": 117.11,
       "timing_state": "WEAK",
       "trade_id": "PINE-20261021-55CB7DFA"
+    },
+    {
+      "daily_hull_bullish": true,
+      "entry": 120.31,
+      "entry_date": "2026-10-28",
+      "htf_state": "BULLISH",
+      "htf_weekly_bullish": true,
+      "initial_stop": 114.02,
+      "last_price": 120.31,
+      "mark_date": "2026-10-28",
+      "prior_hma21": 122.55,
+      "quantity": 476,
+      "realised_pnl": 0.0,
+      "score": 80.0,
+      "state": "OPEN",
+      "stop": 114.02,
+      "symbol": "PNB",
+      "t1_hit": false,
+      "t2_hit": false,
+      "target1": 125.11,
+      "target2": 127.99,
+      "timing_state": "READY",
+      "trade_id": "PINE-20261028-F0B4CE3E"
     }
   ],
   "version": 1
