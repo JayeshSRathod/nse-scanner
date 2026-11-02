@@ -1563,7 +1563,7 @@
       "trade_id": "PINE-20261028-F0B4CE3E"
     }
   ],
-  "last_run": "2026-10-29",
+  "last_run": "2026-10-30",
   "positions": [
     {
       "daily_hull_bullish": true,
@@ -4353,9 +4353,9 @@
       "htf_state": "BULLISH",
       "htf_weekly_bullish": true,
       "initial_stop": 114.02,
-      "last_price": 123.9,
-      "mark_date": "2026-10-29",
-      "prior_hma21": 122.96,
+      "last_price": 122.85,
+      "mark_date": "2026-10-30",
+      "prior_hma21": 123.37,
       "quantity": 476,
       "realised_pnl": 0.0,
       "score": 80.0,
