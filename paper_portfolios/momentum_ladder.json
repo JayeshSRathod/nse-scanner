@@ -2,20 +2,20 @@
   "schema_version": 1,
   "scanner": "Momentum Ladder",
   "mode": "PAPER",
-  "as_of_date": "2026-11-04",
+  "as_of_date": "2026-11-06",
   "provenance": "LADDER_DAILY_20260922",
   "execution_model": "NEXT_SESSION_OHLC_STOP_FIRST_V1",
   "starting_capital": 300000.0,
   "available_cash": 70201.38763933536,
   "invested_capital": 205261.529475,
   "reserved_capital": 0.0,
-  "market_value": 213827.09999999998,
+  "market_value": 215079.5,
   "realised_pnl": -23607.20271294259,
-  "unrealised_pnl": 8565.570525000021,
+  "unrealised_pnl": 9817.970525000026,
   "fees": 929.8801727220572,
-  "total_pnl": -15971.512360664628,
-  "equity": 284028.48763933533,
-  "return_pct": -5.3238374535548765,
+  "total_pnl": -14719.112360664623,
+  "equity": 285280.88763933536,
+  "return_pct": -4.906370786888208,
   "open_positions": 7,
   "closed_positions": 9,
   "pending_setups": 1,
@@ -164,14 +164,14 @@
       "remaining_quantity": 34.0,
       "realised_pnl": 0.0,
       "fees": 39.63796908,
-      "last_price": 1188.1,
-      "mark_date": "2026-11-04",
+      "last_price": 1197.9,
+      "mark_date": "2026-11-06",
       "highest_since_entry": 1266.6,
       "invested_capital": 39637.969079999995,
-      "market_value": 40395.399999999994,
-      "unrealised_pnl": 757.4309199999998,
-      "total_pnl": 717.7929509199998,
-      "return_pct": 1.8108721702449038
+      "market_value": 40728.600000000006,
+      "unrealised_pnl": 1090.630920000006,
+      "total_pnl": 1050.992950920006,
+      "return_pct": 2.6514803238249214
     },
     {
       "symbol": "SANSTAR",
@@ -286,14 +286,14 @@
       "remaining_quantity": 5.0,
       "realised_pnl": 0.0,
       "fees": 1.621660425,
-      "last_price": 59.68,
-      "mark_date": "2026-11-04",
+      "last_price": 62.32,
+      "mark_date": "2026-11-06",
       "highest_since_entry": 335.2,
       "invested_capital": 1621.660425,
-      "market_value": 298.4,
-      "unrealised_pnl": -1323.260425,
-      "total_pnl": -1324.882085425,
-      "return_pct": -81.69910697703558
+      "market_value": 311.6,
+      "unrealised_pnl": -1310.0604250000001,
+      "total_pnl": -1311.6820854250002,
+      "return_pct": -80.88512645457203
     },
     {
       "symbol": "BHEL",
@@ -378,22 +378,22 @@
       "remaining_quantity": 24.0,
       "realised_pnl": 0.0,
       "fees": 12.29318352,
-      "last_price": 636.8,
-      "mark_date": "2026-11-04",
+      "last_price": 619.65,
+      "mark_date": "2026-11-06",
       "highest_since_entry": 652.9,
       "target1_hit": true,
       "invested_capital": 12293.183519999999,
-      "market_value": 15283.199999999999,
-      "unrealised_pnl": 2990.0164800000002,
-      "total_pnl": 2977.72329648,
-      "return_pct": 24.22255627792011
+      "market_value": 14871.599999999999,
+      "unrealised_pnl": 2578.416480000001,
+      "total_pnl": 2566.1232964800006,
+      "return_pct": 20.874359292734297
     },
     {
       "symbol": "INDHOTEL",
       "score": 77.12,
       "entry": 762.170895,
       "entry_high": 784.6437,
-      "stop": 703.62,
+      "stop": 738.1275581606237,
       "target1": 849.06,
       "target2": 907.23,
       "max_stop_pct": 8.0,
@@ -408,14 +408,15 @@
       "remaining_quantity": 51.0,
       "realised_pnl": 0.0,
       "fees": 38.870715645,
-      "last_price": 849.0,
-      "mark_date": "2026-11-04",
-      "highest_since_entry": 849.0,
+      "last_price": 888.0,
+      "mark_date": "2026-11-06",
+      "highest_since_entry": 892.7,
+      "target1_hit": true,
       "invested_capital": 38870.715645,
-      "market_value": 43299.0,
-      "unrealised_pnl": 4428.284355000002,
-      "total_pnl": 4389.413639355002,
-      "return_pct": 11.292340690207023
+      "market_value": 45288.0,
+      "unrealised_pnl": 6417.284355000002,
+      "total_pnl": 6378.413639355002,
+      "return_pct": 16.409303336753634
     },
     {
       "symbol": "HAL",
@@ -437,14 +438,14 @@
       "remaining_quantity": 9.0,
       "realised_pnl": 0.0,
       "fees": 43.891534799999995,
-      "last_price": 5079.1,
-      "mark_date": "2026-11-04",
+      "last_price": 4980.0,
+      "mark_date": "2026-11-06",
       "highest_since_entry": 5091.6,
       "invested_capital": 43891.534799999994,
-      "market_value": 45711.9,
-      "unrealised_pnl": 1820.365200000012,
-      "total_pnl": 1776.473665200012,
-      "return_pct": 4.047417510676825
+      "market_value": 44820.0,
+      "unrealised_pnl": 928.4652000000087,
+      "total_pnl": 884.5736652000087,
+      "return_pct": 2.0153628011203857
     },
     {
       "symbol": "FEDERALBNK",
@@ -466,14 +467,14 @@
       "remaining_quantity": 117.0,
       "realised_pnl": 0.0,
       "fees": 40.039859924999995,
-      "last_price": 335.2,
-      "mark_date": "2026-11-04",
+      "last_price": 340.1,
+      "mark_date": "2026-11-06",
       "highest_since_entry": 350.85,
       "invested_capital": 40039.859925,
-      "market_value": 39218.4,
-      "unrealised_pnl": -821.459925000001,
-      "total_pnl": -861.499784925001,
-      "return_pct": -2.151605391574059
+      "market_value": 39791.700000000004,
+      "unrealised_pnl": -248.15992499999703,
+      "total_pnl": -288.199784924997,
+      "return_pct": -0.7197822006990875
     },
     {
       "symbol": "INDGN",
@@ -495,14 +496,14 @@
       "remaining_quantity": 48.0,
       "realised_pnl": 0.0,
       "fees": 28.906606079999992,
-      "last_price": 617.1,
-      "mark_date": "2026-11-04",
+      "last_price": 609.75,
+      "mark_date": "2026-11-06",
       "highest_since_entry": 638.0,
       "invested_capital": 28906.606079999994,
-      "market_value": 29620.800000000003,
-      "unrealised_pnl": 714.193920000007,
-      "total_pnl": 685.287313920007,
-      "return_pct": 2.370694477322767
+      "market_value": 29268.0,
+      "unrealised_pnl": 361.3939200000059,
+      "total_pnl": 332.4873139200059,
+      "return_pct": 1.1502122144669498
     }
   ],
   "pending": [
@@ -517,7 +518,7 @@
       "max_stop_pct": 8.0,
       "trade_id": "Momentum Ladder:PHOENIXLTD:2026-10-29",
       "created_date": "2026-10-29",
-      "sessions_waited": 4,
+      "sessions_waited": 5,
       "status": "PENDING",
       "reserved_capital": 0.0
     }
@@ -527,20 +528,29 @@
     "Review holdings remain invested; no unverified corporate-action conversion is assumed.",
     "Security master unavailable; using the existing scanner gateway fallback for this session."
   ],
-  "reconciliation_residual": -5.820766091346741e-11,
+  "reconciliation_residual": 0.0,
   "cost_basis": "NET_OF_RECORDED_FEES",
   "events_today": [
     {
-      "date": "2026-11-04",
+      "date": "2026-11-06",
       "event": "TARGET_1",
-      "trade_id": "Momentum Ladder:SAREGAMA:2026-10-19",
-      "symbol": "SAREGAMA"
+      "trade_id": "Momentum Ladder:INDHOTEL:2026-10-20",
+      "symbol": "INDHOTEL"
     },
     {
-      "date": "2026-11-04",
+      "date": "2026-11-06",
       "event": "ENTRY_GAP_BLOCKED",
       "trade_id": "Momentum Ladder:PHOENIXLTD:2026-10-29",
       "symbol": "PHOENIXLTD"
+    },
+    {
+      "date": "2026-11-06",
+      "event": "TRAIL_FOR_NEXT_SESSION",
+      "trade_id": "Momentum Ladder:INDHOTEL:2026-10-20",
+      "symbol": "INDHOTEL",
+      "previous_stop": 703.62,
+      "new_stop": 738.1275581606237,
+      "context_date": "2026-11-06"
     }
   ],
   "strategy_profile": "LADDER_DAILY_20260922"
