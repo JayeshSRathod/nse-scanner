@@ -1582,9 +1582,16 @@
       "state": "CLOSED",
       "symbol": "MPHASIS",
       "trade_id": "PINE-20261104-49448E3F"
+    },
+    {
+      "date": "2026-11-10",
+      "event": "ENTRY",
+      "state": "OPEN",
+      "symbol": "IIFLCAPS",
+      "trade_id": "PINE-20261110-B1F3CDB6"
     }
   ],
-  "last_run": "2026-11-09",
+  "last_run": "2026-11-10",
   "positions": [
     {
       "daily_hull_bullish": true,
@@ -4375,8 +4382,8 @@
       "htf_weekly_bullish": true,
       "initial_stop": 114.02,
       "last_price": 132.17,
-      "mark_date": "2026-11-09",
-      "prior_hma21": 125.04,
+      "mark_date": "2026-11-10",
+      "prior_hma21": 126.84,
       "quantity": 476,
       "realised_pnl": 0.0,
       "score": 80.0,
@@ -4398,13 +4405,13 @@
       "htf_weekly_bullish": true,
       "initial_stop": 665.88,
       "last_price": 686.2,
-      "mark_date": "2026-11-09",
-      "prior_hma21": 688.35,
+      "mark_date": "2026-11-10",
+      "prior_hma21": 688.63,
       "quantity": 86,
       "realised_pnl": 0.0,
       "score": 75.0,
       "state": "TRAILING",
-      "stop": 675.12,
+      "stop": 680.58,
       "symbol": "JINDALPOLY",
       "t1_hit": false,
       "t2_hit": false,
@@ -4438,6 +4445,29 @@
       "target2": 2668.48,
       "timing_state": "EXTENDED",
       "trade_id": "PINE-20261104-49448E3F"
+    },
+    {
+      "daily_hull_bullish": true,
+      "entry": 350.35,
+      "entry_date": "2026-11-10",
+      "htf_state": "IMPROVING",
+      "htf_weekly_bullish": false,
+      "initial_stop": 338.36,
+      "last_price": 350.35,
+      "mark_date": "2026-11-10",
+      "prior_hma21": 349.98,
+      "quantity": 171,
+      "realised_pnl": 0.0,
+      "score": 80.0,
+      "state": "OPEN",
+      "stop": 338.36,
+      "symbol": "IIFLCAPS",
+      "t1_hit": false,
+      "t2_hit": false,
+      "target1": 356.82,
+      "target2": 358.97,
+      "timing_state": "EARLY",
+      "trade_id": "PINE-20261110-B1F3CDB6"
     }
   ],
   "version": 1
