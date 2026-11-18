@@ -1603,9 +1603,16 @@
       "state": "CLOSED",
       "symbol": "IIFLCAPS",
       "trade_id": "PINE-20261110-B1F3CDB6"
+    },
+    {
+      "date": "2026-11-17",
+      "event": "ENTRY",
+      "state": "OPEN",
+      "symbol": "IIFLCAPS",
+      "trade_id": "PINE-20261117-374D7868"
     }
   ],
-  "last_run": "2026-11-16",
+  "last_run": "2026-11-17",
   "positions": [
     {
       "daily_hull_bullish": true,
@@ -4395,14 +4402,14 @@
       "htf_state": "BULLISH",
       "htf_weekly_bullish": true,
       "initial_stop": 114.02,
-      "last_price": 144.59,
-      "mark_date": "2026-11-16",
-      "prior_hma21": 139.81,
+      "last_price": 150.0,
+      "mark_date": "2026-11-17",
+      "prior_hma21": 143.6,
       "quantity": 476,
       "realised_pnl": 0.0,
       "score": 80.0,
       "state": "TRAILING",
-      "stop": 132.7,
+      "stop": 136.59,
       "symbol": "PNB",
       "t1_hit": true,
       "t2_hit": true,
@@ -4488,6 +4495,29 @@
       "target2": 358.97,
       "timing_state": "EXTENDED",
       "trade_id": "PINE-20261110-B1F3CDB6"
+    },
+    {
+      "daily_hull_bullish": true,
+      "entry": 351.25,
+      "entry_date": "2026-11-17",
+      "htf_state": "BULLISH",
+      "htf_weekly_bullish": true,
+      "initial_stop": 341.4,
+      "last_price": 351.25,
+      "mark_date": "2026-11-17",
+      "prior_hma21": 353.48,
+      "quantity": 170,
+      "realised_pnl": 0.0,
+      "score": 80.0,
+      "state": "OPEN",
+      "stop": 341.4,
+      "symbol": "IIFLCAPS",
+      "t1_hit": false,
+      "t2_hit": false,
+      "target1": 359.63,
+      "target2": 364.65,
+      "timing_state": "READY",
+      "trade_id": "PINE-20261117-374D7868"
     }
   ],
   "version": 1
