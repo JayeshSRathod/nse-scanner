@@ -1,9 +1,9 @@
 {
   "schema_version":1,
-  "updated_at":"2026-11-18T03:48:04Z",
+  "updated_at":"2026-11-19T03:46:37Z",
   "snapshot_count":420,
-  "oldest_date":"2025-03-25",
-  "newest_date":"2026-11-17",
+  "oldest_date":"2025-03-26",
+  "newest_date":"2026-11-18",
   "columns":[
     "symbol",
     "date",

@@ -1,13 +1,13 @@
 {
-  "run_at": "2026-11-18T03:48:18.889012+00:00",
-  "trade_date": "2026-11-17",
+  "run_at": "2026-11-19T03:46:57.012487+00:00",
+  "trade_date": "2026-11-18",
   "status": "READY",
   "datasets": [
     {
       "dataset": "equity_master",
       "status": "FRESH",
       "rows": 2632,
-      "source": "corporate_data/raw/equity_master/20261118T034812Z_a6b184ea3e37.csv",
+      "source": "corporate_data/raw/equity_master/20261119T034649Z_e52bd40676b0.csv",
       "error": ""
     },
     {
@@ -22,12 +22,12 @@
       "status": "REUSED_LAST_VALID",
       "rows": 0,
       "source": "",
-      "error": "rejected=16"
+      "error": "rejected=17"
     },
     {
       "dataset": "corporate_actions",
       "status": "FRESH",
-      "rows": 96,
+      "rows": 98,
       "source": "",
       "error": ""
     },
